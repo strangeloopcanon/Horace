@@ -21,7 +21,6 @@ checkpoints/
 *.pt
 
 # Analysis outputs can be huge — keep reports, ignore raw analysis
-data/analysis/
 
 # Hugging Face / mlx caches (if any)
 ~/.cache/
