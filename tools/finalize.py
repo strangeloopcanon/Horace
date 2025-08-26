@@ -51,6 +51,13 @@ NARRATIVE = {
         'After spike: look for cooldown entropy drop ≥ 1.0 bits (3-token window)',
         'Maintain content alignment: spike-next-content-rate high; avoid back-to-back punctuation surprises',
     ],
+    'what_why': (
+        "What we did and why: We measured token distributions and cadence signatures across authors and genres to learn what "
+        "‘good writing’ looks like in terms of focus, rhythm, and cohesion. We then built a cadence‑aware sampler that explicitly "
+        "follows those patterns — keeping baseline choices focused, inserting purposeful spikes on content pivots, cooling down to consolidate, "
+        "and periodically opening sustained shifts. We added rhyme nudging for poetry, repetition controls and a diversity bonus on spikes to keep turns fresh, "
+        "and we save before/after snippets so you can see and measure the effect."
+    ),
 }
 
 
@@ -150,6 +157,12 @@ def render_final_readme(model: str, model_dir: Path, compare_dir: Path, gen_late
             rel = img.as_posix()
         lines.append(f'<img src="{rel}" alt="{img.name}" style="max-width: 100%; width: 100%; height: auto;" />')
         lines.append('')
+
+    # What we did and why
+    lines.append('## What We Did and Why')
+    lines.append('')
+    lines.append(NARRATIVE['what_why'])
+    lines.append('')
 
     # Generated snippets
     lines.append('## Generated Snippets (Normal vs Fixed-Up)')

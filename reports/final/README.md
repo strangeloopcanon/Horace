@@ -70,6 +70,10 @@ Findings by genre and author:
 
 <img src="../Qwen/Qwen2.5-1.5B/doc_ts_shortstory_aesop_hercules_and_the_wagoner.png" alt="doc_ts_shortstory_aesop_hercules_and_the_wagoner.png" style="max-width: 100%; width: 100%; height: auto;" />
 
+## What We Did and Why
+
+What we did and why: We measured token distributions and cadence signatures across authors and genres to learn what ‘good writing’ looks like in terms of focus, rhythm, and cohesion. We then built a cadence‑aware sampler that explicitly follows those patterns — keeping baseline choices focused, inserting purposeful spikes on content pivots, cooling down to consolidate, and periodically opening sustained shifts. We added rhyme nudging for poetry, repetition controls and a diversity bonus on spikes to keep turns fresh, and we save before/after snippets so you can see and measure the effect.
+
 ## Generated Snippets (Normal vs Fixed-Up)
 ### Imagist
 

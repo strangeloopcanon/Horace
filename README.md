@@ -1,13 +1,28 @@
-Horace Analysis Pipeline
- 
-A small, model‑pluggable pipeline to compute per‑token distributions from causal LMs (GPT‑2, Qwen, etc.), derive per‑document and per‑author signatures, and store results for downstream analysis. Optimized to run on Apple Silicon via MLX, with a fallback to Hugging Face + PyTorch.
+Horace — Writing Signatures and Cadence Sampler
+
+Horace is a compact toolkit to: (1) measure token‑level distributions and cadence signatures from causal LMs (GPT‑2, Qwen, etc.), and (2) generate better prose/poetry with a cadence‑aware sampler that inserts purposeful spikes and cool‑downs. It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
+
+Quick Links
+- Final one‑pager (self‑contained HTML): `reports/final/report.html`
+- Final docx: `reports/final/report.docx`
+- Final markdown: `reports/final/README.md`
+- Qwen model report: `reports/Qwen/Qwen2.5-1.5B/README.md`
+- GPT‑2 model report: `reports/gpt2/README.md`
+- Cross‑model compare: `reports/compare_gpt2_vs_Qwen_Qwen2.5-1.5B/README.md`
+- All generated examples (normal vs fixed‑up): `reports/generated/README.md`
+
+What we built (and why)
+- Analysis: per‑token probabilities, entropy, true‑rank, nucleus width, and top‑k; per‑doc/author cadence metrics (IPI, MASD/ACF/FFT, cooldown entropy drop), distributional stats, cohesion shuffle delta, token‑class context.
+- Cadence Sampler: a token‑aware controller that enforces Base → Spike → Cooldown with per‑phase `top_p` + temperature, defers spikes on punctuation, aims rhyme at line ends, applies repetition controls and diversity bonus on spikes.
+- Reports: per‑model and cross‑model dashboards; curated “Final” book with narrative, illustrations, and before/after snippets.
+- Motivation: great writing isn’t random or safe — it rides a rhythm of focused choices punctuated by turns; we measure those patterns and then make the model follow them.
 
 Overview
 - Input source: `data/index.json` with records `{type, author, title, path}` pointing to `.txt` files.
 - Per‑token capture: chosen token probability, logprob, rank, entropy, effective support `exp(H)`, nucleus width `w_p`, `topk_ids`/`topk_probs`, cumulative mass, tail mass, plus offsets and metadata.
-- Aggregations: per‑doc metrics (means/medians/percentiles, cohesion shuffle delta) and per‑author rollups.
+- Aggregations: per‑doc metrics (means/medians/percentiles, cadence & cohesion shuffle delta) and per‑author rollups.
 - Storage: `data/analysis/<model_id>/...` with tokens, docs, and authors artifacts.
- - Cadence: surprisal rhythm/bursts via CV/MASD, autocorrelation, FFT peak period, high‑surprise inter‑peak intervals, run lengths, permutation entropy, and Hurst (R/S).
+- Cadence: surprisal rhythm/bursts via CV/MASD, autocorrelation, FFT peak period, high‑surprise inter‑peak intervals (IPI), run lengths, permutation entropy, and Hurst (R/S).
 
 Requirements
 - Python 3.9+ recommended
@@ -98,5 +113,16 @@ Troubleshooting
 
 Next Steps
 - Add optional Parquet outputs for faster analytics.
-- Add side‑by‑side collator and plots for cross‑model comparisons.
+- Add cadence metrics alongside generated snippets in the final book.
 - Extend MLX backend coverage (e.g., for additional base models) as mlx‑lm support grows.
+
+Cadence Sampler (generation)
+- Compare normal vs fixed‑up using the token‑aware controller (HF backend):
+  - `python -m tools.gen_compare --model Qwen/Qwen2.5-1.5B --preset imagist --manual-fixed --task "Write an imagist poem with clear, concrete images." --prompt "At dawn, the city leans into light:\n" --max-new-tokens 90 --seed 303 --save`
+- One‑off sampler (HF/MLX) with presets: `python -m tools.sampler <model> --backend <hf|mlx> --preset <poetry_default|sonnet|dickinson|freeverse|couplets> --prompt "..." --max-new-tokens 120`
+- Saved outputs go to `data/generated/...` and aggregate at `reports/generated/README.md`.
+
+Make the Final Book
+- Build curated README, DOCX, PDF, and one‑page HTML, pulling in figures and latest samples:
+  - `python -m tools.finalize --model Qwen/Qwen2.5-1.5B --out-readme reports/final/README.md --out-docx reports/final/report.docx --out-pdf reports/final/report.pdf`
+  - One‑page HTML at `reports/final/report.html` embeds images for easy sharing.
