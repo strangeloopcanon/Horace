@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "couplets",
+  "seed": 403,
+  "max_new_tokens": 80,
+  "prompt": "Write a short poem in rhymed couplets (AA) with precise images.\n\nIn twilight, markets close and sparrows lift:\\n",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/couplets/write_a_short_poem_in_rhymed_couplets_aa_with_precise_images_in__couplets_16ec9933/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/couplets/write_a_short_poem_in_rhymed_couplets_aa_with_precise_images_in__couplets_16ec9933/fixed.txt"
+  }
+}

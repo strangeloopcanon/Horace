@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "imagist",
+  "seed": 401,
+  "max_new_tokens": 90,
+  "prompt": "Write an imagist poem with clear, concrete images.\n\nAt dawn, the city leans into light:\\n",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/imagist/write_an_imagist_poem_with_clear_concrete_images_at_dawn_the_cit_imagist_95d63cd7/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/imagist/write_an_imagist_poem_with_clear_concrete_images_at_dawn_the_cit_imagist_95d63cd7/fixed.txt"
+  }
+}

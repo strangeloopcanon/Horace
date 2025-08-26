@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "imagist",
+  "seed": 42,
+  "max_new_tokens": 80,
+  "prompt": "At dawn, the city leans into light:\\n",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/imagist/at_dawn_the_city_leans_into_lightn_imagist_018f0db2/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/imagist/at_dawn_the_city_leans_into_lightn_imagist_018f0db2/fixed.txt"
+  }
+}

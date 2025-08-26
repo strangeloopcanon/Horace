@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "sonnet",
+  "seed": 402,
+  "max_new_tokens": 120,
+  "prompt": "Write a sonnet with Shakespearean rhyme scheme (ABAB CDCD EFEF GG).\n\nOn winter's breath, the river learns to sing:\\n",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/sonnet/write_a_sonnet_with_shakespearean_rhyme_scheme_abab_cdcd_efef_gg_sonnet_e20e2cca/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/sonnet/write_a_sonnet_with_shakespearean_rhyme_scheme_abab_cdcd_efef_gg_sonnet_e20e2cca/fixed.txt"
+  }
+}

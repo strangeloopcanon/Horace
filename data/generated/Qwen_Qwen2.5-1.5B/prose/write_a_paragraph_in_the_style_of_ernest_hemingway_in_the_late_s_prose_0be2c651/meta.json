@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "prose",
+  "seed": 405,
+  "max_new_tokens": 140,
+  "prompt": "Write a paragraph in the style of Ernest Hemingway.\n\nIn the late summer of that year we lived in a house in a village that looked across the river and the plain to the mountains.",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/prose/write_a_paragraph_in_the_style_of_ernest_hemingway_in_the_late_s_prose_0be2c651/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/prose/write_a_paragraph_in_the_style_of_ernest_hemingway_in_the_late_s_prose_0be2c651/fixed.txt"
+  }
+}

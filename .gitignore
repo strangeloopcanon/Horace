@@ -1,0 +1,32 @@
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+*.orig
+*.log
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Virtualenvs and caches
+.venv/
+venv/
+.cache/
+
+# Large model artifacts
+models/
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+
+# Analysis outputs can be huge — keep reports, ignore raw analysis
+data/analysis/
+
+# Hugging Face / mlx caches (if any)
+~/.cache/
+
+# Optional: ignore very large generated text variants (keep index + meta + fixed/baseline by default)
+# Uncomment if push complains about size or quota
+# data/generated/**/*.txt
+

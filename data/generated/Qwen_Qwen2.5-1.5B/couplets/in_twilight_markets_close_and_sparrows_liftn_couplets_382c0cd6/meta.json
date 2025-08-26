@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "couplets",
+  "seed": 7,
+  "max_new_tokens": 60,
+  "prompt": "In twilight, markets close and sparrows lift:\\n",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/couplets/in_twilight_markets_close_and_sparrows_liftn_couplets_382c0cd6/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/couplets/in_twilight_markets_close_and_sparrows_liftn_couplets_382c0cd6/fixed.txt"
+  }
+}

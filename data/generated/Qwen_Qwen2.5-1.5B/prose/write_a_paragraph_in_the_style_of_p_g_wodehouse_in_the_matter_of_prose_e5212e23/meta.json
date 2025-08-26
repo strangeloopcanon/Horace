@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "prose",
+  "seed": 11,
+  "max_new_tokens": 120,
+  "prompt": "Write a paragraph in the style of P. G. Wodehouse: In the matter of Aunt Agatha, I have always maintained that a fellow must keep his wits polished, lest he be sent to the country for a rest cure and come back engaged.",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/prose/write_a_paragraph_in_the_style_of_p_g_wodehouse_in_the_matter_of_prose_e5212e23/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/prose/write_a_paragraph_in_the_style_of_p_g_wodehouse_in_the_matter_of_prose_e5212e23/fixed.txt"
+  }
+}

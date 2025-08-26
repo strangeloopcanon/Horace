@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "sonnet",
+  "seed": 42,
+  "max_new_tokens": 80,
+  "prompt": "Shall I compare thee to a summer's day?\\n",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/sonnet/shall_i_compare_thee_to_a_summers_dayn_sonnet_fbed7b6b/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/sonnet/shall_i_compare_thee_to_a_summers_dayn_sonnet_fbed7b6b/fixed.txt"
+  }
+}

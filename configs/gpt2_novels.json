@@ -1,0 +1,11 @@
+{
+  "model": "gpt2",
+  "k": 10,
+  "p": 0.9,
+  "context": 1024,
+  "stride": 896,
+  "types": ["novel"],
+  "limit": null,
+  "steps": ["init", "tokens", "docs", "authors"]
+}
+
