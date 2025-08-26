@@ -1,0 +1,13 @@
+{
+  "model_id": "gpt2",
+  "tokenizer_id": "gpt2",
+  "vocab_size": 50257,
+  "max_context": 1024,
+  "params": {
+    "k": 10,
+    "p": 0.9,
+    "context": 1024,
+    "stride": 896
+  },
+  "timestamp": 1756018184.514415
+}
