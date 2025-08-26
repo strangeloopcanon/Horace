@@ -35,6 +35,25 @@ It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
 - [Model Report — GPT‑2](reports/gpt2/README.md)
 - [Cross‑Model Compare (GPT‑2 vs Qwen)](reports/compare_gpt2_vs_Qwen_Qwen2.5-1.5B/README.md)
 - [All Generated Before/After Examples](reports/generated/README.md)
+- [GRPO Reward Plan (v0)](docs/reward.md)
+
+## GRPO Rollouts (MLX)
+- Configure: `configs/grpo_default.json` (defaults to `Qwen/Qwen3-1.7B`, MLX backend, simple diverse sampler).
+- Run rollouts + rewards: `python tools/grpo_runner.py --config configs/grpo_default.json`
+- Output: `data/grpo_runs/<run>/rollouts.jsonl` with group rewards, advantages, and component breakdowns.
+
+## GRPO Training (Adapter)
+- The repo includes a lightweight GRPO trainer that optimizes a vocab-sized logit-bias adapter (keeps base model fixed; MLX rollouts).
+- Configure training under `train` in `configs/grpo_default.json`.
+- Start training: `python tools/grpo_train.py --config configs/grpo_default.json`
+- Checkpoints/logs in the configured `out_dir`.
+
+## Full GRPO Training (HF)
+- Train the base model weights (no LoRA/adapters):
+- Set `backend: hf` and adjust `train` hyperparams in `configs/grpo_default.json` (e.g., `lr: 5e-6`, `clip: 0.2`).
+- Start: `python tools/grpo_full_train.py --config configs/grpo_default.json`
+- Checkpoints are saved under the configured `out_dir`.
+- Options: enable `train.amp` (`bf16`/`fp16` on CUDA), set `train.grad_accum` for accumulation, and `train.kl_coef` to add a reference-KL penalty.
 
 ## Data Layout
 
