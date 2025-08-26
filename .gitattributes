@@ -1,0 +1,5 @@
+# Exclude docs and generated artifacts from language stats
+reports/** linguist-documentation
+reports/final/report.html linguist-generated=true
+reports/generated/** linguist-documentation
+
