@@ -28,13 +28,13 @@ It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
 
 ## Quick Links
 
-- Final one‑pager (self‑contained HTML): `reports/final/report.html`
-- Final DOCX: `reports/final/report.docx`
-- Final Markdown: `reports/final/README.md`
-- Model report (Qwen): `reports/Qwen/Qwen2.5-1.5B/README.md`
-- Model report (GPT‑2): `reports/gpt2/README.md`
-- Cross‑model compare: `reports/compare_gpt2_vs_Qwen_Qwen2.5-1.5B/README.md`
-- Generated examples (Normal vs Fixed‑Up): `reports/generated/README.md`
+- [Final Report (HTML, self‑contained)](reports/final/report.html)
+- [Final Report (DOCX)](reports/final/report.docx)
+- [Final Report (Markdown)](reports/final/README.md)
+- [Model Report — Qwen/Qwen2.5‑1.5B](reports/Qwen/Qwen2.5-1.5B/README.md)
+- [Model Report — GPT‑2](reports/gpt2/README.md)
+- [Cross‑Model Compare (GPT‑2 vs Qwen)](reports/compare_gpt2_vs_Qwen_Qwen2.5-1.5B/README.md)
+- [All Generated Before/After Examples](reports/generated/README.md)
 
 ## Data Layout
 
