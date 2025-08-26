@@ -29,3 +29,6 @@ checkpoints/
 # Uncomment if push complains about size or quota
 # data/generated/**/*.txt
 
+
+# Remove poorly formatted PDF from tracking
+reports/final/report.pdf
