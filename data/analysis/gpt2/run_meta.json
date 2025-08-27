@@ -7,7 +7,7 @@
     "k": 10,
     "p": 0.9,
     "context": 1024,
-    "stride": 896
+    "stride": null
   },
-  "timestamp": 1756018184.514415
+  "timestamp": 1756254703.923542
 }

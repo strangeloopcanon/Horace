@@ -346,6 +346,7 @@ def main():
     ap.add_argument('--out-readme', default='reports/final/README.md')
     ap.add_argument('--out-pdf', default='reports/final/report.pdf')
     ap.add_argument('--out-docx', default='reports/final/report.docx')
+    ap.add_argument('--keep-pdf', action='store_true', help='Keep the generated PDF (by default it is deleted)')
     args = ap.parse_args()
 
     # Resolve model report dir and compare dir
@@ -372,7 +373,15 @@ def main():
         model_dir / 'author_william_shakespeare_series.png',
         model_dir / 'author_p_g_wodehouse_series.png',
     ]
-    build_final_pdf(Path(args.out_readme), images, latest, Path(args.out_pdf))
+    out_pdf_path = Path(args.out_pdf)
+    build_final_pdf(Path(args.out_readme), images, latest, out_pdf_path)
+    # Delete PDF unless requested to keep
+    if not args.keep_pdf:
+        try:
+            out_pdf_path.unlink(missing_ok=True)
+            print(f"Deleted PDF (as requested): {out_pdf_path}")
+        except Exception as e:
+            print(f"[WARN] Could not delete PDF {out_pdf_path}: {e}")
 
     # Build DOCX (best-effort)
     try:
