@@ -1,9 +1,27 @@
 [
   {
     "type": "novel",
+    "author": "Bram Stoker",
+    "title": "Dracula",
+    "path": "data/novel/bram_stoker/dracula.txt"
+  },
+  {
+    "type": "novel",
+    "author": "Charlotte Bronte",
+    "title": "Jane Eyre",
+    "path": "data/novel/charlotte_bronte/jane_eyre.txt"
+  },
+  {
+    "type": "novel",
     "author": "Ernest Hemingway",
-    "title": "A Farewell to Arms",
+    "title": "A Farewell To Arms",
     "path": "data/novel/ernest_hemingway/a_farewell_to_arms.txt"
+  },
+  {
+    "type": "novel",
+    "author": "Ernest Hemingway",
+    "title": "The Old Man And The Sea",
+    "path": "data/novel/ernest_hemingway/the_old_man_and_the_sea.txt"
   },
   {
     "type": "novel",
@@ -19,15 +37,105 @@
   },
   {
     "type": "novel",
+    "author": "H G Wells",
+    "title": "The War Of The Worlds",
+    "path": "data/novel/h_g_wells/the_war_of_the_worlds.txt"
+  },
+  {
+    "type": "novel",
+    "author": "Jane Austen",
+    "title": "Pride And Prejudice",
+    "path": "data/novel/jane_austen/pride_and_prejudice.txt"
+  },
+  {
+    "type": "novel",
+    "author": "Mary Shelley",
+    "title": "Frankenstein",
+    "path": "data/novel/mary_shelley/frankenstein.txt"
+  },
+  {
+    "type": "novel",
+    "author": "Oscar Wilde",
+    "title": "The Picture Of Dorian Gray",
+    "path": "data/novel/oscar_wilde/the_picture_of_dorian_gray.txt"
+  },
+  {
+    "type": "novel",
     "author": "P G Wodehouse",
-    "title": "Carry on Jeeves",
+    "title": "Carry On Jeeves",
     "path": "data/novel/p_g_wodehouse/carry_on_jeeves.txt"
+  },
+  {
+    "type": "novel",
+    "author": "P G Wodehouse",
+    "title": "Mike",
+    "path": "data/novel/p_g_wodehouse/mike.txt"
+  },
+  {
+    "type": "novel",
+    "author": "P G Wodehouse",
+    "title": "Psmith In The City",
+    "path": "data/novel/p_g_wodehouse/psmith_in_the_city.txt"
+  },
+  {
+    "type": "novel",
+    "author": "P G Wodehouse",
+    "title": "The Pothunters",
+    "path": "data/novel/p_g_wodehouse/the_pothunters.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Alfred Lord Tennyson",
+    "title": "Break Break Break",
+    "path": "data/poem/alfred_lord_tennyson/Break_Break_Break.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Alfred Lord Tennyson",
+    "title": "Crossing The Bar",
+    "path": "data/poem/alfred_lord_tennyson/Crossing_the_Bar.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Alfred Lord Tennyson",
+    "title": "The Charge Of The Light Brigade",
+    "path": "data/poem/alfred_lord_tennyson/The_Charge_of_the_Light_Brigade.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Christina Rossetti",
+    "title": "A Birthday",
+    "path": "data/poem/christina_rossetti/A_Birthday.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Christina Rossetti",
+    "title": "In The Bleak Midwinter",
+    "path": "data/poem/christina_rossetti/In_the_Bleak_Midwinter.txt"
   },
   {
     "type": "poem",
     "author": "Christina Rossetti",
     "title": "Remember",
     "path": "data/poem/christina_rossetti/Remember.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Christina Rossetti",
+    "title": "When I Am Dead My Dearest",
+    "path": "data/poem/christina_rossetti/When_I_am_dead_my_dearest.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Dylan Thomas",
+    "title": "And Death Shall Have No Dominion",
+    "path": "data/poem/dylan_thomas/And_Death_Shall_Have_No_Dominion.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Dylan Thomas",
+    "title": "Do Not Go Gentle Into That Good Night",
+    "path": "data/poem/dylan_thomas/Do_Not_Go_Gentle_Into_That_Good_Night.txt"
   },
   {
     "type": "poem",
@@ -44,31 +152,121 @@
   {
     "type": "poem",
     "author": "Emily Dickinson",
-    "title": "Because I Could Not Stop for Death",
+    "title": "A Bird Came Down The Walk",
+    "path": "data/poem/emily_dickinson/A_Bird_came_down_the_Walk.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Emily Dickinson",
+    "title": "Because I Could Not Stop For Death",
     "path": "data/poem/emily_dickinson/Because_I_Could_Not_Stop_for_Death.txt"
   },
   {
     "type": "poem",
     "author": "Emily Dickinson",
-    "title": "I'm Nobody, Who Are You",
+    "title": "Hope Is The Thing With Feathers",
+    "path": "data/poem/emily_dickinson/Hope_is_the_thing_with_feathers.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Emily Dickinson",
+    "title": "I Dwell In Possibility",
+    "path": "data/poem/emily_dickinson/I_dwell_in_Possibility.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Emily Dickinson",
+    "title": "I Heard A Fly Buzz When I Died",
+    "path": "data/poem/emily_dickinson/I_heard_a_Fly_buzz_when_I_died.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Emily Dickinson",
+    "title": "Im Nobody Who Are You",
     "path": "data/poem/emily_dickinson/Im_Nobody_Who_Are_You.txt"
   },
   {
     "type": "poem",
     "author": "Emily Dickinson",
-    "title": "Hope Is the Thing with Feathers",
-    "path": "data/poem/emily_dickinson/Hope_is_the_thing_with_feathers.txt"
+    "title": "Success Is Counted Sweetest",
+    "path": "data/poem/emily_dickinson/Success_is_counted_sweetest.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Emily Dickinson",
+    "title": "Wild Nights Wild Nights",
+    "path": "data/poem/emily_dickinson/Wild_Nights_Wild_Nights.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Henry Wadsworth Longfellow",
+    "title": "A Psalm Of Life",
+    "path": "data/poem/henry_wadsworth_longfellow/A_Psalm_of_Life.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Henry Wadsworth Longfellow",
+    "title": "The Arrow And The Song",
+    "path": "data/poem/henry_wadsworth_longfellow/The_Arrow_and_the_Song.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Henry Wadsworth Longfellow",
+    "title": "The Childrens Hour",
+    "path": "data/poem/henry_wadsworth_longfellow/The_Childrens_Hour.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Henry Wadsworth Longfellow",
+    "title": "The Village Blacksmith",
+    "path": "data/poem/henry_wadsworth_longfellow/The_Village_Blacksmith.txt"
   },
   {
     "type": "poem",
     "author": "John Donne",
-    "title": "No Man Is an Island",
+    "title": "No Man Is An Island",
     "path": "data/poem/john_donne/No_Man_Is_an_Island.txt"
   },
   {
     "type": "poem",
+    "author": "John Keats",
+    "title": "Ode To A Grecian Urn",
+    "path": "data/poem/john_keats/Ode_to_a_Grecian_Urn.txt"
+  },
+  {
+    "type": "poem",
+    "author": "John Keats",
+    "title": "Ode To A Nightingale",
+    "path": "data/poem/john_keats/Ode_to_a_Nightingale.txt"
+  },
+  {
+    "type": "poem",
+    "author": "John Keats",
+    "title": "To Autumn",
+    "path": "data/poem/john_keats/To_Autumn.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Langston Hughes",
+    "title": "I Too",
+    "path": "data/poem/langston_hughes/I_Too.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Langston Hughes",
+    "title": "Mother To Son",
+    "path": "data/poem/langston_hughes/Mother_to_Son.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Langston Hughes",
+    "title": "The Negro Speaks Of Rivers",
+    "path": "data/poem/langston_hughes/The_Negro_Speaks_of_Rivers.txt"
+  },
+  {
+    "type": "poem",
     "author": "Laurence Binyon",
-    "title": "For the Fallen",
+    "title": "For The Fallen",
     "path": "data/poem/laurence_binyon/For_the_Fallen.txt"
   },
   {
@@ -80,8 +278,20 @@
   {
     "type": "poem",
     "author": "Lord Byron",
-    "title": "She Walks in Beauty",
+    "title": "She Walks In Beauty",
     "path": "data/poem/lord_byron/She_Walks_in_Beauty.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Paul Laurence Dunbar",
+    "title": "Sympathy",
+    "path": "data/poem/paul_laurence_dunbar/Sympathy.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Paul Laurence Dunbar",
+    "title": "We Wear The Mask",
+    "path": "data/poem/paul_laurence_dunbar/We_Wear_the_Mask.txt"
   },
   {
     "type": "poem",
@@ -92,19 +302,43 @@
   {
     "type": "poem",
     "author": "Robert Burns",
-    "title": "A Red, Red Rose",
+    "title": "A Red Red Rose",
     "path": "data/poem/robert_burns/A_Red_Red_Rose.txt"
   },
   {
     "type": "poem",
+    "author": "Robert Burns",
+    "title": "Auld Lang Syne",
+    "path": "data/poem/robert_burns/Auld_Lang_Syne.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Robert Burns",
+    "title": "My Hearts In The Highlands",
+    "path": "data/poem/robert_burns/My_Hearts_in_the_Highlands.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Robert Burns",
+    "title": "To A Louse",
+    "path": "data/poem/robert_burns/To_a_Louse.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Robert Burns",
+    "title": "To A Mouse",
+    "path": "data/poem/robert_burns/To_a_Mouse.txt"
+  },
+  {
+    "type": "poem",
     "author": "Robert Frost",
-    "title": "Fire and Ice",
+    "title": "Fire And Ice",
     "path": "data/poem/robert_frost/Fire_and_Ice.txt"
   },
   {
     "type": "poem",
     "author": "Robert Frost",
-    "title": "Stopping by Woods on a Snowy Evening",
+    "title": "Stopping By Woods On A Snowy Evening",
     "path": "data/poem/robert_frost/Stopping_by_Woods_on_a_Snowy_Evening.txt"
   },
   {
@@ -127,15 +361,39 @@
   },
   {
     "type": "poem",
+    "author": "Rudyard Kipling",
+    "title": "The Gods Of Copybook Headings",
+    "path": "data/poem/rudyard_kipling/The_Gods_of_Copybook_Headings.txt"
+  },
+  {
+    "type": "poem",
     "author": "Samuel Taylor Coleridge",
     "title": "Kubla Khan",
     "path": "data/poem/samuel_taylor_coleridge/Kubla_Khan.txt"
   },
   {
     "type": "poem",
+    "author": "Thomas Gray",
+    "title": "Elegy In A Country Churchyard",
+    "path": "data/poem/thomas_gray/Elegy_in_a_Country_Churchyard.txt"
+  },
+  {
+    "type": "poem",
     "author": "Walt Whitman",
-    "title": "O Captain! My Captain!",
+    "title": "O Captain My Captain",
     "path": "data/poem/walt_whitman/O_Captain_My_Captain.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Wilfred Owen",
+    "title": "Anthem For Doomed Youth",
+    "path": "data/poem/wilfred_owen/Anthem_for_Doomed_Youth.txt"
+  },
+  {
+    "type": "poem",
+    "author": "Wilfred Owen",
+    "title": "Dulce Et Decorum Est",
+    "path": "data/poem/wilfred_owen/Dulce_et_Decorum_Est.txt"
   },
   {
     "type": "poem",
@@ -146,8 +404,62 @@
   {
     "type": "poem",
     "author": "William Blake",
+    "title": "Holy Thursday Innocence",
+    "path": "data/poem/william_blake/Holy_Thursday_Innocence.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Blake",
+    "title": "London",
+    "path": "data/poem/william_blake/London.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Blake",
+    "title": "The Chimney Sweeper Experience",
+    "path": "data/poem/william_blake/The_Chimney_Sweeper_Experience.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Blake",
+    "title": "The Chimney Sweeper Innocence",
+    "path": "data/poem/william_blake/The_Chimney_Sweeper_Innocence.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Blake",
+    "title": "The Lamb",
+    "path": "data/poem/william_blake/The_Lamb.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Blake",
     "title": "The Tyger",
     "path": "data/poem/william_blake/The_Tyger.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Butler Yeats",
+    "title": "He Wishes For The Cloths Of Heaven",
+    "path": "data/poem/william_butler_yeats/He_Wishes_For_the_Cloths_of_Heaven.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Butler Yeats",
+    "title": "The Lake Isle Of Innisfree",
+    "path": "data/poem/william_butler_yeats/The_Lake_Isle_of_Innisfree.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Butler Yeats",
+    "title": "The Second Coming",
+    "path": "data/poem/william_butler_yeats/The_Second_Coming.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Butler Yeats",
+    "title": "When You Are Old",
+    "path": "data/poem/william_butler_yeats/When_You_Are_Old.txt"
   },
   {
     "type": "poem",
@@ -158,62 +470,49 @@
   {
     "type": "poem",
     "author": "William Shakespeare",
-    "title": "Sonnet 18",
-    "path": "data/poem/william_shakespeare/Sonnet_18.txt"
-  },
-  {
-    "type": "poem",
-    "author": "William Shakespeare",
     "title": "Sonnet 130",
     "path": "data/poem/william_shakespeare/Sonnet_130.txt"
   },
   {
     "type": "poem",
+    "author": "William Shakespeare",
+    "title": "Sonnet 18",
+    "path": "data/poem/william_shakespeare/Sonnet_18.txt"
+  },
+  {
+    "type": "poem",
     "author": "William Wordsworth",
-    "title": "I Wandered Lonely as a Cloud",
+    "title": "Composed Upon Westminster Bridge",
+    "path": "data/poem/william_wordsworth/Composed_upon_Westminster_Bridge.txt"
+  },
+  {
+    "type": "poem",
+    "author": "William Wordsworth",
+    "title": "I Wandered Lonely As A Cloud",
     "path": "data/poem/william_wordsworth/I_Wandered_Lonely_as_a_Cloud.txt"
   },
   {
     "type": "poem",
-    "author": "William Butler Yeats",
-    "title": "He Wishes for the Cloths of Heaven",
-    "path": "data/poem/william_butler_yeats/He_Wishes_For_the_Cloths_of_Heaven.txt"
+    "author": "William Wordsworth",
+    "title": "The Solitary Reaper",
+    "path": "data/poem/william_wordsworth/The_Solitary_Reaper.txt"
   },
-  {
-    "type": "poem",
-    "author": "Dylan Thomas",
-    "title": "Do Not Go Gentle into That Good Night",
-    "path": "data/poem/dylan_thomas/Do_Not_Go_Gentle_Into_That_Good_Night.txt"
-  },
-  {
-    "type": "poem",
-    "author": "Dylan Thomas",
-    "title": "And Death Shall Have No Dominion",
-    "path": "data/poem/dylan_thomas/And_Death_Shall_Have_No_Dominion.txt"
-  },
-  {
-    "type": "poem",
-    "author": "Rudyard Kipling",
-    "title": "The Gods of Copybook Headings",
-    "path": "data/poem/rudyard_kipling/The_Gods_of_Copybook_Headings.txt"
-  },
-
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "Belling the Cat",
+    "title": "Belling The Cat",
     "path": "data/shortstory/aesop/Belling_the_Cat.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "Hercules and the Wagoner",
+    "title": "Hercules And The Wagoner",
     "path": "data/shortstory/aesop/Hercules_and_the_Wagoner.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Ant and the Grasshopper",
+    "title": "The Ant And The Grasshopper",
     "path": "data/shortstory/aesop/The_Ant_and_the_Grasshopper.txt"
   },
   {
@@ -225,116 +524,188 @@
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Bundle of Sticks",
+    "title": "The Bundle Of Sticks",
     "path": "data/shortstory/aesop/The_Bundle_of_Sticks.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Crow and the Pitcher",
+    "title": "The Crow And The Pitcher",
     "path": "data/shortstory/aesop/The_Crow_and_the_Pitcher.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Dog in the Manger",
+    "title": "The Dog In The Manger",
     "path": "data/shortstory/aesop/The_Dog_in_the_Manger.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Fisherman and the Little Fish",
+    "title": "The Fisherman And The Little Fish",
     "path": "data/shortstory/aesop/The_Fisherman_and_the_Little_Fish.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Fox and the Crow",
+    "title": "The Fox And The Crow",
     "path": "data/shortstory/aesop/The_Fox_and_the_Crow.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Fox and the Grapes",
+    "title": "The Fox And The Grapes",
     "path": "data/shortstory/aesop/The_Fox_and_the_Grapes.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Frogs Desiring a King",
+    "title": "The Frogs Desiring A King",
     "path": "data/shortstory/aesop/The_Frogs_Desiring_a_King.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Goose That Laid the Golden Eggs",
+    "title": "The Goose That Laid The Golden Eggs",
     "path": "data/shortstory/aesop/The_Goose_that_Laid_the_Golden_Eggs.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Lion and the Mouse",
+    "title": "The Lion And The Mouse",
     "path": "data/shortstory/aesop/The_Lion_and_the_Mouse.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Milkmaid and Her Pail",
+    "title": "The Milkmaid And Her Pail",
     "path": "data/shortstory/aesop/The_Milkmaid_and_Her_Pail.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Miser and His Gold",
+    "title": "The Miser And His Gold",
     "path": "data/shortstory/aesop/The_Miser_and_His_Gold.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The North Wind and the Sun",
+    "title": "The North Wind And The Sun",
     "path": "data/shortstory/aesop/The_North_Wind_and_the_Sun.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Tortoise and the Hare",
+    "title": "The Tortoise And The Hare",
     "path": "data/shortstory/aesop/The_Tortoise_and_the_Hare.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Travelers and the Plane Tree",
+    "title": "The Travelers And The Plane Tree",
     "path": "data/shortstory/aesop/The_Travelers_and_the_Plane_Tree.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Wolf and the Crane",
+    "title": "The Wolf And The Crane",
     "path": "data/shortstory/aesop/The_Wolf_and_the_Crane.txt"
   },
   {
     "type": "shortstory",
     "author": "Aesop",
-    "title": "The Wolf in Sheep's Clothing",
+    "title": "The Wolf In Sheeps Clothing",
     "path": "data/shortstory/aesop/The_Wolf_in_Sheeps_Clothing.txt"
   },
   {
     "type": "shortstory",
     "author": "Anton Chekhov",
-    "title": "The Lady with the Dog",
+    "title": "Gooseberries",
+    "path": "data/shortstory/anton_chekhov/Gooseberries.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Anton Chekhov",
+    "title": "The Bet",
+    "path": "data/shortstory/anton_chekhov/The_Bet.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Anton Chekhov",
+    "title": "The Darling",
+    "path": "data/shortstory/anton_chekhov/The_Darling.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Anton Chekhov",
+    "title": "The Lady With The Dog",
     "path": "data/shortstory/anton_chekhov/The_Lady_with_the_Dog.txt"
   },
   {
     "type": "shortstory",
-    "author": "Edgar Allan Poe",
-    "title": "Annabel Lee",
-    "path": "data/shortstory/edgar_allan_poe/Annabel_Lee.txt"
+    "author": "Anton Chekhov",
+    "title": "Vanka",
+    "path": "data/shortstory/anton_chekhov/Vanka.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Anton Chekhov",
+    "title": "Ward No 6",
+    "path": "data/shortstory/anton_chekhov/Ward_No_6.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Bret Harte",
+    "title": "The Outcasts Of Poker Flat",
+    "path": "data/shortstory/bret_harte/The_Outcasts_of_Poker_Flat.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Charles Dickens",
+    "title": "The Signal Man",
+    "path": "data/shortstory/charles_dickens/The_Signal_Man.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Charlotte Perkins Gilman",
+    "title": "The Yellow Wallpaper",
+    "path": "data/shortstory/charlotte_perkins_gilman/The_Yellow_Wallpaper.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "D H Lawrence",
+    "title": "The Rocking Horse Winner",
+    "path": "data/shortstory/d_h_lawrence/The_Rocking_Horse_Winner.txt"
   },
   {
     "type": "shortstory",
     "author": "Edgar Allan Poe",
-    "title": "The Cask of Amontillado",
+    "title": "The Black Cat",
+    "path": "data/shortstory/edgar_allan_poe/The_Black_Cat.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Edgar Allan Poe",
+    "title": "The Cask Of Amontillado",
     "path": "data/shortstory/edgar_allan_poe/The_Cask_of_Amontillado.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Edgar Allan Poe",
+    "title": "The Fall Of The House Of Usher",
+    "path": "data/shortstory/edgar_allan_poe/The_Fall_of_the_House_of_Usher.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Edgar Allan Poe",
+    "title": "The Masque Of The Red Death",
+    "path": "data/shortstory/edgar_allan_poe/The_Masque_of_the_Red_Death.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Edgar Allan Poe",
+    "title": "The Purloined Letter",
+    "path": "data/shortstory/edgar_allan_poe/The_Purloined_Letter.txt"
   },
   {
     "type": "shortstory",
@@ -345,25 +716,85 @@
   {
     "type": "shortstory",
     "author": "Edgar Allan Poe",
-    "title": "The Tell-Tale Heart",
+    "title": "The Tell Tale Heart",
     "path": "data/shortstory/edgar_allan_poe/The_Tell_Tale_Heart.txt"
   },
   {
     "type": "shortstory",
-    "author": "Guy de Maupassant",
+    "author": "F Scott Fitzgerald",
+    "title": "The Curious Case Of Benjamin Button",
+    "path": "data/shortstory/f_scott_fitzgerald/The_Curious_Case_of_Benjamin_Button.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "F Scott Fitzgerald",
+    "title": "The Diamond As Big As The Ritz",
+    "path": "data/shortstory/f_scott_fitzgerald/The_Diamond_as_Big_as_the_Ritz.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Guy De Maupassant",
     "title": "The Necklace",
     "path": "data/shortstory/guy_de_maupassant/The_Necklace.txt"
   },
   {
     "type": "shortstory",
+    "author": "H G Wells",
+    "title": "The Country Of The Blind",
+    "path": "data/shortstory/h_g_wells/The_Country_of_the_Blind.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "H G Wells",
+    "title": "The Magic Shop",
+    "path": "data/shortstory/h_g_wells/The_Magic_Shop.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "H G Wells",
+    "title": "The Star",
+    "path": "data/shortstory/h_g_wells/The_Star.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Herman Melville",
+    "title": "Bartleby The Scrivener",
+    "path": "data/shortstory/herman_melville/Bartleby_the_Scrivener.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Herman Melville",
+    "title": "Benito Cereno",
+    "path": "data/shortstory/herman_melville/Benito_Cereno.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Jack London",
+    "title": "A Piece Of Steak",
+    "path": "data/shortstory/jack_london/A_Piece_of_Steak.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "James Joyce",
+    "title": "Araby",
+    "path": "data/shortstory/james_joyce/Araby.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "James Joyce",
+    "title": "Eveline",
+    "path": "data/shortstory/james_joyce/Eveline.txt"
+  },
+  {
+    "type": "shortstory",
     "author": "Kate Chopin",
-    "title": "A Pair of Silk Stockings",
+    "title": "A Pair Of Silk Stockings",
     "path": "data/shortstory/kate_chopin/A_Pair_of_Silk_Stockings.txt"
   },
   {
     "type": "shortstory",
     "author": "Kate Chopin",
-    "title": "The Story of an Hour",
+    "title": "The Story Of An Hour",
     "path": "data/shortstory/kate_chopin/The_Story_of_an_Hour.txt"
   },
   {
@@ -374,14 +805,56 @@
   },
   {
     "type": "shortstory",
+    "author": "Leo Tolstoy",
+    "title": "How Much Land Does A Man Need",
+    "path": "data/shortstory/leo_tolstoy/How_Much_Land_Does_a_Man_Need.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Leo Tolstoy",
+    "title": "Kholstomer",
+    "path": "data/shortstory/leo_tolstoy/Kholstomer.txt"
+  },
+  {
+    "type": "shortstory",
     "author": "Mark Twain",
-    "title": "The Celebrated Jumping Frog of Calaveras County",
+    "title": "The Celebrated Jumping Frog Of Calaveras County",
     "path": "data/shortstory/mark_twain/The_Celebrated_Jumping_Frog_of_Calaveras_County.txt"
   },
   {
     "type": "shortstory",
-    "author": "O. Henry",
-    "title": "The Gift of the Magi",
+    "author": "Nathaniel Hawthorne",
+    "title": "The Birthmark",
+    "path": "data/shortstory/nathaniel_hawthorne/The_Birthmark.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Nathaniel Hawthorne",
+    "title": "The Ministers Black Veil",
+    "path": "data/shortstory/nathaniel_hawthorne/The_Ministers_Black_Veil.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Nikolai Gogol",
+    "title": "The Nose",
+    "path": "data/shortstory/nikolai_gogol/The_Nose.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Nikolai Gogol",
+    "title": "The Overcoat",
+    "path": "data/shortstory/nikolai_gogol/The_Overcoat.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "O Henry",
+    "title": "After Twenty Years",
+    "path": "data/shortstory/o_henry/After_Twenty_Years.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "O Henry",
+    "title": "The Gift Of The Magi",
     "path": "data/shortstory/o_henry/The_Gift_of_the_Magi.txt"
   },
   {
@@ -404,14 +877,20 @@
   },
   {
     "type": "shortstory",
-    "author": "Rudyard Kipling",
-    "title": "If",
-    "path": "data/shortstory/rudyard_kipling/If.txt"
+    "author": "Robert Louis Stevenson",
+    "title": "Dr Jekyll And Mr Hyde",
+    "path": "data/shortstory/robert_louis_stevenson/Dr_Jekyll_and_Mr_Hyde.txt"
   },
   {
     "type": "shortstory",
     "author": "Rudyard Kipling",
-    "title": "Rikki-Tikki-Tavi",
+    "title": "Mrs Bathurst",
+    "path": "data/shortstory/rudyard_kipling/Mrs_Bathurst.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Rudyard Kipling",
+    "title": "Rikki Tikki Tavi",
     "path": "data/shortstory/rudyard_kipling/Rikki_Tikki_Tavi.txt"
   },
   {
@@ -419,5 +898,35 @@
     "author": "Saki",
     "title": "The Open Window",
     "path": "data/shortstory/saki/The_Open_Window.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Stephen Crane",
+    "title": "The Blue Hotel",
+    "path": "data/shortstory/stephen_crane/The_Blue_Hotel.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Stephen Crane",
+    "title": "The Open Boat",
+    "path": "data/shortstory/stephen_crane/The_Open_Boat.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Washington Irving",
+    "title": "The Devil And Tom Walker",
+    "path": "data/shortstory/washington_irving/The_Devil_and_Tom_Walker.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Washington Irving",
+    "title": "The Legend Of Sleepy Hollow",
+    "path": "data/shortstory/washington_irving/The_Legend_of_Sleepy_Hollow.txt"
+  },
+  {
+    "type": "shortstory",
+    "author": "Willa Cather",
+    "title": "Pauls Case",
+    "path": "data/shortstory/willa_cather/Pauls_Case.txt"
   }
 ]

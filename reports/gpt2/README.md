@@ -24,13 +24,13 @@
 ![docs_top_cohesion_delta](docs_top_cohesion_delta.png)
 
 
-![doc_ts_poem_william_blake_the_tyger](doc_ts_poem_william_blake_the_tyger.png)
+![doc_ts_poem_laurence_binyon_for_the_fallen](doc_ts_poem_laurence_binyon_for_the_fallen.png)
 
 
-![doc_ts_shortstory_aesop_the_north_wind_and_the_sun](doc_ts_shortstory_aesop_the_north_wind_and_the_sun.png)
+![doc_ts_shortstory_anton_chekhov_the_darling](doc_ts_shortstory_anton_chekhov_the_darling.png)
 
 
-![doc_ts_novel_ernest_hemingway_the_sun_also_rises](doc_ts_novel_ernest_hemingway_the_sun_also_rises.png)
+![doc_ts_novel_charlotte_bronte_jane_eyre](doc_ts_novel_charlotte_bronte_jane_eyre.png)
 
 
 ## Author Cadence

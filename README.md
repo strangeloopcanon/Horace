@@ -168,6 +168,7 @@ After both complete, compare per‑doc or per‑author signatures across `data/a
 - Saved outputs go to `data/generated/...` and aggregate at `reports/generated/README.md`.
 
 ## Make the Final Book
-- Build curated README, DOCX, PDF, and one‑page HTML, pulling in figures and latest samples:
+- Build curated README (Markdown), DOCX, and HTML (one‑page), pulling in figures and latest samples:
   - `python -m tools.finalize --model Qwen/Qwen2.5-1.5B --out-readme reports/final/README.md --out-docx reports/final/report.docx --out-pdf reports/final/report.pdf`
+  - Note: `tools/finalize.py` generates a PDF but deletes it by default. To keep the PDF, pass `--keep-pdf`.
   - One‑page HTML at `reports/final/report.html` embeds images for easy sharing.

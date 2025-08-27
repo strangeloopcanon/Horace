@@ -24,13 +24,13 @@
 ![docs_top_cohesion_delta](docs_top_cohesion_delta.png)
 
 
-![doc_ts_poem_william_shakespeare_sonnet_130](doc_ts_poem_william_shakespeare_sonnet_130.png)
+![doc_ts_poem_wilfred_owen_anthem_for_doomed_youth](doc_ts_poem_wilfred_owen_anthem_for_doomed_youth.png)
 
 
-![doc_ts_shortstory_aesop_hercules_and_the_wagoner](doc_ts_shortstory_aesop_hercules_and_the_wagoner.png)
+![doc_ts_shortstory_guy_de_maupassant_the_necklace](doc_ts_shortstory_guy_de_maupassant_the_necklace.png)
 
 
-![doc_ts_novel_ernest_hemingway_the_sun_also_rises](doc_ts_novel_ernest_hemingway_the_sun_also_rises.png)
+![doc_ts_novel_ernest_hemingway_a_farewell_to_arms](doc_ts_novel_ernest_hemingway_a_farewell_to_arms.png)
 
 
 ## Author Cadence

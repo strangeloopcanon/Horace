@@ -1,0 +1,13 @@
+{
+  "model_id": "Qwen/Qwen2.5-1.5B",
+  "tokenizer_id": "Qwen/Qwen2.5-1.5B",
+  "vocab_size": 151643,
+  "max_context": 1024,
+  "params": {
+    "k": 10,
+    "p": 0.9,
+    "context": 1024,
+    "stride": null
+  },
+  "timestamp": 1756263546.546089
+}

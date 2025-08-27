@@ -1,0 +1,25 @@
+{
+  "freeverse": {
+    "weights": {"cad":0.28,"sup":0.18,"dis":0.18,"cor":0.26,"arc":0.10,"kl":0.08},
+    "corridor": {"r_lo":0.14,"r_hi":0.32,"soft_margin":0.02},
+    "bands": {"surprise": [0.5, 2.0], "entropy": [2.5, 4.0]},
+    "notes": "Defaults assume unit-norm sentence embeddings for distance. Start wide; tighten after Phase B."
+  },
+  "sonnet": {
+    "weights": {"cad":0.22,"sup":0.12,"dis":0.14,"cor":0.22,"arc":0.06,"rhyme":0.12,"meter":0.12,"kl":0.08},
+    "corridor": {"r_lo":0.12,"r_hi":0.26,"soft_margin":0.015},
+    "rhyme_scheme": "ABAB CDCD EFEF GG",
+    "meter": "iambic_pentameter",
+    "format_lines": 14
+  },
+  "prose": {
+    "weights": {"cad":0.22,"sup":0.12,"dis":0.22,"cor":0.34,"arc":0.10,"kl":0.06},
+    "corridor": {"r_lo":0.10,"r_hi":0.28,"soft_margin":0.015}
+  },
+  "dickinson": {
+    "weights": {"cad":0.30,"sup":0.16,"dis":0.18,"cor":0.26,"arc":0.10,"kl":0.08},
+    "corridor": {"r_lo":0.14,"r_hi":0.32,"soft_margin":0.02},
+    "notes": "Enable dash-tolerant punctuation handling in scorer."
+  }
+}
+

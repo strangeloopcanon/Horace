@@ -1,0 +1,13 @@
+{
+  "model": "Qwen/Qwen3-1.7B",
+  "backend": "mlx",
+  "seed": 42,
+  "group_size": 8,
+  "max_new_tokens": 160,
+  "sampler": {"temperature": 0.8, "top_p": 0.95, "top_k": 60, "jitter": 0.03},
+  "reward": {"preset": "freeverse", "weights_override": null, "presets_file": "configs/reward_presets_v01.json"},
+  "prompts": "data/prompts/freeverse_dev.txt",
+  "out_dir": "data/grpo_runs/freeverse_v01",
+  "train": {"clip": 0.2, "lr": 5e-6, "kl_coef": 0.08, "target_kl": 0.08, "amp": true, "amp_dtype": "bf16"}
+}
+
