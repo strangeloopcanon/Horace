@@ -4,31 +4,39 @@
 *.swo
 *.orig
 *.log
+
+# Python
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
 
 # Virtualenvs and caches
 .venv/
 venv/
+.env/
+env/
 .cache/
 
-# Large model artifacts
+# Temporary import workspace
+.import_tmp/
+
+# Large model artifacts (do not track)
 models/
 checkpoints/
 *.safetensors
 *.bin
 *.pt
 
-# Analysis outputs can be huge — keep reports, ignore raw analysis
-
-# Hugging Face / mlx caches (if any)
-~/.cache/
+# Reports: do not track generated PDFs
+reports/**/report.pdf
+reports/final/*.pdf
 
 # Optional: ignore very large generated text variants (keep index + meta + fixed/baseline by default)
 # Uncomment if push complains about size or quota
 # data/generated/**/*.txt
-
-
-# Remove poorly formatted PDF from tracking
-reports/final/report.pdf
