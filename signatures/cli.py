@@ -402,6 +402,22 @@ def chunklevel_cv_classification(
     groups = [c.doc_idx for c in chunks]
     doc_ids = sorted(set(groups))
 
+    # If there is fewer than 2 documents, we cannot do leave-one-doc-out CV.
+    # Return a report with metadata and no confusion matrix.
+    if len(doc_ids) < 2:
+        return {
+            "n_chunks": len(chunks),
+            "n_docs": len(doc_ids),
+            "authors": sorted(set(y)),
+            "feature_keys": keys,
+            "acc_chunk_level": None,
+            "folds": [],
+            "confusion_labels": [],
+            "confusion_matrix": [],
+            "confusion_figure": None,
+            "note": "Insufficient documents for CV classification (need >=2).",
+        }
+
     # CV: leave-one-doc-out
     all_true: List[str] = []
     all_pred: List[str] = []
@@ -411,6 +427,9 @@ def chunklevel_cv_classification(
         # z-score on train only
         train_idx = [i for i, gg in enumerate(groups) if gg != g]
         test_idx = [i for i, gg in enumerate(groups) if gg == g]
+        if not train_idx or not test_idx:
+            # Skip folds where no training or testing data exists (degenerate split)
+            continue
         mu, sd = zscore_fit(X[train_idx])
         Xn = zscore_apply(X, mu, sd)
         preds, cents = nearest_centroid_predict(Xn, y, groups, fold_test_group=g)
