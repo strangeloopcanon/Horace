@@ -227,6 +227,11 @@ def surprisal_for_text_mlx(
             out = out[0]
         # logits: [1, L, V]; we need positions 0..L-2 predicting labels 1..L-1
         logits = out[:, :-1, :]
+        # Ensure float32 for safe numpy conversion (avoid bf16/float16 buffer issues)
+        try:
+            logits = logits.astype(getattr(mx, 'float32'))  # type: ignore[attr-defined]
+        except Exception:
+            pass
         # Convert to numpy for stability
         logits_np = np.array(logits)
         # softmax along vocab

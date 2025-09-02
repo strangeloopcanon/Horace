@@ -27,6 +27,7 @@ class RewardWeights:
     kl: float = 0.05
     safety: float = 1.0
     format: float = 0.5
+    grammar: float = 0.0
     # Optional plugin weights
     rhyme: float = 0.0
     meter: float = 0.0
@@ -47,6 +48,12 @@ class PresetConfig:
     format_lines: Optional[int] = None
     enable_rhyme: bool = False
     enable_meter: bool = False
+    enable_grammar: bool = False
+    # Grammar options (effective when enable_grammar or weights.grammar>0)
+    grammar_lang: str = "en-US"
+    grammar_count_style_as_errors: bool = False
+    grammar_max_errors_per_sentence: int = 0
+    grammar_alpha: float = 0.15  # decay factor in exp(-alpha * errors_per_100w)
     notes: Optional[str] = None
 
 
@@ -68,6 +75,10 @@ def load_presets(path: str) -> Dict[str, PresetConfig]:
             notes=cfg.get("notes"),
         )
     return presets
+
+
+# Cached LanguageTool instances per language (optional dependency)
+_LT_TOOLS = {}  # type: ignore[var-annotated]
 
 
 def normalize_components(components: Dict[str, float], stats: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
@@ -222,6 +233,61 @@ def distinctive_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
     return float(np.clip(s, 0.0, 1.0))
 
 
+def grammar_accuracy_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
+    """Optional grammar accuracy score in [0,1].
+
+    Uses language_tool_python if available to count rule matches and converts
+    error density (per 100 words) to a smooth score via exp(-alpha * rate).
+    Falls back to a light heuristic if the library is unavailable.
+
+    Only activates if preset.enable_grammar is True or weight > 0.
+    """
+    # Fast exit unless explicitly enabled/weighted
+    if not (preset.enable_grammar or getattr(preset.weights, "grammar", 0.0) > 0.0):
+        return 0.0
+    text = sample.get("gen_text") or sample.get("text") or ""
+    if not text or not text.strip():
+        return 0.0
+    try:
+        # Lazy import to avoid hard dependency
+        import language_tool_python as _ltp  # type: ignore
+        global _LT_TOOLS
+        lang = getattr(preset, "grammar_lang", "en-US") or "en-US"
+        if lang not in _LT_TOOLS:
+            _LT_TOOLS[lang] = _ltp.LanguageTool(lang)
+        tool = _LT_TOOLS[lang]
+        matches = tool.check(text)
+        # Optionally drop style issues
+        count_style = bool(getattr(preset, "grammar_count_style_as_errors", False))
+        issues = [m for m in matches if count_style or str(getattr(m, "ruleIssueType", "")).lower() != "style"]
+        # Allow up to N errors per sentence
+        import re as _re
+        sents = [s for s in _re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+        allowed = int(getattr(preset, "grammar_max_errors_per_sentence", 0)) * max(1, len(sents))
+        eff_errors = max(0, len(issues) - allowed)
+        # Compute errors per 100 words
+        words = _re.findall(r"[A-Za-z']+", text)
+        n_words = max(1, len(words))
+        rate = (eff_errors / n_words) * 100.0
+        alpha = float(getattr(preset, "grammar_alpha", 0.15))
+        # Map to [0,1] with smooth decay; 0 errors -> 1.0
+        score = math.exp(-alpha * rate)
+        return float(np.clip(score, 0.0, 1.0))
+    except Exception:
+        # Lightweight fallback: capitalization + terminal punctuation heuristic
+        try:
+            import re as _re
+            sents = [s.strip() for s in _re.split(r"[.!?]+\s+", text) if s.strip()]
+            if not sents:
+                return 0.0
+            caps = sum(1 for s in sents if s and s[0].isupper())
+            terminal = 1.0 if _re.search(r"[.!?]\s*$", text.strip()) else 0.0
+            base = 0.5 * (caps / max(1, len(sents))) + 0.5 * terminal
+            return float(np.clip(base, 0.0, 1.0))
+        except Exception:
+            return 0.0
+
+
 def corridor_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
     """Fraction of lines with theme-distance inside a corridor band.
     Uses hashed bag-of-words cosine distance as a lightweight embedding proxy.
@@ -365,6 +431,7 @@ def compute_reward(
         "kl": kl_divergence(sample, refs or {}),
         "saf": safety_penalty(sample, preset),
         "fmt": format_penalty(sample, preset),
+        "gra": grammar_accuracy_score(sample, preset),
     }
 
     comp = normalize_components(raw, norm_stats)
@@ -378,6 +445,7 @@ def compute_reward(
         - w.kl * comp["kl"]
         - w.safety * comp["saf"]
         - w.format * comp["fmt"]
+        + getattr(w, "grammar", 0.0) * comp.get("gra", 0.0)
     )
 
     # Optional plugins (weights default to 0.0)

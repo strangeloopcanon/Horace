@@ -1,6 +1,6 @@
 {
   "sonnet": {
-    "weights": {"cad": 0.25, "sup": 0.2, "dis": 0.1, "cor": 0.2, "arc": 0.1, "kl": 0.05, "safety": 1.0, "format": 1.0, "rhyme": 0.1, "meter": 0.1},
+    "weights": {"cad": 0.25, "sup": 0.2, "dis": 0.1, "cor": 0.2, "arc": 0.1, "kl": 0.05, "safety": 1.0, "format": 1.0, "grammar": 0.0, "rhyme": 0.1, "meter": 0.1},
     "corridor": {"r_lo": 0.25, "r_hi": 0.65, "soft_margin": 0.1},
     "format_lines": 14,
     "enable_rhyme": false,
@@ -8,7 +8,7 @@
     "notes": "Start with core five; enable rhyme/meter later by flipping flags and weights."
   },
   "dickinson": {
-    "weights": {"cad": 0.3, "sup": 0.25, "dis": 0.1, "cor": 0.2, "arc": 0.15, "kl": 0.05, "safety": 1.0, "format": 0.5},
+    "weights": {"cad": 0.3, "sup": 0.25, "dis": 0.1, "cor": 0.2, "arc": 0.15, "kl": 0.05, "safety": 1.0, "format": 0.5, "grammar": 0.0},
     "corridor": {"r_lo": 0.2, "r_hi": 0.7, "soft_margin": 0.12},
     "format_lines": null,
     "enable_rhyme": false,
@@ -16,7 +16,7 @@
     "notes": "Allow slant rhyme later via plugin; tolerate caesura/dashes."
   },
   "freeverse": {
-    "weights": {"cad": 0.35, "sup": 0.25, "dis": 0.15, "cor": 0.15, "arc": 0.1, "kl": 0.05, "safety": 1.0, "format": 0.25},
+    "weights": {"cad": 0.35, "sup": 0.25, "dis": 0.15, "cor": 0.15, "arc": 0.1, "kl": 0.05, "safety": 1.0, "format": 0.25, "grammar": 0.0},
     "corridor": {"r_lo": 0.15, "r_hi": 0.75, "soft_margin": 0.15},
     "format_lines": null,
     "enable_rhyme": false,
@@ -24,7 +24,7 @@
     "notes": "Wider corridor and longer cooldowns acceptable."
   },
   "prose": {
-    "weights": {"cad": 0.3, "sup": 0.2, "dis": 0.2, "cor": 0.2, "arc": 0.1, "kl": 0.05, "safety": 1.0, "format": 0.1},
+    "weights": {"cad": 0.3, "sup": 0.2, "dis": 0.2, "cor": 0.2, "arc": 0.1, "kl": 0.05, "safety": 1.0, "format": 0.1, "grammar": 0.0},
     "corridor": {"r_lo": 0.2, "r_hi": 0.6, "soft_margin": 0.1},
     "format_lines": null,
     "enable_rhyme": false,
@@ -32,4 +32,3 @@
     "notes": "Focus on pacing and coherence; no rhyme/meter."
   }
 }
-

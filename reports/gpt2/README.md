@@ -2,6 +2,24 @@
 
 
 
+## Signatures (Classification)
+
+Directory: signatures_gpt2_mlx_full
+
+
+- Accuracy: 0.39316239316239315
+
+- Documents: 28
+
+- Chunks: 351
+
+- Authors: 17
+
+
+![confusion_matrix](../signatures_gpt2_mlx_full/classification_confusion_matrix.png)
+
+
+
 ## Authors
 
 ![authors_top_low_surprisal](authors_top_low_surprisal.png)

@@ -31,6 +31,7 @@ Regularizers (always on)
 - Rhyme/Meter: phonetic rhyme score and meter fit (slant allowed). Useful for sonnets/couplets.
 - Repetition & Safety: stricter repetition control, toxicity/NSFW blocks.
 - Format: line/stanza/length requirements; e.g., 14 lines for sonnet.
+- Grammar (optional): soft preference for grammatical correctness using LanguageTool; off by default to avoid over‑constraining poetic style.
 
 ## Composite Reward
 R = w_cad·S_cad + w_sup·S_sup + w_dis·S_dis + w_cor·S_corridor + w_arc·S_arc − w_kl·KL − w_saf·Penalty − w_fmt·Penalty (+ optional plugin terms)
@@ -59,7 +60,7 @@ Anti-gaming
 ## Minimal API (stubs now added)
 - `tools/reward.py`
   - `PresetConfig`, `RewardWeights`, `compute_reward(sample, preset, refs, toggles)`
-  - Component scorers: `cadence_score`, `surprise_score`, `distinctive_score`, `corridor_score`, `wander_return_score`
+  - Component scorers: `cadence_score`, `surprise_score`, `distinctive_score`, `corridor_score`, `wander_return_score`, `grammar_accuracy_score` (optional)
   - Normalization and composite assembly.
 - `configs/reward_presets.json`
   - Default weights and corridor bands for `sonnet`, `dickinson`, `freeverse`, `prose`.
@@ -111,6 +112,23 @@ Open Questions
 - When enabling meter, how strict should stress alignment be for modern free-verse variants?
 
 ---
+
+## Optional: Grammar Accuracy
+
+Why: When training prose or explanatory text, a light grammatical correctness preference can help, while poetry often benefits from deliberate disfluency. Keep this off by default; enable per preset or via CLI weight override.
+
+How: `tools/reward.py::grammar_accuracy_score` tries `language_tool_python` to count rule matches and converts errors-per-100-words to a [0,1] score with a smooth decay (0 errors → 1.0). Style issues are excluded by default; configure to include. If the package isn’t installed, a fallback heuristic checks sentence capitalization and terminal punctuation.
+
+Enable:
+- Set `weights.grammar > 0` in the preset or in `weights_override` of the run config, or set `enable_grammar: true` in the preset.
+- Optional install: `pip install language-tool-python` (import name `language_tool_python`). A local Java LanguageTool server is supported by the library but not required.
+
+Config:
+- `reward.enable_grammar: true|false`
+- `reward.grammar.lang: "en-US" | "en-GB" | ...`
+- `reward.grammar.count_style_as_errors: true|false` (default false)
+- `reward.grammar.max_errors_per_sentence: int` (allowance before scoring)
+- `reward.grammar.alpha: float` (decay in exp(-alpha * errors_per_100w))
 
 ## v0.1 Upgrades (targeted, high leverage)
 

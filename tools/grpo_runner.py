@@ -243,6 +243,14 @@ def run_grpo(config_path: Path) -> Path:
         preset.format_lines = cfg["reward"]["format_lines"]
     preset.enable_rhyme = bool(cfg.get("reward", {}).get("enable_rhyme", preset.enable_rhyme))
     preset.enable_meter = bool(cfg.get("reward", {}).get("enable_meter", preset.enable_meter))
+    preset.enable_grammar = bool(cfg.get("reward", {}).get("enable_grammar", getattr(preset, "enable_grammar", False)))
+    # Optional grammar settings
+    gcfg = cfg.get("reward", {}).get("grammar", {})
+    if isinstance(gcfg, dict):
+        preset.grammar_lang = str(gcfg.get("lang", getattr(preset, "grammar_lang", "en-US")))
+        preset.grammar_count_style_as_errors = bool(gcfg.get("count_style_as_errors", getattr(preset, "grammar_count_style_as_errors", False)))
+        preset.grammar_max_errors_per_sentence = int(gcfg.get("max_errors_per_sentence", getattr(preset, "grammar_max_errors_per_sentence", 0)))
+        preset.grammar_alpha = float(gcfg.get("alpha", getattr(preset, "grammar_alpha", 0.15)))
 
     K = int(cfg.get("group_size", 6))
     T = int(cfg.get("max_new_tokens", 120))
