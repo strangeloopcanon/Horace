@@ -66,6 +66,52 @@ def build_signatures_md(model: str, outdir: Path) -> str:
     return '\n'.join(md)
 
 
+def _find_signature_dirs(model: str) -> List[Path]:
+    root = Path('reports')
+    want = 'gpt2' if 'gpt2' in model.lower() else ('qwen' if 'qwen' in model.lower() else None)
+    out = []
+    for p in root.glob('signatures_*'):
+        if not p.is_dir():
+            continue
+        name = p.name.lower()
+        if want and want not in name:
+            continue
+        if (p / 'classification_report.json').exists():
+            out.append(p)
+    # sort by mtime of classification_report.json
+    out.sort(key=lambda d: (d / 'classification_report.json').stat().st_mtime, reverse=True)
+    return out
+
+
+def build_signatures_index_md(model: str, outdir: Path) -> str:
+    dirs = _find_signature_dirs(model)
+    if not dirs:
+        return ''
+    lines = []
+    lines.append('## Signatures (Index)')
+    lines.append('')
+    lines.append('Available signature runs:')
+    for d in dirs:
+        rep = d / 'classification_report.json'
+        try:
+            data = json.loads(rep.read_text(encoding='utf-8'))
+        except Exception:
+            data = {}
+        acc = data.get('acc_chunk_level')
+        n_docs = data.get('n_docs')
+        n_chunks = data.get('n_chunks')
+        fig = data.get('confusion_figure')
+        # relative paths from outdir
+        rel_dir = os.path.relpath(d, outdir)
+        desc = f"- [{d.name}]({rel_dir}) — acc: {acc if acc is not None else 'N/A'}, docs: {n_docs}, chunks: {n_chunks}"
+        if fig and Path(fig).exists():
+            rel_fig = os.path.relpath(fig, outdir)
+            desc += f" — [confusion]({rel_fig})"
+        lines.append(desc)
+    lines.append('')
+    return '\n'.join(lines)
+
+
 def load_jsonl(path: Path) -> List[Dict]:
     if not path.exists():
         return []
@@ -340,6 +386,11 @@ def write_report(model: str, outdir: Path, author_figs: List[Path], doc_figs: Li
     md = []
     md.append(f"# Writing Signatures — {model}\n")
     md.append("\n")
+    # Signatures runs index (list all matching signature outputs)
+    sig_index = build_signatures_index_md(model, outdir)
+    if sig_index:
+        md.append(sig_index)
+        md.append("\n")
     # Inject signatures classification summary if available
     sig_md = build_signatures_md(model, outdir)
     if sig_md:
