@@ -11,8 +11,12 @@ Outputs:
   - Classification report (JSON) and confusion matrix plot (PNG)
   - Early→late trajectory plot for a chosen author (PNG)
 
+Backends:
+  - 'hf' (PyTorch + transformers)
+  - 'mlx' (Apple MLX via mlx-lm)
+
 Notes:
-  - Uses a HF causal LM to compute token surprisal s_t and local entropy H_t (for normalization r_t = s_t/H_t)
+  - Computes token surprisal s_t and local entropy H_t (normalized r_t = s_t/H_t)
   - Features cover distribution shape + rhythm + high-surprisal run stats (core of idea.md)
   - Sentence/paragraph/dialogue-conditioned features are deferred unless spans are provided in future
 """
@@ -31,8 +35,24 @@ try:
 except Exception:
     plt = None  # We'll error nicely later if plotting is requested
 
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+# Optional heavy imports are loaded lazily per backend to allow MLX-only usage
+try:
+    import torch  # type: ignore
+except Exception:  # torch may be absent on MLX-only setups
+    torch = None  # type: ignore
+try:
+    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+except Exception:
+    AutoModelForCausalLM = None  # type: ignore
+    AutoTokenizer = None  # type: ignore
+
+# MLX imports are also optional
+try:
+    from mlx_lm import load as mlx_load  # type: ignore
+    import mlx.core as mx  # type: ignore
+except Exception:
+    mlx_load = None  # type: ignore
+    mx = None  # type: ignore
 
 
 # ---------- Data structures ----------
@@ -109,7 +129,9 @@ def _row_to_docspec(obj: Dict) -> DocSpec:
 
 # ---------- LM + surprisal ----------
 
-def pick_device() -> torch.device:
+def pick_device():
+    if torch is None:
+        return None
     if torch.cuda.is_available():
         return torch.device("cuda")
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -117,11 +139,10 @@ def pick_device() -> torch.device:
     return torch.device("cpu")
 
 
-@torch.inference_mode()
-def surprisal_for_text(
+def surprisal_for_text_hf(
     text: str,
-    tok: AutoTokenizer,
-    model: AutoModelForCausalLM,
+    tok,
+    model,
     max_window: Optional[int] = None,
 ) -> Tuple[np.ndarray, np.ndarray, int]:
     """
@@ -132,6 +153,8 @@ def surprisal_for_text(
         H: np.ndarray of shape [T-1] (local entropy)
         T: number of tokens
     """
+    if torch is None:
+        raise RuntimeError("PyTorch is not available — cannot use 'hf' backend")
     device = next(model.parameters()).device
     enc = tok(text, return_tensors="pt")
     input_ids = enc["input_ids"].to(device)
@@ -148,7 +171,7 @@ def surprisal_for_text(
         # try model.config.n_positions or max_position_embeddings
         max_window = int(getattr(getattr(model, "config", object()), "n_positions", 1024))
         max_window = int(getattr(getattr(model, "config", object()), "max_position_embeddings", max_window))
-        max_window = max(64, min(max_window, 2048))
+        max_window = max(64, min(max_window, 4096))
 
     step = max_window - 1  # we predict tokens 1..L-1 in each window of length L
     s_list: List[np.ndarray] = []
@@ -158,7 +181,8 @@ def surprisal_for_text(
         end = min(T, start + max_window)
         ids = input_ids[:, start:end]
         am = attn[:, start:end] if attn is not None else None
-        out = model(input_ids=ids, attention_mask=am)
+        with torch.inference_mode():
+            out = model(input_ids=ids, attention_mask=am)
         logits = out.logits[:, :-1, :]  # predict next token
         probs = logits.softmax(-1)
         labels = ids[:, 1:]
@@ -170,6 +194,54 @@ def surprisal_for_text(
         if end >= T:
             break
 
+    s = np.concatenate(s_list, axis=0)
+    H = np.concatenate(H_list, axis=0)
+    return s, H, T
+
+
+def surprisal_for_text_mlx(
+    text: str,
+    tok,
+    model,
+    max_window: Optional[int] = None,
+) -> Tuple[np.ndarray, np.ndarray, int]:
+    if mlx_load is None or mx is None:
+        raise RuntimeError("MLX is not available — cannot use 'mlx' backend")
+    # Tokenize to integer ids
+    ids: List[int] = tok.encode(text)
+    T = len(ids)
+    if T <= 1:
+        return np.empty((0,), dtype=np.float32), np.empty((0,), dtype=np.float32), T
+    if max_window is None:
+        max_window = 1024  # default for GPT‑2; can be overridden by --max-window
+    max_window = max(64, min(int(max_window), 8192))
+    step = max_window - 1
+    s_list: List[np.ndarray] = []
+    H_list: List[np.ndarray] = []
+    for start in range(0, T, step):
+        end = min(T, start + max_window)
+        ids_win = ids[start:end]
+        x = mx.array([ids_win])
+        out = model(x)
+        if isinstance(out, tuple):
+            out = out[0]
+        # logits: [1, L, V]; we need positions 0..L-2 predicting labels 1..L-1
+        logits = out[:, :-1, :]
+        # Convert to numpy for stability
+        logits_np = np.array(logits)
+        # softmax along vocab
+        e = np.exp(logits_np - logits_np.max(axis=-1, keepdims=True))
+        probs_np = e / (e.sum(axis=-1, keepdims=True) + 1e-12)
+        labels = np.array(ids_win[1:], dtype=np.int64)[None, :]  # [1, L-1]
+        # gather true probs
+        p_true = probs_np[0, np.arange(probs_np.shape[1]), labels[0]]  # [L-1]
+        s_win = -np.log(np.clip(p_true, 1e-12, None))
+        # local entropy
+        H_win = -(probs_np * (np.log(np.clip(probs_np, 1e-12, None)))).sum(axis=-1)[0]
+        s_list.append(s_win.astype(np.float32))
+        H_list.append(H_win.astype(np.float32))
+        if end >= T:
+            break
     s = np.concatenate(s_list, axis=0)
     H = np.concatenate(H_list, axis=0)
     return s, H, T
@@ -347,15 +419,37 @@ def compute_signatures_for_docs(
     chunk_tokens: int = 1500,
     max_window: Optional[int] = None,
     limit_chunks_per_doc: Optional[int] = None,
+    backend: str = "auto",
 ) -> List[ChunkSig]:
-    device = pick_device()
-    tok = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id).to(device).eval()
+    # Select backend
+    be = backend.lower()
+    if be == "auto":
+        if (torch is not None) and (AutoModelForCausalLM is not None) and (AutoTokenizer is not None):
+            be = "hf"
+        elif (mlx_load is not None) and (mx is not None):
+            be = "mlx"
+        else:
+            raise RuntimeError("No compatible backend found. Install torch+transformers or mlx+mlx-lm.")
+
+    if be == "hf":
+        if AutoTokenizer is None or AutoModelForCausalLM is None or torch is None:
+            raise RuntimeError("HF backend requested but torch/transformers not available")
+        device = pick_device()
+        tok = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForCausalLM.from_pretrained(model_id).to(device).eval()
+        compute_fn = lambda txt: surprisal_for_text_hf(txt, tok, model, max_window=max_window)
+    elif be == "mlx":
+        if mlx_load is None or mx is None:
+            raise RuntimeError("MLX backend requested but mlx/mlx-lm not available")
+        model, tok = mlx_load(model_id)
+        compute_fn = lambda txt: surprisal_for_text_mlx(txt, tok, model, max_window=max_window)
+    else:
+        raise RuntimeError(f"Unknown backend: {backend}")
 
     all_chunks: List[ChunkSig] = []
     for di, d in enumerate(docs):
         text = Path(d.path).read_text(encoding="utf-8", errors="ignore")
-        s, H, T = surprisal_for_text(text, tok, model, max_window=max_window)
+        s, H, T = compute_fn(text)
         if T <= 1:
             continue
         # chunk by token indices [a,b)
@@ -553,6 +647,7 @@ def save_signatures_jsonl(chunks: List[ChunkSig], path: Path):
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Compute writer signatures, classify authors, and plot trajectories")
     ap.add_argument("--model", default="gpt2", help="HF causal LM model id (default: gpt2)")
+    ap.add_argument("--backend", default="auto", choices=["auto", "hf", "mlx"], help="Backend: hf (torch) or mlx (Apple MLX); default auto")
     ap.add_argument("--manifest", type=str, help="Manifest file (json/jsonl/csv with path,author[,title,year])")
     ap.add_argument("--file", action="append", nargs="+", help="One or more file paths for a single author when used with --author")
     ap.add_argument("--author", action="append", help="Author for the preceding --file group; repeatable")
@@ -624,6 +719,7 @@ def main():
         chunk_tokens=ns.chunk_tokens,
         max_window=ns.max_window,
         limit_chunks_per_doc=ns.limit_chunks,
+        backend=ns.backend,
     )
     print(f"[info] Computed {len(chunks)} chunk signatures")
 
