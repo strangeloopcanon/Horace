@@ -3,7 +3,7 @@ import argparse
 import json
 import textwrap
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib
 matplotlib.use('Agg')
@@ -85,6 +85,42 @@ def _find_signatures_confusion(model: str) -> Optional[Path]:
     return cands[0]
 
 
+def _find_signatures_dir(model: str) -> Optional[Path]:
+    root = Path('reports')
+    want = 'gpt2' if 'gpt2' in model.lower() else ('qwen' if 'qwen' in model.lower() else None)
+    cands: List[Tuple[float, Path]] = []
+    for d in root.glob('signatures_*'):
+        if not d.is_dir():
+            continue
+        name = d.name.lower()
+        if want and want not in name:
+            continue
+        rep = d / 'classification_report.json'
+        if rep.exists():
+            cands.append((rep.stat().st_mtime, d))
+    if not cands:
+        return None
+    cands.sort(key=lambda t: t[0], reverse=True)
+    return cands[0][1]
+
+
+def _load_signatures_summary(model: str) -> Tuple[Optional[float], Optional[int], Optional[int], Optional[Path]]:
+    """Return (accuracy, n_docs, n_chunks, confusion_png_path) for a model if available."""
+    d = _find_signatures_dir(model)
+    if not d:
+        return None, None, None, None
+    rep = d / 'classification_report.json'
+    fig = d / 'classification_confusion_matrix.png'
+    try:
+        data = json.loads(rep.read_text(encoding='utf-8'))
+    except Exception:
+        return None, None, None, fig if fig.exists() else None
+    acc = data.get('acc_chunk_level')
+    n_docs = data.get('n_docs')
+    n_chunks = data.get('n_chunks')
+    return acc, n_docs, n_chunks, fig if fig.exists() else None
+
+
 def load_generated(index_path: Path, model_sub: str) -> List[Dict]:
     rows: List[Dict] = []
     if not index_path.exists():
@@ -112,7 +148,7 @@ def pick_latest_by_preset(entries: List[Dict], presets: List[str], max_per: int 
     return buckets
 
 
-def render_final_readme(model: str, model_dir: Path, compare_dir: Path, gen_latest: Dict[str, List[Dict]], out_path: Path):
+def render_final_readme(model: str, model_dir: Path, compare_dir: Path, gen_latest: Dict[str, List[Dict]], out_path: Path, also_model: Optional[str] = None):
     lines: List[str] = []
     lines.append(f"# {NARRATIVE['title']}")
     lines.append('')
@@ -136,6 +172,33 @@ def render_final_readme(model: str, model_dir: Path, compare_dir: Path, gen_late
     for b in NARRATIVE['best_practices']:
         lines.append(f"- {b}")
     lines.append('')
+
+    # Signatures classification summaries (one or two models)
+    def add_sig_section(m: str):
+        acc, n_docs, n_chunks, fig = _load_signatures_summary(m)
+        if acc is None and fig is None:
+            return
+        lines.append('## Signatures — Classification ({})'.format(m))
+        if acc is not None:
+            lines.append(f"- Accuracy: {acc}")
+        if n_docs is not None and n_chunks is not None:
+            lines.append(f"- Documents: {n_docs}; Chunks: {n_chunks}")
+        lines.append('')
+        if fig and fig.exists():
+            try:
+                rel = Path(out_path).parent.joinpath('x').resolve()  # dummy to get parent
+            except Exception:
+                rel = None
+            try:
+                rel_fig = fig.relative_to(out_path.parent)
+            except Exception:
+                rel_fig = Path(fig)
+            lines.append(f'<img src="{rel_fig.as_posix()}" alt="{fig.name}" style="max-width: 100%; width: 100%; height: auto;" />')
+            lines.append('')
+
+    add_sig_section(model)
+    if also_model:
+        add_sig_section(also_model)
 
     # Illustrations
     lines.append('## Illustrations')
@@ -231,7 +294,7 @@ def render_final_readme(model: str, model_dir: Path, compare_dir: Path, gen_late
     print(f"Wrote {out_path}")
 
 
-def build_final_pdf(readme_path: Path, images: List[Path], gen_latest: Dict[str, List[Dict]], out_pdf: Path):
+def build_final_pdf(readme_path: Path, images: List[Path], gen_latest: Dict[str, List[Dict]], out_pdf: Path, extra_sig_figs: Optional[List[Path]] = None):
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     with PdfPages(out_pdf) as pdf:
         # Title page
@@ -250,6 +313,23 @@ def build_final_pdf(readme_path: Path, images: List[Path], gen_latest: Dict[str,
 
         add_text_page('Executive Summary', NARRATIVE['summary'])
         add_text_page('Principles', '\n'.join('- ' + p for p in NARRATIVE['principles']))
+
+        # Signatures confusion matrices (if provided)
+        if extra_sig_figs:
+            for fig_path in extra_sig_figs:
+                if not fig_path or not Path(fig_path).exists():
+                    continue
+                fig = plt.figure(figsize=(8.5, 11))
+                ax = fig.add_axes([0.05, 0.12, 0.9, 0.8])
+                try:
+                    im = plt.imread(fig_path)
+                except Exception:
+                    continue
+                ax.imshow(im, aspect='auto'); ax.set_xticks([]); ax.set_yticks([]); ax.set_frame_on(False)
+                cap = fig_path.name.replace('_', ' ').replace('.png', '')
+                plt.title('Signatures Confusion Matrix')
+                fig.text(0.5, 0.05, cap, ha='center', fontsize=10)
+                pdf.savefig(fig); plt.close(fig)
 
         # Illustration pages
         for img in images:
@@ -286,7 +366,7 @@ def build_final_pdf(readme_path: Path, images: List[Path], gen_latest: Dict[str,
     print(f"PDF written to {out_pdf}")
 
 
-def build_final_html(model: str, images: List[Path], gen_latest: Dict[str, List[Dict]], out_html: Path):
+def build_final_html(model: str, images: List[Path], gen_latest: Dict[str, List[Dict]], out_html: Path, extra_sig_figs: Optional[List[Path]] = None):
     import base64
     out_html.parent.mkdir(parents=True, exist_ok=True)
 
@@ -321,6 +401,18 @@ def build_final_html(model: str, images: List[Path], gen_latest: Dict[str, List[
     for p in NARRATIVE['best_practices']:
         html.append(f"<li>{p}</li>")
     html.append("</ul>")
+
+    # Signatures confusion (if provided)
+    if extra_sig_figs:
+        for fig_path in extra_sig_figs:
+            if not fig_path or not Path(fig_path).exists():
+                continue
+            data = b64_img(fig_path)
+            if data:
+                html.append('<div class="img">')
+                html.append(f"<img src=\"{data}\" alt=\"{fig_path.name}\">")
+                html.append(f"<div class=\"caption\">{fig_path.name.replace('_',' ').replace('.png','')}</div>")
+                html.append("</div>")
 
     # Illustrations
     html.append("<h2>Illustrations</h2>")
@@ -376,6 +468,7 @@ def main():
     ap.add_argument('--out-pdf', default='reports/final/report.pdf')
     ap.add_argument('--out-docx', default='reports/final/report.docx')
     ap.add_argument('--keep-pdf', action='store_true', help='Keep the generated PDF (by default it is deleted)')
+    ap.add_argument('--also-model', default=None, help='Optional second model to include signatures for (e.g., gpt2 if main is Qwen)')
     args = ap.parse_args()
 
     # Resolve model report dir and compare dir
@@ -389,7 +482,7 @@ def main():
     latest = pick_latest_by_preset(gen_entries, ['imagist','sonnet','couplets','prose'], max_per=3)
 
     # Build README
-    render_final_readme(args.model, model_dir, compare_dir, latest, Path(args.out_readme))
+    render_final_readme(args.model, model_dir, compare_dir, latest, Path(args.out_readme), also_model=args.also_model)
 
     # Build PDF
     images = [
@@ -402,8 +495,17 @@ def main():
         model_dir / 'author_william_shakespeare_series.png',
         model_dir / 'author_p_g_wodehouse_series.png',
     ]
+    # Gather signatures confusion for primary and optional second model
+    extra_sig_figs: List[Path] = []
+    sig_a = _find_signatures_confusion(args.model)
+    if sig_a:
+        extra_sig_figs.append(sig_a)
+    if args.also_model:
+        sig_b = _find_signatures_confusion(args.also_model)
+        if sig_b:
+            extra_sig_figs.append(sig_b)
     out_pdf_path = Path(args.out_pdf)
-    build_final_pdf(Path(args.out_readme), images, latest, out_pdf_path)
+    build_final_pdf(Path(args.out_readme), images, latest, out_pdf_path, extra_sig_figs=extra_sig_figs)
     # Delete PDF unless requested to keep
     if not args.keep_pdf:
         try:
@@ -471,7 +573,7 @@ def main():
         print(f'[WARN] Could not write DOCX ({e}). Try: pip install python-docx')
 
     # Build single-page HTML
-    build_final_html(args.model, images, latest, Path('reports/final/report.html'))
+    build_final_html(args.model, images, latest, Path('reports/final/report.html'), extra_sig_figs=extra_sig_figs)
 
 
 if __name__ == '__main__':

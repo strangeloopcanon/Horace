@@ -2,6 +2,13 @@
 
 
 
+## Signatures (Index)
+
+Available signature runs:
+- [signatures_gpt2_mlx_full](../signatures_gpt2_mlx_full) — acc: 0.39316239316239315, docs: 28, chunks: 351 — [confusion](../signatures_gpt2_mlx_full/classification_confusion_matrix.png)
+
+
+
 ## Signatures (Classification)
 
 Directory: signatures_gpt2_mlx_full

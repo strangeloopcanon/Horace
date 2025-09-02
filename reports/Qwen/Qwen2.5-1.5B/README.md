@@ -2,6 +2,13 @@
 
 
 
+## Signatures (Index)
+
+Available signature runs:
+- [signatures_qwen_mlx_full](../../signatures_qwen_mlx_full) — acc: 0.31864406779661014, docs: 27, chunks: 295 — [confusion](../../signatures_qwen_mlx_full/classification_confusion_matrix.png)
+
+
+
 ## Signatures (Classification)
 
 Directory: signatures_qwen_mlx_full
