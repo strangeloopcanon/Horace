@@ -369,9 +369,9 @@ def compute_signatures_for_docs(
             chunks = chunks[: limit_chunks_per_doc]
 
         for ci, (a, b) in enumerate(chunks):
-            # s/H index correspond to labels for tokens [1..T-1]; slice s/H covering labels in [a..b-1]
-            i0 = max(0, a - 1 + 1 - 1)  # careful: label for token k is at s[k-1]; we want k in [a..b-1]
-            i0 = max(0, a)  # simpler: indices [a..b-1) map to s[a..b-2]
+            # Indices in s/H correspond to labels for tokens [1..T-1].
+            # For chunk tokens [a, b), we want s/H covering labels for k in [a, b-1] → s[a : b-1].
+            i0 = max(0, a)
             i1 = max(i0, b - 1)
             s_slice = s[i0:i1]
             H_slice = H[i0:i1]
