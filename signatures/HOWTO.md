@@ -13,7 +13,9 @@ python3 -m pip install -r requirements.txt
 
 ```bash
 python3 signatures/cli.py --help
+# Use PyTorch+HF (default if available) or MLX on Apple Silicon with --backend mlx
 python3 signatures/cli.py --model gpt2 --manifest data/index.json --outdir reports/generated
+python3 signatures/cli.py --backend mlx --model gpt2 --manifest data/index.json --outdir reports/generated
 ```
 
   - Option B (direct files): pair files with authors:
