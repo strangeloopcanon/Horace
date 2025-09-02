@@ -37,6 +37,11 @@ It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
 - [All Generated Before/After Examples](reports/generated/README.md)
 - [GRPO Reward Plan (v0)](docs/reward.md)
 - [Signatures CLI HOWTO](signatures/HOWTO.md)
+ 
+## Signatures Index
+
+- GPT‑2 (MLX, full): `reports/signatures_gpt2_mlx_full/`
+- Qwen/Qwen2.5‑1.5B (MLX, full): `reports/signatures_qwen_mlx_full/`
 
 ## GRPO Rollouts (MLX)
 - Configure: `configs/grpo_default.json` (defaults to `Qwen/Qwen3-1.7B`, MLX backend, simple diverse sampler).

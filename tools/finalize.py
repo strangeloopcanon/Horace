@@ -61,6 +61,30 @@ NARRATIVE = {
 }
 
 
+def _find_signatures_confusion(model: str) -> Optional[Path]:
+    """Locate the most recent signatures confusion matrix PNG for the given model.
+    Looks under reports/signatures_* and matches 'gpt2' or 'qwen' based on model name.
+    """
+    root = Path('reports')
+    want = 'gpt2' if 'gpt2' in model.lower() else ('qwen' if 'qwen' in model.lower() else None)
+    cands: List[Path] = []
+    for d in root.glob('signatures_*'):
+        if not d.is_dir():
+            continue
+        name = d.name.lower()
+        if want and want not in name:
+            continue
+        rep = d / 'classification_report.json'
+        fig = d / 'classification_confusion_matrix.png'
+        if rep.exists() and fig.exists():
+            cands.append(fig)
+    if not cands:
+        return None
+    # Sort by report mtime
+    cands.sort(key=lambda p: (p.parent / 'classification_report.json').stat().st_mtime, reverse=True)
+    return cands[0]
+
+
 def load_generated(index_path: Path, model_sub: str) -> List[Dict]:
     rows: List[Dict] = []
     if not index_path.exists():
@@ -148,6 +172,11 @@ def render_final_readme(model: str, model_dir: Path, compare_dir: Path, gen_late
         p = model_dir / name
         if p.exists():
             illos.append(p)
+
+    # Include signatures confusion matrix if available
+    sig_fig = _find_signatures_confusion(model)
+    if sig_fig:
+        illos.insert(0, sig_fig)
 
     # Render images as HTML with full width to avoid tiny corner rendering
     for img in illos:
