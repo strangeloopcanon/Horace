@@ -36,6 +36,7 @@ It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
 - [Cross‑Model Compare (GPT‑2 vs Qwen)](reports/compare_gpt2_vs_Qwen_Qwen2.5-1.5B/README.md)
 - [All Generated Before/After Examples](reports/generated/README.md)
 - [GRPO Reward Plan (v0)](docs/reward.md)
+- [Signatures CLI HOWTO](signatures/HOWTO.md)
 
 ## GRPO Rollouts (MLX)
 - Configure: `configs/grpo_default.json` (defaults to `Qwen/Qwen3-1.7B`, MLX backend, simple diverse sampler).
@@ -54,6 +55,10 @@ It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
 - Start: `python tools/grpo_full_train.py --config configs/grpo_default.json`
 - Checkpoints are saved under the configured `out_dir`.
 - Options: enable `train.amp` (`bf16`/`fp16` on CUDA), set `train.grad_accum` for accumulation, and `train.kl_coef` to add a reference-KL penalty.
+
+Optional grammar accuracy
+- You can enable a soft grammar preference in the reward: set `reward.enable_grammar: true` and add a small positive `grammar` weight via `reward.weights_override`.
+- Install (optional): `pip install language-tool-python` (import name `language_tool_python`). If not installed, the scorer falls back to a light heuristic.
 
 ## Data Layout
 

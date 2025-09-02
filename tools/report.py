@@ -16,6 +16,56 @@ except Exception as e:
     raise
 
 
+def _find_signatures_dir(model: str) -> Path:
+    """Best-effort: find a signatures_* directory under reports/ that matches the model.
+    For model 'gpt2' → look for 'gpt2' in dirname; for 'qwen' models → look for 'qwen'.
+    Pick the most recent by classification_report.json mtime if multiple.
+    """
+    root = Path('reports')
+    want = 'gpt2' if 'gpt2' in model.lower() else ('qwen' if 'qwen' in model.lower() else None)
+    cands = []
+    for p in root.glob('signatures_*'):
+        if not p.is_dir():
+            continue
+        name = p.name.lower()
+        if want and want not in name:
+            continue
+        rep = p / 'classification_report.json'
+        if rep.exists():
+            cands.append((rep.stat().st_mtime, p))
+    if not cands:
+        return Path()
+    cands.sort(key=lambda t: t[0], reverse=True)
+    return cands[0][1]
+
+
+def build_signatures_md(model: str, outdir: Path) -> str:
+    sig_dir = _find_signatures_dir(model)
+    if not sig_dir:
+        return ''
+    rep = sig_dir / 'classification_report.json'
+    try:
+        data = json.loads(rep.read_text(encoding='utf-8'))
+    except Exception:
+        return ''
+    acc = data.get('acc_chunk_level')
+    n_docs = data.get('n_docs')
+    n_chunks = data.get('n_chunks')
+    authors = data.get('authors') or []
+    fig = data.get('confusion_figure')
+    md = []
+    md.append('## Signatures (Classification)\n')
+    md.append(f"Directory: {sig_dir.name}\n\n")
+    md.append(f"- Accuracy: {acc if acc is not None else 'N/A'}\n")
+    md.append(f"- Documents: {n_docs}\n")
+    md.append(f"- Chunks: {n_chunks}\n")
+    md.append(f"- Authors: {len(authors)}\n")
+    if fig and Path(fig).exists():
+        rel = os.path.relpath(fig, outdir)
+        md.append(f"\n![confusion_matrix]({rel})\n")
+    return '\n'.join(md)
+
+
 def load_jsonl(path: Path) -> List[Dict]:
     if not path.exists():
         return []
@@ -290,6 +340,11 @@ def write_report(model: str, outdir: Path, author_figs: List[Path], doc_figs: Li
     md = []
     md.append(f"# Writing Signatures — {model}\n")
     md.append("\n")
+    # Inject signatures classification summary if available
+    sig_md = build_signatures_md(model, outdir)
+    if sig_md:
+        md.append(sig_md)
+        md.append("\n")
     md.append("## Authors\n")
     for p in author_figs:
         rel = p.name
