@@ -21,10 +21,12 @@
       "arc": 0.1,
       "kl": 0.05,
       "safety": 1.0,
-      "format": 0.25
+      "format": 0.25,
+      "grammar": 0.0
     },
     "enable_rhyme": false,
-    "enable_meter": false
+    "enable_meter": false,
+    "enable_grammar": false
   },
   "prompts": [
     "Write a free-verse poem about tidal flats.",

@@ -2,6 +2,24 @@
 
 
 
+## Signatures (Classification)
+
+Directory: signatures_qwen_mlx_full
+
+
+- Accuracy: 0.31864406779661014
+
+- Documents: 27
+
+- Chunks: 295
+
+- Authors: 17
+
+
+![confusion_matrix](../../signatures_qwen_mlx_full/classification_confusion_matrix.png)
+
+
+
 ## Authors
 
 ![authors_top_low_surprisal](authors_top_low_surprisal.png)
