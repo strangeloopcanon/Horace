@@ -1,0 +1,31 @@
+{
+  "model": "Qwen/Qwen3-1.7B",
+  "backend": "mlx",
+  "seed": 42,
+  "group_size": 3,
+  "max_new_tokens": 40,
+  "sampler": {
+    "temperature": 0.9,
+    "top_p": 0.92,
+    "top_k": 120,
+    "jitter": {"temperature": 0.05, "top_p": 0.03}
+  },
+  "reward": {
+    "preset": "freeverse",
+    "presets_file": "configs/reward_presets.json"
+  },
+  "prompts": [
+    "Write a free-verse poem about tidal flats.",
+    "Compose a sonnet about the first frost."
+  ],
+  "out_dir": "data/grpo_runs/qwen3_1p7b_gspo_train",
+  "gspo": {
+    "beta": 0.05,
+    "pair_k": 2.0,
+    "lr": 0.05,
+    "l2": 0.0001,
+    "clipnorm": 5.0,
+    "steps": 2,
+    "save_every": 1
+  }
+}

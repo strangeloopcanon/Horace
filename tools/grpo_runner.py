@@ -104,7 +104,15 @@ class MLXSimpleSampler:
         if seed is not None:
             np.random.seed(seed)
         enc = self.backend.tokenize(prompt)
-        ids = list(enc['input_ids']) if isinstance(enc, dict) else list(enc)
+        # Robustly extract input_ids from HF BatchEncoding or dict-like
+        try:
+            if isinstance(enc, dict) or ('input_ids' in enc):  # BatchEncoding supports 'in'
+                arr = enc['input_ids']
+            else:
+                arr = enc
+        except Exception:
+            arr = enc
+        ids = [int(x) for x in (list(arr) if not isinstance(arr, list) else arr)]
         # Attempt to add BOS if present in tokenizer
         bos_id = None
         try:
