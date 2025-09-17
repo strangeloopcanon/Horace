@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import math
 import random
 from dataclasses import dataclass
@@ -116,6 +117,14 @@ class PoetryConfig:
     # sustained shift (line-level): open entropy for a short span periodically
     shift_every_lines: Tuple[int, int] = (1, 3)
     shift_span_tokens: Tuple[int, int] = (8, 16)
+    # Optional rhyme/line controls (present in some presets)
+    rhyme_enabled: bool = False
+    rhyme_scheme: Optional[str] = None
+    rhyme_boost: float = 0.0
+    rhyme_min_line_tokens: int = 6
+    line_tokens_target: Optional[Tuple[int, int]] = None
+    newline_penalty_until_target: float = 0.0
+    newline_penalty_until_rhyme: float = 0.0
 
 
 class CadenceSampler:
@@ -132,6 +141,7 @@ class CadenceSampler:
         self._is_punct = np.zeros(V, dtype=bool)
         self._is_newline = np.zeros(V, dtype=bool)
         self._is_content = np.zeros(V, dtype=bool)
+        self._forbidden = np.zeros(V, dtype=bool)
         # Build masks by inspecting token strings
         for tid in range(V):
             tok = backend.token_str(tid)
@@ -140,6 +150,18 @@ class CadenceSampler:
             self._is_newline[tid] = nl
             self._is_punct[tid] = is_punct_token(tok) or nl
             self._is_content[tid] = (not self._is_punct[tid]) and is_content_token(tok)
+        # Mark special/unknown tokens as forbidden (avoid <unk>, control placeholders)
+        try:
+            tok_obj = getattr(self.backend, 'hf_tok', None)
+            if tok_obj is not None:
+                for sid in (getattr(tok_obj, 'all_special_ids', None) or []):
+                    if isinstance(sid, int) and 0 <= sid < V:
+                        self._forbidden[sid] = True
+                unk_id = getattr(tok_obj, 'unk_token_id', None)
+                if isinstance(unk_id, int) and 0 <= unk_id < V:
+                    self._forbidden[unk_id] = True
+        except Exception:
+            pass
 
         # State
         self.to_next_spike = self._sample_between(self.cfg.interval_range)
@@ -177,6 +199,12 @@ class CadenceSampler:
         if params.content_boost != 0.0:
             if isinstance(logits, np.ndarray):
                 logits[self._is_content] += float(params.content_boost)
+        # Always discourage forbidden tokens (e.g., <unk>, specials)
+        try:
+            if self._forbidden.shape[0] == logits.shape[-1] and self._forbidden.any():
+                logits[self._forbidden] -= 50.0
+        except Exception:
+            pass
         # Rhyme-aware nudging and line-length control
         logits = self._apply_rhyme_and_line_bias(logits)
         return logits
@@ -187,6 +215,7 @@ class CadenceSampler:
         self._is_punct = np.zeros(V, dtype=bool)
         self._is_newline = np.zeros(V, dtype=bool)
         self._is_content = np.zeros(V, dtype=bool)
+        self._forbidden = np.zeros(V, dtype=bool)
         for tid in range(V):
             tok = self.backend.token_str(tid)
             tok = tok or ''
@@ -194,6 +223,17 @@ class CadenceSampler:
             self._is_newline[tid] = nl
             self._is_punct[tid] = is_punct_token(tok) or nl
             self._is_content[tid] = (not self._is_punct[tid]) and is_content_token(tok)
+        try:
+            tok_obj = getattr(self.backend, 'hf_tok', None)
+            if tok_obj is not None:
+                for sid in (getattr(tok_obj, 'all_special_ids', None) or []):
+                    if isinstance(sid, int) and 0 <= sid < V:
+                        self._forbidden[sid] = True
+                unk_id = getattr(tok_obj, 'unk_token_id', None)
+                if isinstance(unk_id, int) and 0 <= unk_id < V:
+                    self._forbidden[unk_id] = True
+        except Exception:
+            pass
 
     # ---- Rhyme helpers ----
     def _scheme_letters(self) -> Optional[List[str]]:
@@ -448,6 +488,168 @@ class CadenceSampler:
         return text
 
 
+# ---- Author-guided tuning and baseline generation --------------------------
+
+def _load_author_stats(model_id: str) -> List[Dict]:
+    """Load per-author aggregates for a given model id.
+
+    Tries several plausible locations under data/analysis/ to accommodate
+    nested vendors (e.g., Qwen/Qwen2.5-1.5B).
+    """
+    # Exact nested path
+    p = Path('data/analysis') / model_id / 'authors.jsonl'
+    if not p.exists():
+        parts = model_id.split('/')
+        if len(parts) >= 2:
+            p = Path('data/analysis') / parts[0] / parts[1] / 'authors.jsonl'
+    if not p.exists():
+        p = Path('data/analysis') / (model_id.split('/')[-1]) / 'authors.jsonl'
+    rows: List[Dict] = []
+    try:
+        with p.open('r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    rows.append(json.loads(line))
+                except Exception:
+                    pass
+    except Exception:
+        return []
+    return rows
+
+
+def _match_author(rows: List[Dict], name: str) -> Optional[Dict]:
+    if not rows:
+        return None
+    want = name.strip().lower()
+    # Exact case-insensitive
+    for r in rows:
+        if str(r.get('author', '')).strip().lower() == want:
+            return r
+    # Contains match
+    for r in rows:
+        a = str(r.get('author', '')).strip().lower()
+        if want in a or a in want:
+            return r
+    # Fallback: last token (e.g., "shakespeare")
+    want_tok = want.split()[-1]
+    for r in rows:
+        a = str(r.get('author', '')).strip().lower()
+        if want_tok in a.split():
+            return r
+    return None
+
+
+def _adjust_config_from_author(cfg: PoetryConfig, stats: Dict) -> PoetryConfig:
+    # Inter-peak interval → cadence interval
+    ipi = stats.get('ipi_mean_mean') or stats.get('ipi_mean')
+    try:
+        if ipi and ipi == ipi and float(ipi) > 0:
+            m = float(ipi)
+            lo = max(3, int(round(0.8 * m)))
+            hi = max(lo + 1, int(round(1.2 * m)))
+            cfg.interval_range = (lo, hi)
+    except Exception:
+        pass
+
+    # Cooldown tokens from cooldown entropy drop (heuristic mapping)
+    cd = stats.get('cooldown_entropy_drop_3_mean')
+    try:
+        if cd and cd == cd:
+            v = float(cd)
+            if v >= 1.4:
+                cfg.cooldown_range = (5, 8)
+            elif v >= 1.1:
+                cfg.cooldown_range = (3, 6)
+            else:
+                cfg.cooldown_range = (2, 4)
+    except Exception:
+        pass
+
+    # Content fraction tunes spike content boost
+    cf = stats.get('content_fraction_mean')
+    try:
+        if cf and cf == cf:
+            c = float(cf)
+            if c >= 0.40:
+                cfg.spike.content_boost = 0.30
+            elif c >= 0.35:
+                cfg.spike.content_boost = 0.25
+            else:
+                cfg.spike.content_boost = max(0.18, cfg.spike.content_boost)
+    except Exception:
+        pass
+
+    # Punctuation near spikes → avoid spending spikes there
+    sp_prev_punct = stats.get('spike_prev_punct_rate_mean')
+    try:
+        if sp_prev_punct and sp_prev_punct == sp_prev_punct:
+            s = float(sp_prev_punct)
+            if s >= 0.25:
+                cfg.spike.stop_punct_penalty = 1.8
+            elif s >= 0.18:
+                cfg.spike.stop_punct_penalty = 1.4
+            else:
+                cfg.spike.stop_punct_penalty = max(1.0, cfg.spike.stop_punct_penalty)
+    except Exception:
+        pass
+
+    # Nucleus width → mild focus tuning
+    nw = stats.get('nucleus_w_mean_mean')
+    try:
+        if nw and nw == nw:
+            w = float(nw)
+            if w <= 100:
+                cfg.base.top_p, cfg.cool.top_p = 0.88, 0.82
+            elif w <= 180:
+                cfg.base.top_p, cfg.cool.top_p = 0.90, 0.84
+            else:
+                cfg.base.top_p, cfg.cool.top_p = 0.92, 0.86
+    except Exception:
+        pass
+    return cfg
+
+
+def _generate_baseline(
+    backend: ModelBackend,
+    prompt: str,
+    max_new_tokens: int,
+    temperature: float = 0.85,
+    top_p: float = 0.92,
+    top_k: Optional[int] = None,
+    seed: Optional[int] = None,
+) -> str:
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+    enc = backend.tokenize(prompt)
+    ids = list(enc['input_ids']) if isinstance(enc, dict) or ('input_ids' in enc) else list(enc)
+    try:
+        ids = [int(x) for x in ids]
+    except Exception:
+        pass
+    cache, last_logits = (None, None)
+    if backend.supports_kv():
+        cache, last_logits = backend.prefill_cache(ids)
+    else:
+        last_logits = backend.logits_for_input_ids(ids)[-1]
+    out_ids: List[int] = []
+    for _ in range(max_new_tokens):
+        logits = last_logits
+        tid = sample_from_logits(logits, temperature=temperature, top_p=top_p, top_k=top_k)
+        out_ids.append(int(tid))
+        if backend.supports_kv():
+            last_logits, cache = backend.logits_with_cache(tid, cache)
+        else:
+            last_logits = backend.logits_for_input_ids(ids + out_ids)[-1]
+    # Decode
+    try:
+        if hasattr(backend, 'hf_tok') and backend.hf_tok is not None:
+            return backend.hf_tok.decode(ids + out_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        elif hasattr(backend, 'tok') and hasattr(backend.tok, 'decode'):
+            return backend.tok.decode(ids + out_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+    except Exception:
+        pass
+    return ''.join(backend.token_str(i) for i in (ids + out_ids))
 # ---- Presets ---------------------------------------------------------------
 
 def poetry_default_preset() -> PoetryConfig:
@@ -559,6 +761,14 @@ def main():
     ap.add_argument('--rhyme-scheme', type=str, default=None, help='Rhyme scheme letters (e.g., "ABAB CDCD EFEF GG" or "AA" for couplets)')
     ap.add_argument('--rhyme-boost', type=float, default=None, help='Boost for rhyme-matching tokens')
     ap.add_argument('--line-target', type=str, default=None, help='Target line token range, e.g., "8,12"')
+    # Author-guided tuning
+    ap.add_argument('--author-seed', type=str, default=None, help='Author name to guide cadence from analysis stats (case-insensitive)')
+    ap.add_argument('--author-stats-model', type=str, default=None, help='Model id to read author stats from (defaults to --model)')
+    # Baseline comparison
+    ap.add_argument('--also-baseline', action='store_true', help='Also generate a plain baseline sample alongside the cadence-controlled one')
+    ap.add_argument('--baseline-temp', type=float, default=0.85)
+    ap.add_argument('--baseline-top-p', type=float, default=0.92)
+    ap.add_argument('--baseline-top-k', type=int, default=None)
     ap.add_argument('--save', action='store_true', default=True, help='Save output under data/generated')
     args = ap.parse_args()
 
@@ -578,15 +788,43 @@ def main():
             setattr(cfg, 'line_tokens_target', (int(a), int(b)))
         except Exception:
             pass
+    # Author-guided tuning from analysis stats
+    if args.author_seed:
+        stats_model = args.author_stats_model or args.model
+        rows = _load_author_stats(stats_model)
+        row = _match_author(rows, args.author_seed)
+        if row:
+            cfg = _adjust_config_from_author(cfg, row)
+        elif args.debug:
+            print(f"[DEBUG] No author stats found for '{args.author_seed}' in {stats_model}")
+
     sampler = CadenceSampler(backend, cfg, seed=args.seed, debug=args.debug)
 
     prompt = args.prompt
     if not prompt:
         prompt = "Write a short poem about dawn in the city.\n"
 
-    text = sampler.generate(prompt, max_new_tokens=args.max_new_tokens)
+    fixed_text = sampler.generate(prompt, max_new_tokens=args.max_new_tokens)
+    # Optional baseline
+    base_text: Optional[str] = None
+    if args.also_baseline:
+        base_text = _generate_baseline(
+            backend,
+            prompt,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.baseline_temp,
+            top_p=args.baseline_top_p,
+            top_k=args.baseline_top_k,
+            seed=args.seed,
+        )
     # Print
-    print(text)
+    if args.also_baseline and base_text is not None:
+        print('--- Normal ---')
+        print(base_text)
+        print('\n--- Fixed-Up ---')
+        print(fixed_text)
+    else:
+        print(fixed_text)
     # Save
     if args.save:
         from pathlib import Path
@@ -605,17 +843,31 @@ def main():
         model_dir = _safe_model_id(args.model)
         prompt_slug = _slugify(prompt)
         h = hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:8]
-        base_dir = Path('data/generated') / model_dir / f'sampler_{args.preset}' / f'{prompt_slug}_{h}'
+        tag = (args.author_seed or '').strip().lower().replace(' ', '_')
+        preset_leaf = f'sampler_{args.preset}' + (f'_author_{tag}' if tag else '')
+        base_dir = Path('data/generated') / model_dir / preset_leaf / f'{prompt_slug}_{h}'
         base_dir.mkdir(parents=True, exist_ok=True)
-        (base_dir / 'output.txt').write_text(text, encoding='utf-8')
         meta = {
             'model': args.model,
             'preset': f'sampler_{args.preset}',
             'seed': args.seed,
             'max_new_tokens': args.max_new_tokens,
             'prompt': args.prompt,
-            'paths': {'text': str(base_dir / 'output.txt')},
         }
+        if args.also_baseline and base_text is not None:
+            (base_dir / 'baseline.txt').write_text(base_text, encoding='utf-8')
+            (base_dir / 'fixed.txt').write_text(fixed_text, encoding='utf-8')
+            meta['paths'] = {
+                'baseline': str(base_dir / 'baseline.txt'),
+                'fixed': str(base_dir / 'fixed.txt'),
+            }
+        else:
+            (base_dir / 'output.txt').write_text(fixed_text, encoding='utf-8')
+            meta['paths'] = {'text': str(base_dir / 'output.txt')}
+        if args.author_seed:
+            meta['author_seed'] = args.author_seed
+            if args.author_stats_model:
+                meta['author_stats_model'] = args.author_stats_model
         (base_dir / 'meta.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
         idx = Path('data/generated/index.jsonl')
         idx.parent.mkdir(parents=True, exist_ok=True)
