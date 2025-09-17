@@ -5,6 +5,8 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 import json
+from pathlib import Path
+import json
 import hashlib
 from pathlib import Path
 
@@ -380,7 +382,83 @@ def prose_cadence() -> CadenceConfig:
     return cfg
 
 
-def run_compare(model_id: str, prompt: str, max_new_tokens: int, seed: Optional[int], preset: str = 'default'):
+def _load_author_stats(model_id: str) -> List[Dict]:
+    """Load per-author aggregates for a given model id from data/analysis.
+
+    Supports nested identifiers like Vendor/Model by trying a few paths.
+    """
+    # Try exact
+    p = Path('data/analysis') / model_id / 'authors.jsonl'
+    if not p.exists():
+        parts = model_id.split('/')
+        if len(parts) >= 2:
+            p = Path('data/analysis') / parts[0] / parts[1] / 'authors.jsonl'
+    if not p.exists():
+        p = Path('data/analysis') / (model_id.split('/')[-1]) / 'authors.jsonl'
+    rows: List[Dict] = []
+    try:
+        with p.open('r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    rows.append(json.loads(line))
+                except Exception:
+                    pass
+    except Exception:
+        return []
+    return rows
+
+
+def _match_author(rows: List[Dict], name: str) -> Optional[Dict]:
+    if not rows:
+        return None
+    want = name.strip().lower()
+    for r in rows:
+        if str(r.get('author','')).strip().lower() == want:
+            return r
+    for r in rows:
+        a = str(r.get('author','')).strip().lower()
+        if want in a or a in want:
+            return r
+    want_tok = want.split()[-1]
+    for r in rows:
+        a = str(r.get('author','')).strip().lower()
+        if want_tok in a.split():
+            return r
+    return None
+
+
+def _adjust_cfg_from_author(cfg, stats: Dict):
+    """Adjust CadenceConfig in-place using a subset of author stats.
+
+    We keep changes minimal to preserve HF generate() robustness.
+    """
+    # Inter-peak interval → cadence interval
+    ipi = stats.get('ipi_mean_mean') or stats.get('ipi_mean')
+    try:
+        if ipi and ipi == ipi and float(ipi) > 0:
+            m = float(ipi)
+            lo = max(3, int(round(0.8 * m)))
+            hi = max(lo + 1, int(round(1.2 * m)))
+            cfg.interval_range = (lo, hi)
+    except Exception:
+        pass
+    # Cooldown length heuristic
+    cd = stats.get('cooldown_entropy_drop_3_mean')
+    try:
+        if cd and cd == cd:
+            v = float(cd)
+            if v >= 1.4:
+                cfg.cooldown_range = (5, 8)
+            elif v >= 1.1:
+                cfg.cooldown_range = (3, 6)
+            else:
+                cfg.cooldown_range = (2, 4)
+    except Exception:
+        pass
+    return cfg
+
+
+def run_compare(model_id: str, prompt: str, max_new_tokens: int, seed: Optional[int], preset: str = 'default', *, author_seed: Optional[str] = None, author_stats_model: Optional[str] = None):
     if seed is not None:
         random.seed(seed)
         torch.manual_seed(seed)
@@ -418,6 +496,12 @@ def run_compare(model_id: str, prompt: str, max_new_tokens: int, seed: Optional[
         cfg = prose_cadence()
     else:
         cfg = default_cadence()
+    # Optional: author-guided tweaks to cadence schedule
+    if author_seed:
+        rows = _load_author_stats(author_stats_model or model_id)
+        row = _match_author(rows, author_seed)
+        if row:
+            cfg = _adjust_cfg_from_author(cfg, row)
     proc = CadenceProcessor(tok, cfg)
     processors = LogitsProcessorList([proc])
     out_fix = model.generate(
@@ -732,6 +816,8 @@ def main():
     ap.add_argument('--manual-fixed', action='store_true', help='Use manual token-aware loop for fixed-up output')
     ap.add_argument('--variants', type=int, default=1, help='Number of fixed-up variants to sample (manual mode only)')
     ap.add_argument('--task', default=None, help='Optional directive to prepend (e.g., "Write an imagist poem about ...")')
+    ap.add_argument('--author-seed', default=None, help='Optional author style seed to tune cadence (HF engine only)')
+    ap.add_argument('--author-stats-model', default=None, help='Model id to read author stats from (default: --model)')
     args = ap.parse_args()
 
     prompt = args.prompt
@@ -752,7 +838,15 @@ def main():
             fixed_variants = None
             fix_text = run_fixed_manual(args.model, prompt, args.max_new_tokens, args.seed, args.preset)
     else:
-        base_text, fix_text = run_compare(args.model, prompt, args.max_new_tokens, args.seed, args.preset)
+        base_text, fix_text = run_compare(
+            args.model,
+            prompt,
+            args.max_new_tokens,
+            args.seed,
+            args.preset,
+            author_seed=args.author_seed,
+            author_stats_model=args.author_stats_model,
+        )
 
     print('--- Normal ---')
     print(base_text)

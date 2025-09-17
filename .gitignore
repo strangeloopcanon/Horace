@@ -40,3 +40,16 @@ reports/final/*.pdf
 # Optional: ignore very large generated text variants (keep index + meta + fixed/baseline by default)
 # Uncomment if push complains about size or quota
 # data/generated/**/*.txt
+
+# Documentation (hide interim docs from the repo)
+# Hide everything under docs/, but allow README.md files inside
+docs/**
+!docs/**/
+!docs/**/[Rr][Ee][Aa][Dd][Mm][Ee].[Mm][Dd]
+
+# Ignore all Markdown files anywhere except any README.md
+*.md
+!**/[Rr][Ee][Aa][Dd][Mm][Ee].[Mm][Dd]
+
+# Important HOWTO doc to keep tracked
+!signatures/HOWTO.md
