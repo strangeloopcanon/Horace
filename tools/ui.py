@@ -22,6 +22,14 @@ if __package__ in (None, ""):
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import gradio as gr
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import io
+from PIL import Image
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from tools.analyze import pick_backend
 from tools.gen_compare import run_compare  # HF generate() path with logits-processor
@@ -139,6 +147,88 @@ def _preset_label(preset: str) -> str:
     return m.get(preset, 'a poem')
 
 
+# ---- Cadence charts (quick scorer: GPT-2 by default) -----------------------
+_SCORER_CACHE: Dict[str, tuple] = {}
+
+
+def _get_scorer(model_id: str = 'gpt2'):
+    key = model_id
+    if key in _SCORER_CACHE:
+        return _SCORER_CACHE[key]
+    tok = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(model_id)
+    model.eval()
+    _SCORER_CACHE[key] = (tok, model)
+    return tok, model
+
+
+def _surprisal_series(text: str, scorer_model: str = 'gpt2', max_tokens: int = 600):
+    tok, model = _get_scorer(scorer_model)
+    enc = tok(text, return_tensors='pt')
+    input_ids = enc['input_ids']
+    L = int(input_ids.shape[1])
+    if L <= 1:
+        return np.array([]), np.array([])
+    # Limit for responsiveness
+    if L > max_tokens + 1:
+        input_ids = input_ids[:, : max_tokens + 1]
+        L = int(input_ids.shape[1])
+    with torch.no_grad():
+        out = model(input_ids=input_ids)
+    logits = out.logits[:, :-1, :]  # predict next token
+    labels = input_ids[:, 1:]
+    probs = torch.softmax(logits, dim=-1)
+    p_true = probs.gather(-1, labels.unsqueeze(-1)).squeeze(-1)  # [1, L-1]
+    s = (-torch.log(torch.clamp(p_true, min=1e-12))).squeeze(0).cpu().numpy()
+    H = (-(probs * torch.log(torch.clamp(probs, min=1e-12))).sum(-1)).squeeze(0).cpu().numpy()
+    return s.astype(np.float32), H.astype(np.float32)
+
+
+def _cadence_metrics(s: np.ndarray, H: np.ndarray):
+    if s.size < 8:
+        return None, None, None
+    mu = float(np.mean(s)); sd = float(np.std(s) + 1e-6)
+    thr = mu + sd
+    peaks = [i for i in range(1, len(s) - 1) if s[i] >= thr and s[i] > s[i - 1] and s[i] >= s[i + 1]]
+    ipi_mean = None
+    ipi_cv = None
+    cd3 = None
+    if len(peaks) >= 2:
+        ipi = np.diff(np.array(peaks))
+        ipi_mean = float(np.mean(ipi))
+        ipi_cv = float(np.std(ipi) / (ipi_mean + 1e-6)) if ipi.size > 1 else 0.0
+    if H.size == s.size and peaks:
+        drops = []
+        for i in peaks:
+            if i + 3 < len(H):
+                drops.append(float(H[i] - np.mean(H[i+1:i+4])))
+        if drops:
+            cd3 = float(np.mean(drops))
+    return ipi_mean, ipi_cv, cd3
+
+
+def _cadence_image(text: str, scorer_model: str = 'gpt2'):
+    s, H = _surprisal_series(text, scorer_model=scorer_model)
+    if s.size == 0:
+        return None, ""
+    mu = float(np.mean(s)); sd = float(np.std(s) + 1e-6); thr = mu + sd
+    fig = plt.figure(figsize=(6.0, 2.0))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(s, lw=0.8)
+    ax.axhline(thr, color='red', linestyle='--', alpha=0.6)
+    ax.set_xlabel('Token')
+    ax.set_ylabel('Surprisal (nats)')
+    ax.set_title('Cadence (quick scorer)')
+    plt.tight_layout()
+    buf = io.BytesIO(); fig.savefig(buf, format='png', dpi=160); plt.close(fig); buf.seek(0)
+    img = Image.open(buf)
+    ipi_mean, ipi_cv, cd3 = _cadence_metrics(s, H)
+    metrics = ''
+    if ipi_mean is not None:
+        metrics = f"IPI {ipi_mean:.1f} / CV {ipi_cv:.2f}; cooldown ΔH(3) {cd3:.2f}"
+    return img, metrics
+
+
 def generate(
     model: str,
     backend: str,
@@ -162,6 +252,7 @@ def generate(
     safe_mode: bool,
     clean_unicode: bool,
     style_in_prompt: bool,
+    show_cadence: bool,
 ):
     try:
         base_text: Optional[str] = None
@@ -184,6 +275,7 @@ def generate(
                 'sonnet': 'sonnet',
                 'couplets': 'couplets',
                 'dickinson': 'default',  # closest available
+                'prose': 'prose',
             }
             gc_preset = preset_map.get(preset, 'default')
             # Combine author seed with prompt for gentle framing (optional)
@@ -288,9 +380,23 @@ def generate(
         status = "OK"
         if saved:
             status += f" — saved to {saved.get('dir')}"
-        return base_text or "(baseline disabled)", fixed_text, status
+        # Optional cadence charts (quick scorer: gpt2)
+        base_img = None; fixed_img = None
+        if show_cadence:
+            try:
+                if base_text:
+                    base_img, metrics_b = _cadence_image(base_text, scorer_model='gpt2')
+                    if metrics_b:
+                        status += f"\nNormal cadence: {metrics_b}"
+                if fixed_text:
+                    fixed_img, metrics_f = _cadence_image(fixed_text, scorer_model='gpt2')
+                    if metrics_f:
+                        status += f"\nFixed-Up cadence: {metrics_f}"
+            except Exception as e:
+                status += f"\n[chart error: {e}]"
+        return base_text or "(baseline disabled)", fixed_text, status, base_img, fixed_img
     except Exception as e:
-        return "", "", f"Error: {e}"
+        return "", "", f"Error: {e}", None, None
 
 
 def build_ui() -> gr.Blocks:
@@ -339,12 +445,16 @@ def build_ui() -> gr.Blocks:
             safe_mode = gr.Checkbox(value=True, label="Safe mode (softer biases; avoid artifacts)")
             clean_unicode = gr.Checkbox(value=True, label="Clean replacement characters (�) from outputs")
             style_in_prompt = gr.Checkbox(value=True, label="Add style instruction to prompt")
+            show_cadence = gr.Checkbox(value=True, label="Show cadence charts (quick scorer)")
 
         run_btn = gr.Button("Generate")
         status = gr.Markdown()
         with gr.Row():
             base_out = gr.Textbox(label="Normal (baseline)", lines=16)
             fixed_out = gr.Textbox(label="Fixed‑Up (cadence‑controlled)", lines=16)
+        with gr.Row():
+            base_img = gr.Image(label="Normal cadence", type='pil')
+            fixed_img = gr.Image(label="Fixed‑Up cadence", type='pil')
 
         run_btn.click(
             fn=generate,
@@ -371,8 +481,9 @@ def build_ui() -> gr.Blocks:
                 safe_mode,
                 clean_unicode,
                 style_in_prompt,
+                show_cadence,
             ],
-            outputs=[base_out, fixed_out, status],
+            outputs=[base_out, fixed_out, status, base_img, fixed_img],
         )
 
         # Refresh authors list based on stats model or base model

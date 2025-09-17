@@ -745,6 +745,24 @@ PRESETS = {
 }
 
 
+def prose_preset() -> PoetryConfig:
+    # Longer intervals, gentle spikes, no rhyme; prose-like cadence
+    return PoetryConfig(
+        base=PhaseParams(top_p=0.90, temperature=0.78, top_k=120),
+        spike=PhaseParams(top_p=0.95, temperature=1.03, top_k=180, content_boost=0.15, stop_punct_penalty=0.6),
+        cool=PhaseParams(top_p=0.86, temperature=0.66, top_k=80),
+        interval_range=(14, 24),
+        cooldown_range=(5, 10),
+        shift_every_lines=(2, 4),
+        shift_span_tokens=(16, 28),
+        rhyme_enabled=False,
+    )
+
+
+# Register after definition to avoid forward reference issues
+PRESETS['prose'] = prose_preset
+
+
 # ---- CLI -------------------------------------------------------------------
 
 def main():
