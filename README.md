@@ -177,6 +177,11 @@ After both complete, compare per‑doc or per‑author signatures across `data/a
 - One‑off sampler (HF/MLX) with presets: `python -m tools.sampler <model> --backend <hf|mlx> --preset <poetry_default|sonnet|dickinson|freeverse|couplets> --prompt "..." --max-new-tokens 120`
 - Saved outputs go to `data/generated/...` and aggregate at `reports/generated/README.md`.
 
+## Local Web UI
+- Launch the full UI with authors/presets/charts: `python tools/ui.py --host 127.0.0.1 --port 7860`
+- Use any HF or MLX model id in the Model box (e.g., `Qwen/Qwen3-1.7B-MLX-bf16`).
+- The earlier minimal demo under `examples/gradio_app.py` has been removed.
+
 ## Make the Final Book
 - Build curated README (Markdown), DOCX, and HTML (one‑page), pulling in figures and latest samples:
   - `python -m tools.finalize --model Qwen/Qwen2.5-1.5B --out-readme reports/final/README.md --out-docx reports/final/report.docx --out-pdf reports/final/report.pdf`
