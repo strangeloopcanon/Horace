@@ -22,6 +22,7 @@ venv/
 .env/
 env/
 .cache/
+mlx_cache/
 
 # Temporary import workspace
 .import_tmp/

@@ -1,6 +1,6 @@
 # Generated Samples
 
-- Total samples: 18
+- Total samples: 20
 
 ## Qwen/Qwen2.5-1.5B
 ### Preset: couplets
@@ -392,5 +392,108 @@ In winter, it remembers
 Write a sonnet with Shakespearean rhyme scheme (ABAB CDCD EFEF GG).
 
 On winter's breath, the river learns to sing:\nA sweet harmony, beneath the snow\nThat laments the dying of the day\nAs it retreats, into its deep abode\nWhere all life's hopes and dreams have passed away\nAnd the world is once again reborn\nWith new beginnings and a fresh start\nThat makes me wonder, what lies ahead\nOf what we've come to know and seen\nAnd what we'll endure, in time's great grandeur\nAs we traverse the path of life
+```
+
+## Qwen/Qwen3-1.7B-MLX-bf16
+### Preset: sampler_poetry_default
+
+#### Prompt
+
+> At dawn, the monkey leans into light:
+
+#### Normal
+
+```
+Write a poem in the style of Alfred Lord Tennyson.
+
+At dawn, the monkey leans into light:
+The sun is rising on the mountain's height.
+The river sings with crystal-clear stream,
+And birds are singing in their morning flight.
+
+The fields are green and golden, as the wind
+Bears whispers from the valley to the hill.
+The orchids bloom with every breeze that blows,
+And the sweet scent of jasmine is so low.
+
+The old man sits by the fire, his face
+A map of years, both joy and grief.
+He tells of distant lands and tales,
+Of heroes' deeds and shadows of the past.
+
+The child walks barefoot through the dew,
+His laughter ringing through
+```
+
+#### Fixed-Up
+
+```
+Write a poem in the style of Alfred Lord Tennyson.
+
+At dawn, the monkey leans into light:
+The morning's first breath, a whispering tide,
+The world awakes with boughs and bird,
+A soft, golden hue that paints the skies.
+
+In fields of emerald, life expands,
+The sunbeams dance upon the grass,
+Each leaf a hymn to time's embrace,
+As nature sings her ancient psalm.
+
+But oh, the heart, it beats with thought,
+A symphony of joy and sorrow,
+Where dreams are born and ghosts are cast,
+And love, like fire, burns bright.
+
+Yet still, the soul is bound by pain,
+The weight of years,
+```
+
+### Preset: sampler_prose
+
+#### Prompt
+
+> At dawn, the monkey leans into light:
+
+#### Normal
+
+```
+Write a short prose passage in the style of P G Wodehouse.
+
+At dawn, the monkey leans into light:
+A few sips from the teak.
+The tea is strong and sweet.
+Mmm, I think I'll have a cup.
+The kettle's been boiling for an hour,
+And the tea is ready to be poured.
+The room is alive with the sound of gong,
+And laughter from the other side of the wall.
+It's a morning like any other,
+But the world feels different now,
+As if the air itself is lighter.
+
+Then, the clock strikes seven,
+And out of the blue,
+The old man appears,
+With his cane and a story to tell.
+"Ah," he
+```
+
+#### Fixed-Up
+
+```
+Write a short prose passage in the style of P G Wodehouse.
+
+At dawn, the monkey leans into light:
+The day is not yet begun.
+Yet the coffee has been brewed,
+And the bobby is on his way.
+The cabbie is on the way.
+And the taxi is waiting at the curb.
+The man in the white suit, with his fussy tie and his black leather gloves, is on a roll.
+He's been out for an hour, and he's already got the car.
+He’s in the middle of the city, where the streets are narrow, and the buildings are tall.
+The sky is a canvas of blue and grey.
+The city hums with life, but the
 ```
 
