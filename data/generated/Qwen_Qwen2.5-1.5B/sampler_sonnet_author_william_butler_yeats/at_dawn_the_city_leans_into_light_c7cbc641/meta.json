@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "sampler_sonnet",
+  "prompt": "At dawn, the city leans into light:\n",
+  "author_seed": "William Butler Yeats",
+  "author_stats_model": "Qwen/Qwen2.5-1.5B",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/sampler_sonnet_author_william_butler_yeats/at_dawn_the_city_leans_into_light_c7cbc641/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/sampler_sonnet_author_william_butler_yeats/at_dawn_the_city_leans_into_light_c7cbc641/fixed.txt"
+  }
+}

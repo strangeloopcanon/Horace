@@ -1,0 +1,9 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "sampler_poetry_default",
+  "prompt": "At dawn, the city leans into light:\n",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/sampler_poetry_default/at_dawn_the_city_leans_into_light_c7cbc641/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/sampler_poetry_default/at_dawn_the_city_leans_into_light_c7cbc641/fixed.txt"
+  }
+}

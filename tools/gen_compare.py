@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import copy
 import math
 import random
 from dataclasses import dataclass
@@ -427,7 +428,78 @@ def _match_author(rows: List[Dict], name: str) -> Optional[Dict]:
     return None
 
 
-def _adjust_cfg_from_author(cfg, stats: Dict):
+def _merge_author_stats(primary: Optional[Dict], secondary: Optional[Dict], weight: float) -> Optional[Dict]:
+    if primary is None and secondary is None:
+        return None
+    if secondary is None or weight <= 0.0:
+        return primary
+    if primary is None:
+        return secondary
+    w = min(max(weight, 0.0), 1.0)
+    merged = {}
+    keys = set(primary.keys()) | set(secondary.keys())
+    for k in keys:
+        v1 = primary.get(k)
+        v2 = secondary.get(k)
+        if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
+            merged[k] = (1.0 - w) * float(v1) + w * float(v2)
+        else:
+            merged[k] = v2 if w >= 0.5 and v2 is not None else v1
+    return merged
+
+
+def _blend_tuple(lo_hi_base: Tuple[int, int], lo_hi_new: Tuple[int, int], alpha: float) -> Tuple[int, int]:
+    a = max(0.0, alpha)
+    b0, b1 = lo_hi_base
+    n0, n1 = lo_hi_new
+    return (
+        int(round(b0 + (n0 - b0) * a)),
+        int(round(b1 + (n1 - b1) * a)),
+    )
+
+
+def _blend_scalar(base_val: float, new_val: float, alpha: float) -> float:
+    a = max(0.0, alpha)
+    return float(base_val + (new_val - base_val) * a)
+
+
+def _blend_cadence_config(base_cfg: CadenceConfig, new_cfg: CadenceConfig, alpha: float) -> CadenceConfig:
+    if alpha == 1.0:
+        return new_cfg
+    a = max(0.0, alpha)
+    new_cfg.interval_range = _blend_tuple(base_cfg.interval_range, new_cfg.interval_range, a)
+    new_cfg.cooldown_range = _blend_tuple(base_cfg.cooldown_range, new_cfg.cooldown_range, a)
+    if base_cfg.line_tokens_target and new_cfg.line_tokens_target:
+        new_cfg.line_tokens_target = _blend_tuple(base_cfg.line_tokens_target, new_cfg.line_tokens_target, a)
+    new_cfg.newline_penalty_until_target = _blend_scalar(
+        base_cfg.newline_penalty_until_target,
+        new_cfg.newline_penalty_until_target,
+        a,
+    )
+    new_cfg.newline_penalty_until_rhyme = _blend_scalar(
+        base_cfg.newline_penalty_until_rhyme,
+        new_cfg.newline_penalty_until_rhyme,
+        a,
+    )
+    new_cfg.anti_meta_penalty = _blend_scalar(base_cfg.anti_meta_penalty, new_cfg.anti_meta_penalty, a)
+    new_cfg.rep_penalty = _blend_scalar(base_cfg.rep_penalty, new_cfg.rep_penalty, a)
+    new_cfg.div_bonus = _blend_scalar(base_cfg.div_bonus, new_cfg.div_bonus, a)
+    new_cfg.rep_window = int(round(base_cfg.rep_window + (new_cfg.rep_window - base_cfg.rep_window) * a))
+    new_cfg.no_repeat_ngram = int(round(base_cfg.no_repeat_ngram + (new_cfg.no_repeat_ngram - base_cfg.no_repeat_ngram) * a))
+    new_cfg.div_window = int(round(base_cfg.div_window + (new_cfg.div_window - base_cfg.div_window) * a))
+
+    for phase_name in ('base', 'spike', 'cool'):
+        base_phase: PhaseParams = getattr(base_cfg, phase_name)
+        new_phase: PhaseParams = getattr(new_cfg, phase_name)
+        new_phase.top_p = _blend_scalar(base_phase.top_p, new_phase.top_p, a)
+        new_phase.temperature = _blend_scalar(base_phase.temperature, new_phase.temperature, a)
+        new_phase.content_boost = _blend_scalar(base_phase.content_boost, new_phase.content_boost, a)
+        new_phase.stop_punct_penalty = _blend_scalar(base_phase.stop_punct_penalty, new_phase.stop_punct_penalty, a)
+    return new_cfg
+
+
+def _adjust_cfg_from_author(cfg, stats: Dict, *, alpha: float = 1.0):
+    base_cfg = copy.deepcopy(cfg)
     """Adjust CadenceConfig in-place using a subset of author stats.
 
     We keep changes minimal to preserve HF generate() robustness.
@@ -455,10 +527,22 @@ def _adjust_cfg_from_author(cfg, stats: Dict):
                 cfg.cooldown_range = (2, 4)
     except Exception:
         pass
-    return cfg
+    return _blend_cadence_config(base_cfg, cfg, alpha)
 
 
-def run_compare(model_id: str, prompt: str, max_new_tokens: int, seed: Optional[int], preset: str = 'default', *, author_seed: Optional[str] = None, author_stats_model: Optional[str] = None):
+def run_compare(
+    model_id: str,
+    prompt: str,
+    max_new_tokens: int,
+    seed: Optional[int],
+    preset: str = 'default',
+    *,
+    author_seed: Optional[str] = None,
+    author_seed_secondary: Optional[str] = None,
+    author_mix: float = 0.0,
+    author_strength: float = 1.0,
+    author_stats_model: Optional[str] = None,
+):
     if seed is not None:
         random.seed(seed)
         torch.manual_seed(seed)
@@ -497,11 +581,13 @@ def run_compare(model_id: str, prompt: str, max_new_tokens: int, seed: Optional[
     else:
         cfg = default_cadence()
     # Optional: author-guided tweaks to cadence schedule
-    if author_seed:
+    if author_seed or author_seed_secondary:
         rows = _load_author_stats(author_stats_model or model_id)
-        row = _match_author(rows, author_seed)
-        if row:
-            cfg = _adjust_cfg_from_author(cfg, row)
+        primary = _match_author(rows, author_seed) if author_seed else None
+        secondary = _match_author(rows, author_seed_secondary) if author_seed_secondary else None
+        stats = _merge_author_stats(primary, secondary, float(author_mix or 0.0))
+        if stats:
+            cfg = _adjust_cfg_from_author(cfg, stats, alpha=float(max(0.0, author_strength)))
     proc = CadenceProcessor(tok, cfg)
     processors = LogitsProcessorList([proc])
     out_fix = model.generate(
@@ -817,6 +903,9 @@ def main():
     ap.add_argument('--variants', type=int, default=1, help='Number of fixed-up variants to sample (manual mode only)')
     ap.add_argument('--task', default=None, help='Optional directive to prepend (e.g., "Write an imagist poem about ...")')
     ap.add_argument('--author-seed', default=None, help='Optional author style seed to tune cadence (HF engine only)')
+    ap.add_argument('--secondary-author-seed', default=None, help='Second author to blend stats from')
+    ap.add_argument('--author-mix', type=float, default=0.0, help='Blend weight for secondary author (0-1)')
+    ap.add_argument('--author-strength', type=float, default=1.0, help='Strength multiplier for author stats influence (0 disables)')
     ap.add_argument('--author-stats-model', default=None, help='Model id to read author stats from (default: --model)')
     args = ap.parse_args()
 
@@ -845,6 +934,9 @@ def main():
             args.seed,
             args.preset,
             author_seed=args.author_seed,
+            author_seed_secondary=args.secondary_author_seed,
+            author_mix=args.author_mix,
+            author_strength=args.author_strength,
             author_stats_model=args.author_stats_model,
         )
 

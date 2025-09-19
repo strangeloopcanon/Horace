@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "sampler_prose",
+  "prompt": "At dawn, the city leans into light. \n",
+  "author_seed": "Oscar Wilde",
+  "author_stats_model": "Qwen/Qwen2.5-1.5B",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/sampler_prose_author_oscar_wilde/at_dawn_the_city_leans_into_light_83e926f3/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/sampler_prose_author_oscar_wilde/at_dawn_the_city_leans_into_light_83e926f3/fixed.txt"
+  }
+}

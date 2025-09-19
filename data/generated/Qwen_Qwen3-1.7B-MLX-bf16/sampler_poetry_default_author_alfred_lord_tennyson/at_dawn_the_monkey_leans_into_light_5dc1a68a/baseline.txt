@@ -1,0 +1,19 @@
+Write a poem in the style of Alfred Lord Tennyson.
+
+At dawn, the monkey leans into light:
+The sun is rising on the mountain's height.
+The river sings with crystal-clear stream,
+And birds are singing in their morning flight.
+
+The fields are green and golden, as the wind
+Bears whispers from the valley to the hill.
+The orchids bloom with every breeze that blows,
+And the sweet scent of jasmine is so low.
+
+The old man sits by the fire, his face
+A map of years, both joy and grief.
+He tells of distant lands and tales,
+Of heroes' deeds and shadows of the past.
+
+The child walks barefoot through the dew,
+His laughter ringing through

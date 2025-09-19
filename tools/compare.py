@@ -419,7 +419,7 @@ def write_report(a: str, b: str, outdir: Path, author_figs, doc_figs):
 
 def main():
     ap = argparse.ArgumentParser(description='Compare two models')
-    ap.add_argument('--a', default='gpt2', help='Baseline model (e.g., gpt2)')
+    ap.add_argument('--a', default='mlx-community/Llama-3.2-3B-Instruct', help='Baseline model (e.g., gpt2)')
     ap.add_argument('--b', required=True, help='Comparison model (e.g., Qwen/Qwen2.5-1.5B)')
     args = ap.parse_args()
 

@@ -40,7 +40,7 @@ def build_pdf(model: str, out_path: Path):
 
 def main():
     ap = argparse.ArgumentParser(description='Create a PDF with report figures')
-    ap.add_argument('--model', default='gpt2')
+    ap.add_argument('--model', default='mlx-community/Llama-3.2-3B-Instruct')
     ap.add_argument('--out', default=None, help='Output PDF path (default: reports/<model>/report.pdf)')
     args = ap.parse_args()
 

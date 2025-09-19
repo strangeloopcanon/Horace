@@ -1,6 +1,6 @@
 # Generated Samples
 
-- Total samples: 20
+- Total samples: 25
 
 ## Qwen/Qwen2.5-1.5B
 ### Preset: couplets
@@ -287,6 +287,239 @@ In the late summer of that year we lived in a house in a village that looked acr
 Write a paragraph in the style of Ernest Hemingway.
 
 In the late summer of that year we lived in a house in a village that looked across the river and the plain to the mountains. It was a small house, but it had a beautiful view. The days were long and hot, and we spent them reading and writing in the shade of the trees. Sometimes we took walks along the river, and sometimes we sat in the fields and watched the birds. We had no electricity or running water, but we were happy. We knew that we were poor, but 인 A. It's a story about a simple, happy life in the country.
+```
+
+### Preset: sampler_dickinson
+
+#### Prompt
+
+> At dawn, the city leans into light:
+
+#### Normal
+
+```
+Write a poem in the style of Emily Dickinson.
+
+At dawn, the city leans into light:
+A painted skyline emerges from night.
+The wind whispers secrets through the trees,
+While shadows stretch, like fingers weeping.
+
+In fields where daisies bloom and sway,
+The scent of summer fills the air.
+A bird soars high above the meadow's edge,
+Its song is pure and free as thought.
+
+In kitchens bright with morning's glow,
+Dishes shine under the morning sun.
+Fathers' hands knead dough and kneel,
+Their faces stern yet tenderly good.
+
+Children laugh and run, their laughter loud,
+Through streets that dance with children's joy.
+They chase each other around the block,
+Their hearts filled with hope and unconfined.
+
+Evening falls, and shadows lengthen,
+The world is still when stars appear.
+But even in this quiet solitude,
+There's something at my heart to say.
+```
+
+#### Fixed-Up
+
+```
+Write a poem in the style of Emily Dickinson.
+
+At dawn, the city leans into light:
+A quiet whisper, not a sound,
+The stars are still, and stars are bright,
+And I'm afraid to move my sight.
+
+I stand alone upon the wall,
+Where shadows dance, and voices fall,
+I look down at leaves that rustle,
+And see them dance, like birds in flight.
+
+Oh, how I wish to be beside
+The river's flow, where life is free,
+To float on currents evermore,
+And breathe the air, without a care.
+
+But here I am, alone again,
+With thoughts that race like horses fast,
+And fears that hide behind my eyes,
+And doubts that whisper, "Why must I grieve?"
+
+Yet I will keep my faith and trust,
+For hope is there, and love is true,
+And though the world may seem so wild,
+I know it all, and more than ever.
+```
+
+### Preset: sampler_poetry_default
+
+#### Prompt
+
+> At dawn, the city leans into light:
+
+#### Normal
+
+```
+At dawn, the city leans into light:
+The sun is a bright and smiling face.
+The morning sky is like a big bed of flowers;
+In the distance, a flock of white birds are flying high.
+In the city, the streetlights are dimmed,
+As if they're sleeping quietly under the night sky.
+A river of water flows slowly,
+Like a gentle stream in the morning breeze.
+A group of children come running to me,
+With smiles on their faces, they play happily.
+Their laughter fills the air,
+Making everyone's heart feel warm and bright.
+A family pet barks excitedly,
+Making the whole neighborhood sound lively.
+```
+
+#### Fixed-Up
+
+```
+At dawn, the city leans into light:
+The morning is golden, a gentle
+wave of light. It bathes the city in its warm glow,
+the sun’s golden rays caress and soothe us,
+and our tired bones stretch long and wide.
+The city comes to life, waking up
+from a deep sleep. The streets are alive with
+a buzzing noise, the sound of people
+coming together to greet the new day.
+A woman walks her dog, children play on the playground,
+parents talk with their children, couples stroll
+in the park. The city is a vibrant
+landscape of human activity, a bustling
+market
+```
+
+### Preset: sampler_prose
+
+#### Prompt
+
+> At dawn, the city leans into light.
+
+#### Normal
+
+```
+Write a short prose passage in the style of Ernest Hemingway.
+
+At dawn, the city leans into light. 
+The streets are dimly lit, but the air is clear and crisp with the promise of new beginnings. The sun rises slowly above the horizon, its warmth seeping through cracks in the brick and glass. The birds are still hushed from the night, but their songs begin to sound closer as the day progresses.
+In the heart of the city, the old man stirs in his chair by the window. He has lived here all his life, weathered the storms and seen the changes come and go. He watches as people pass by, each one bringing stories with them that will be passed on through generations.
+At the corner of the street, a woman weaves a colorful tapestry. She is young and vibrant, with eyes that sparkle like the morning sun. She takes pride in her work, for it is a reflection of her own creativity and the power of art to bring joy to others.
+Nearby, a small boy swings on a rope swing. He laughs
+```
+
+#### Fixed-Up
+
+```
+Write a short prose passage in the style of Ernest Hemingway.
+
+At dawn, the city leans into light. 
+The air is crisp and clean, dusted with dew. 
+In the distance, the horizon stretches out like a tapestry of blue. 
+I walk along the street, my feet sinking slightly into the pavement. 
+A lone figure passes by, their silhouette outlined against the sky. 
+As I turn a corner, I spot a small dog trotting towards me. It barks at me, its fur bristling. 
+With a start, I realize that it's a stray cat. Its eyes are bright and curious, reflecting the morning sun. 
+Without thinking, I reach out and gently stroke its head. The cat arches its back, purring softly. 
+It's a simple gesture, but it feels right. As we stand there, side by side, the world around us fades away.
+```
+
+
+#### Prompt
+
+> At dawn, the city leans into light.
+
+#### Normal
+
+```
+Write a short prose passage in the style of Oscar Wilde.
+
+At dawn, the city leans into light. 
+The streets are dimly lit, but the air is brimming with promise. The sun, like a serpent's eye, has just peered over the horizon, casting its first golden glow upon the world below. 
+Every streetlamp flickers to life, their lanterns ablaze with a soft, warm yellow light. The buildings around me are bathed in this gentle illumination, their facades adorned with delicate patterns and intricate details.
+The birdsong that greets me as I walk is a symphony of happiness, and it fills me with hope. The world before me seems so much brighter than I ever imagined it could be. 
+I feel alive, full of joy and wonder. The city is waking up, and I am grateful for the chance to be part of this magical moment.
+```
+
+#### Fixed-Up
+
+```
+Write a short prose passage in the style of Oscar Wilde.
+
+At dawn, the city leans into light. 
+The streets are cloaked in silence, save for the occasional creak of pavement as it gives way to the sun's rising power. The air is thick with the scent of morning, and the world outside seems to be holding its breath, waiting for the first rays of sunlight to pierce through the clouds.
+
+As the day begins, the sounds of life echo around the city, each sound a testament to the resilience of human beings. The hum of traffic, the chatter of passersby, the rustle of leaves on the trees – all these things come together to create a symphony of urban living.
+
+And yet, amidst this bustling energy, there is something that lingers on the edges of consciousness. A sense of melancholy, perhaps, or a feeling of longing for what was before. It's as if the city has awakened from a dream, eager to embrace the new day but still carrying with it the weight of memories.
+
+But then, as the sun reaches
+```
+
+### Preset: sampler_sonnet
+
+#### Prompt
+
+> At dawn, the city leans into light:
+
+#### Normal
+
+```
+Write a Shakespearean sonnet in the style of William Butler Yeats.
+
+At dawn, the city leans into light:
+A tapestry of shadows and glimmer.
+The silken threads of buildings weep,
+And the city weeps with a silver tear.
+In its heart, where whispers of time entwine,
+We find solace and loss intertwined.
+Yet the soul of the city remains untold,
+A mystery hidden beneath its guise.
+For like a dream, it floats on the night's tide,
+Leaving behind echoes of a lost rhyme.
+```
+
+#### Fixed-Up
+
+```
+Write a Shakespearean sonnet in the style of William Butler Yeats.
+
+At dawn, the city leans into light:
+The spires and towers, like specters, quiver,
+As if to greet the morning's gentlest kiss.
+The world awakens from its slumber deep,
+And shadows flee before the sun's embrace.
+
+In this new day, the earth is bathed in gold,
+And life is filled with music and song.
+The birds sing sweetly, their melodies so bold,
+As they take flight, leaving behind the night.
+
+The city stands tall, a beacon of hope,
+Its streets bustling with people on their way.
+They walk with purpose, each step forward bold,
+Their laughter echoing through the air.
+
+The clouds part, revealing clear blue skies,
+And the wind whispers secrets to the breeze.
+It carries tales of love and joy afar,
+And brings the promise of a brighter day.
+
+So let us bid farewell to yesterday,
+And embrace the wonders that await us anew.
+For in this moment, we find our place,
+Within the heart of the universe.
 ```
 
 ### Preset: sonnet

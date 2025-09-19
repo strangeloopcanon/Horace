@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import copy
 import json
 import math
 import random
@@ -539,7 +540,81 @@ def _match_author(rows: List[Dict], name: str) -> Optional[Dict]:
     return None
 
 
-def _adjust_config_from_author(cfg: PoetryConfig, stats: Dict) -> PoetryConfig:
+def _merge_author_stats(primary: Optional[Dict], secondary: Optional[Dict], weight: float) -> Optional[Dict]:
+    if primary is None and secondary is None:
+        return None
+    if secondary is None or weight <= 0.0:
+        return primary
+    if primary is None:
+        return secondary
+    w = min(max(weight, 0.0), 1.0)
+    merged = {}
+    keys = set(primary.keys()) | set(secondary.keys())
+    for k in keys:
+        v1 = primary.get(k)
+        v2 = secondary.get(k)
+        if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
+            merged[k] = (1.0 - w) * float(v1) + w * float(v2)
+        else:
+            merged[k] = v2 if w >= 0.5 and v2 is not None else v1
+    return merged
+
+
+def _blend_tuple(lo_hi_base: Tuple[int, int], lo_hi_new: Tuple[int, int], alpha: float) -> Tuple[int, int]:
+    a = max(0.0, alpha)
+    b0, b1 = lo_hi_base
+    n0, n1 = lo_hi_new
+    return (
+        int(round(b0 + (n0 - b0) * a)),
+        int(round(b1 + (n1 - b1) * a)),
+    )
+
+
+def _blend_scalar(base_val: float, new_val: float, alpha: float) -> float:
+    a = max(0.0, alpha)
+    return float(base_val + (new_val - base_val) * a)
+
+
+def _blend_poetry_config(base_cfg: PoetryConfig, new_cfg: PoetryConfig, alpha: float) -> PoetryConfig:
+    if alpha == 1.0:
+        return new_cfg
+    a = max(0.0, alpha)
+    new_cfg.interval_range = _blend_tuple(base_cfg.interval_range, new_cfg.interval_range, a)
+    new_cfg.cooldown_range = _blend_tuple(base_cfg.cooldown_range, new_cfg.cooldown_range, a)
+    new_cfg.shift_every_lines = _blend_tuple(base_cfg.shift_every_lines, new_cfg.shift_every_lines, a)
+    new_cfg.shift_span_tokens = _blend_tuple(base_cfg.shift_span_tokens, new_cfg.shift_span_tokens, a)
+    if base_cfg.line_tokens_target and new_cfg.line_tokens_target:
+        new_cfg.line_tokens_target = _blend_tuple(
+            base_cfg.line_tokens_target,
+            new_cfg.line_tokens_target,
+            a,
+        )
+    new_cfg.newline_penalty_until_target = _blend_scalar(
+        base_cfg.newline_penalty_until_target,
+        new_cfg.newline_penalty_until_target,
+        a,
+    )
+    new_cfg.newline_penalty_until_rhyme = _blend_scalar(
+        base_cfg.newline_penalty_until_rhyme,
+        new_cfg.newline_penalty_until_rhyme,
+        a,
+    )
+
+    for phase_name in ('base', 'spike', 'cool'):
+        base_phase: PhaseParams = getattr(base_cfg, phase_name)
+        new_phase: PhaseParams = getattr(new_cfg, phase_name)
+        new_phase.top_p = _blend_scalar(base_phase.top_p, new_phase.top_p, a)
+        new_phase.temperature = _blend_scalar(base_phase.temperature, new_phase.temperature, a)
+        if base_phase.top_k is not None and new_phase.top_k is not None:
+            new_phase.top_k = int(round(base_phase.top_k + (new_phase.top_k - base_phase.top_k) * a))
+        new_phase.content_boost = _blend_scalar(base_phase.content_boost, new_phase.content_boost, a)
+        new_phase.stop_punct_penalty = _blend_scalar(base_phase.stop_punct_penalty, new_phase.stop_punct_penalty, a)
+    return new_cfg
+
+
+def _adjust_config_from_author(cfg: PoetryConfig, stats: Dict, *, alpha: float = 1.0) -> PoetryConfig:
+    base_cfg = copy.deepcopy(cfg)
+
     # Inter-peak interval → cadence interval
     ipi = stats.get('ipi_mean_mean') or stats.get('ipi_mean')
     try:
@@ -606,7 +681,8 @@ def _adjust_config_from_author(cfg: PoetryConfig, stats: Dict) -> PoetryConfig:
                 cfg.base.top_p, cfg.cool.top_p = 0.92, 0.86
     except Exception:
         pass
-    return cfg
+
+    return _blend_poetry_config(base_cfg, cfg, alpha)
 
 
 def _generate_baseline(
@@ -781,6 +857,9 @@ def main():
     ap.add_argument('--line-target', type=str, default=None, help='Target line token range, e.g., "8,12"')
     # Author-guided tuning
     ap.add_argument('--author-seed', type=str, default=None, help='Author name to guide cadence from analysis stats (case-insensitive)')
+    ap.add_argument('--secondary-author-seed', type=str, default=None, help='Optional second author to blend stats from')
+    ap.add_argument('--author-mix', type=float, default=0.0, help='Blend weight for secondary author (0-1)')
+    ap.add_argument('--author-strength', type=float, default=1.0, help='Strength multiplier for author stats influence (0 disables)')
     ap.add_argument('--author-stats-model', type=str, default=None, help='Model id to read author stats from (defaults to --model)')
     # Baseline comparison
     ap.add_argument('--also-baseline', action='store_true', help='Also generate a plain baseline sample alongside the cadence-controlled one')
@@ -807,14 +886,18 @@ def main():
         except Exception:
             pass
     # Author-guided tuning from analysis stats
-    if args.author_seed:
+    if args.author_seed or args.secondary_author_seed:
         stats_model = args.author_stats_model or args.model
         rows = _load_author_stats(stats_model)
-        row = _match_author(rows, args.author_seed)
-        if row:
-            cfg = _adjust_config_from_author(cfg, row)
+        primary = _match_author(rows, args.author_seed) if args.author_seed else None
+        secondary = _match_author(rows, args.secondary_author_seed) if args.secondary_author_seed else None
+        mix = float(args.author_mix or 0.0)
+        stats = _merge_author_stats(primary, secondary, mix)
+        if stats:
+            cfg = _adjust_config_from_author(cfg, stats, alpha=float(max(0.0, args.author_strength)))
         elif args.debug:
-            print(f"[DEBUG] No author stats found for '{args.author_seed}' in {stats_model}")
+            who = args.author_seed or args.secondary_author_seed
+            print(f"[DEBUG] No author stats found for '{who}' in {stats_model}")
 
     sampler = CadenceSampler(backend, cfg, seed=args.seed, debug=args.debug)
 

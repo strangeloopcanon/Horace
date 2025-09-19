@@ -1,0 +1,12 @@
+Write a Shakespearean sonnet in the style of William Butler Yeats.
+
+At dawn, the city leans into light:
+A tapestry of shadows and glimmer.
+The silken threads of buildings weep,
+And the city weeps with a silver tear.
+In its heart, where whispers of time entwine,
+We find solace and loss intertwined.
+Yet the soul of the city remains untold,
+A mystery hidden beneath its guise.
+For like a dream, it floats on the night's tide,
+Leaving behind echoes of a lost rhyme.

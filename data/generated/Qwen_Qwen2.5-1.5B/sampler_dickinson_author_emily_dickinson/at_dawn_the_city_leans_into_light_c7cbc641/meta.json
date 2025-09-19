@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "preset": "sampler_dickinson",
+  "prompt": "At dawn, the city leans into light:\n",
+  "author_seed": "Emily Dickinson",
+  "author_stats_model": "Qwen/Qwen2.5-1.5B",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen2.5-1.5B/sampler_dickinson_author_emily_dickinson/at_dawn_the_city_leans_into_light_c7cbc641/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen2.5-1.5B/sampler_dickinson_author_emily_dickinson/at_dawn_the_city_leans_into_light_c7cbc641/fixed.txt"
+  }
+}

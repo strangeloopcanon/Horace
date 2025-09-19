@@ -38,6 +38,7 @@ from tools.sampler import (
     CadenceSampler,
     _load_author_stats,
     _match_author,
+    _merge_author_stats,
     _adjust_config_from_author,
     _generate_baseline,
 )
@@ -126,12 +127,14 @@ def _refresh_authors(stats_model: str, model: str):
     # If no explicit stats model, use model
     sm = (stats_model or model or "").strip()
     if not sm:
-        return gr.update(choices=["(none)"], value="(none)")
+        upd = gr.update(choices=["(none)"], value="(none)")
+        return upd, upd
     try:
         choices = _list_authors_for_model(sm)
     except Exception:
         choices = ["(none)"]
-    return gr.update(choices=choices, value=choices[0] if choices else "(none)")
+    upd = gr.update(choices=choices, value=choices[0] if choices else "(none)")
+    return upd, upd
 
 
 def _preset_label(preset: str) -> str:
@@ -238,6 +241,10 @@ def generate(
     seed: Optional[int],
     author_seed_dd: str,
     author_seed_custom: Optional[str],
+    author_seed_dd_secondary: str,
+    author_seed_custom_secondary: Optional[str],
+    author_mix: float,
+    author_strength: float,
     author_stats_model: Optional[str],
     engine: str,
     rhyme_enabled: bool,
@@ -260,12 +267,33 @@ def generate(
         # Resolve stats model early so it's available for metadata regardless of engine
         base_for_stats = author_stats_model.strip() if (author_stats_model and author_stats_model.strip()) else model
 
-        # Resolve final style seed: prefer custom text, else dropdown unless "(none)"
-        final_author_seed = None
+        # Resolve primary author seed
+        primary_author = None
         if author_seed_custom and author_seed_custom.strip():
-            final_author_seed = author_seed_custom.strip()
+            primary_author = author_seed_custom.strip()
         elif author_seed_dd and author_seed_dd.strip() and author_seed_dd.strip() != "(none)":
-            final_author_seed = author_seed_dd.strip()
+            primary_author = author_seed_dd.strip()
+
+        # Optional secondary author
+        secondary_author = None
+        if author_seed_custom_secondary and author_seed_custom_secondary.strip():
+            secondary_author = author_seed_custom_secondary.strip()
+        elif author_seed_dd_secondary and author_seed_dd_secondary.strip() and author_seed_dd_secondary.strip() != "(none)":
+            secondary_author = author_seed_dd_secondary.strip()
+
+        mix = float(author_mix or 0.0)
+        mix = max(0.0, min(1.0, mix))
+        strength = max(0.0, float(author_strength or 0.0))
+        mix_for_stats = 1.0 if (primary_author is None and secondary_author) else mix
+
+        author_descriptor = None
+        if primary_author and secondary_author and mix > 0.0:
+            pct = int(round(mix * 100))
+            author_descriptor = f"{primary_author} + {pct}% {secondary_author}"
+        elif primary_author:
+            author_descriptor = primary_author
+        elif secondary_author:
+            author_descriptor = secondary_author
 
         if engine == "hf_generate":
             # Map sampler presets to gen_compare presets
@@ -280,9 +308,15 @@ def generate(
             gc_preset = preset_map.get(preset, 'default')
             # Combine author seed with prompt for gentle framing (optional)
             use_prompt = prompt or "At dawn, the city leans into light:\n"
-            if final_author_seed and style_in_prompt:
+            if style_in_prompt and (primary_author or secondary_author):
                 style_label = _preset_label(preset)
-                directive = f"Write {style_label} in the style of {final_author_seed}.\n\n"
+                if primary_author and secondary_author and mix > 0.0:
+                    pct = int(round(mix * 100))
+                    directive = f"Write {style_label} in the style of {primary_author} with {pct}% influence from {secondary_author}.\n\n"
+                elif primary_author:
+                    directive = f"Write {style_label} in the style of {primary_author}.\n\n"
+                else:
+                    directive = f"Write {style_label} in the style of {secondary_author}.\n\n"
                 use_prompt = directive + use_prompt
             # run_compare returns baseline and fixed-up using HF generate() with a logits processor
             base_text_gc, fixed_text_gc = run_compare(
@@ -291,7 +325,10 @@ def generate(
                 max_new_tokens,
                 seed,
                 gc_preset,
-                author_seed=final_author_seed,
+                author_seed=primary_author,
+                author_seed_secondary=secondary_author,
+                author_mix=mix_for_stats,
+                author_strength=strength,
                 author_stats_model=base_for_stats,
             )
             fixed_text = fixed_text_gc
@@ -314,11 +351,13 @@ def generate(
                     setattr(cfg, "line_tokens_target", (a, b))
                 except Exception:
                     pass
-            if final_author_seed:
+            if (primary_author or secondary_author) and strength > 0.0:
                 rows = _load_author_stats(base_for_stats)
-                row = _match_author(rows, final_author_seed)
-                if row:
-                    cfg = _adjust_config_from_author(cfg, row)
+                primary_stats = _match_author(rows, primary_author) if primary_author else None
+                secondary_stats = _match_author(rows, secondary_author) if secondary_author else None
+                stats = _merge_author_stats(primary_stats, secondary_stats, mix_for_stats)
+                if stats:
+                    cfg = _adjust_config_from_author(cfg, stats, alpha=strength)
             if safe_mode:
                 try:
                     cfg.spike.content_boost = 0.0
@@ -333,9 +372,15 @@ def generate(
                     pass
             sampler = CadenceSampler(backend_obj, cfg, seed=seed, debug=False)
             use_prompt = prompt or "Write a short poem about dawn in the city.\n"
-            if final_author_seed and style_in_prompt:
+            if style_in_prompt and (primary_author or secondary_author):
                 style_label = _preset_label(preset)
-                directive = f"Write {style_label} in the style of {final_author_seed}.\n\n"
+                if primary_author and secondary_author and mix > 0.0:
+                    pct = int(round(mix * 100))
+                    directive = f"Write {style_label} in the style of {primary_author} with {pct}% influence from {secondary_author}.\n\n"
+                elif primary_author:
+                    directive = f"Write {style_label} in the style of {primary_author}.\n\n"
+                else:
+                    directive = f"Write {style_label} in the style of {secondary_author}.\n\n"
                 use_prompt = directive + use_prompt
             fixed_text = sampler.generate(use_prompt, max_new_tokens=max_new_tokens)
             if also_baseline:
@@ -373,8 +418,8 @@ def generate(
                 prompt=prompt,
                 fixed_text=fixed_text,
                 base_text=base_text,
-                author_seed=final_author_seed,
-                author_stats_model=base_for_stats if final_author_seed else None,
+                author_seed=author_descriptor,
+                author_stats_model=base_for_stats if author_descriptor else None,
             )
 
         status = "OK"
@@ -406,16 +451,46 @@ def build_ui() -> gr.Blocks:
         Generate baseline vs cadence‑controlled snippets. Optionally tune cadence using an author seed from your analysis stats.
         """)
         with gr.Row():
-            model = gr.Textbox(value="Qwen/Qwen2.5-1.5B", label="Model (HF or MLX id)")
-            backend = gr.Radio(choices=["auto", "mlx", "hf"], value="auto", label="Backend (manual engine)")
-            preset = gr.Dropdown(choices=sorted(PRESETS.keys()), value="poetry_default", label="Preset")
-            seed = gr.Number(value=None, label="Seed", precision=0)
-            max_new = gr.Slider(minimum=16, maximum=512, value=120, step=1, label="Max new tokens")
+            model = gr.Textbox(
+                value="Qwen/Qwen2.5-1.5B",
+                label="Model (HF or MLX id)",
+                info="Applies to both baseline and cadence-controlled runs.",
+            )
+            backend = gr.Radio(
+                choices=["auto", "mlx", "hf"],
+                value="auto",
+                label="Backend (manual engine)",
+                info="Manual engine only: choose MLX or HF explicitly.",
+            )
+            preset = gr.Dropdown(
+                choices=sorted(PRESETS.keys()),
+                value="poetry_default",
+                label="Preset",
+                info="Select cadence recipe (sonnet, freeverse, prose, etc.).",
+            )
+            seed = gr.Number(value=None, label="Seed", precision=0, info="Reuse to compare generations.")
+            max_new = gr.Slider(
+                minimum=16,
+                maximum=512,
+                value=120,
+                step=1,
+                label="Max new tokens",
+                info="Upper bound on generated tokens for both outputs.",
+            )
 
-        prompt = gr.Textbox(value="At dawn, the city leans into light:\n", lines=4, label="Prompt")
+        prompt = gr.Textbox(
+            value="At dawn, the city leans into light:\n",
+            lines=4,
+            label="Prompt",
+            info="Provide the task or opening lines fed to the model.",
+        )
 
         with gr.Row():
-            author_stats_model = gr.Textbox(value="", label="Stats from model (default: same as Model)")
+            author_stats_model = gr.Textbox(
+                value="",
+                label="Stats from model (default: same as Model)",
+                info="Override when your author metrics were computed from a different checkpoint.",
+            )
             refresh_btn = gr.Button(value="↻ Refresh authors", scale=0)
 
         # Author seed dropdown and custom
@@ -423,29 +498,123 @@ def build_ui() -> gr.Blocks:
             initial_authors = _list_authors_for_model("Qwen/Qwen2.5-1.5B")
         except Exception:
             initial_authors = ["(none)"]
-        author_seed_dd = gr.Dropdown(choices=initial_authors, value=initial_authors[0], label="Style seed (author)")
-        author_seed_custom = gr.Textbox(value="", label="Or custom author (overrides dropdown)")
+        author_seed_dd = gr.Dropdown(
+            choices=initial_authors,
+            value=initial_authors[0],
+            label="Style seed (author)",
+            info="Primary cadence signature pulled from your analysis stats.",
+        )
+        author_seed_custom = gr.Textbox(
+            value="",
+            label="Or custom author (overrides dropdown)",
+            info="Case-insensitive match against author stats; leave blank to use dropdown.",
+        )
+        author_seed_dd2 = gr.Dropdown(
+            choices=initial_authors,
+            value="(none)",
+            label="Blend with (optional)",
+            info="Secondary author to mix in for cadence characteristics.",
+        )
+        author_seed_custom2 = gr.Textbox(
+            value="",
+            label="Or custom secondary author",
+            info="Overrides the secondary dropdown when provided.",
+        )
+        with gr.Row():
+            author_mix = gr.Slider(
+                minimum=0.0,
+                maximum=1.0,
+                value=0.0,
+                step=0.05,
+                label="Secondary author blend",
+                info="0 keeps the primary cadence; 1 mirrors the secondary stats; values between softly interpolate.",
+            )
+            author_strength = gr.Slider(
+                minimum=0.0,
+                maximum=2.0,
+                value=1.0,
+                step=0.05,
+                label="Author influence strength",
+                info="0 disables cadence tuning; 1 uses the measured stats; >1 exaggerates the author adjustments.",
+            )
 
-        engine = gr.Radio(choices=["hf_generate", "manual"], value="hf_generate", label="Engine (recommended: hf_generate)")
+        engine = gr.Radio(
+            choices=["hf_generate", "manual"],
+            value="hf_generate",
+            label="Engine (recommended: hf_generate)",
+            info="Use HF generate() for faster sampling; manual runs the full token-aware loop.",
+        )
 
         with gr.Accordion("Rhyme & Line (optional)", open=False):
-            rhyme = gr.Checkbox(value=False, label="Enable rhyme nudging")
-            rhyme_scheme = gr.Textbox(value="", label="Rhyme scheme (e.g., ABAB CDCD EFEF GG)")
-            rhyme_boost = gr.Number(value=None, label="Rhyme boost (e.g., 0.8)")
-            line_target = gr.Textbox(value="", label="Line token target (e.g., 8,12)")
+            rhyme = gr.Checkbox(value=False, label="Enable rhyme nudging", info="Force rhyme controls even if the preset disables them.")
+            rhyme_scheme = gr.Textbox(
+                value="",
+                label="Rhyme scheme (e.g., ABAB CDCD EFEF GG)",
+                info="Overrides preset scheme; leave blank to keep defaults.",
+            )
+            rhyme_boost = gr.Number(
+                value=None,
+                label="Rhyme boost (e.g., 0.8)",
+                precision=2,
+                info="Adjust bias for rhyme-matching tokens; higher values push harder toward rhyme endings.",
+            )
+            line_target = gr.Textbox(
+                value="",
+                label="Line token target (e.g., 8,12)",
+                info="Specify min,max tokens per line; newline penalties relax after the minimum is hit.",
+            )
 
         with gr.Accordion("Baseline settings", open=False):
-            also_baseline = gr.Checkbox(value=True, label="Also generate baseline")
-            bl_temp = gr.Slider(minimum=0.1, maximum=1.5, value=0.85, step=0.01, label="Baseline temperature")
-            bl_top_p = gr.Slider(minimum=0.05, maximum=0.99, value=0.92, step=0.01, label="Baseline top_p")
-            bl_top_k = gr.Number(value=None, label="Baseline top_k", precision=0)
+            also_baseline = gr.Checkbox(value=True, label="Also generate baseline", info="If disabled, only the cadence-controlled output is produced.")
+            bl_temp = gr.Slider(
+                minimum=0.1,
+                maximum=1.5,
+                value=0.85,
+                step=0.01,
+                label="Baseline temperature",
+                info="Baseline sampling temperature; cadence-controlled path handles its own schedule.",
+            )
+            bl_top_p = gr.Slider(
+                minimum=0.05,
+                maximum=0.99,
+                value=0.92,
+                step=0.01,
+                label="Baseline top_p",
+                info="Nucleus threshold for the baseline decode.",
+            )
+            bl_top_k = gr.Number(
+                value=None,
+                label="Baseline top_k",
+                precision=0,
+                info="Optional top-k cap for baseline sampling (leave blank for none).",
+            )
 
         with gr.Row():
-            save_outputs = gr.Checkbox(value=True, label="Save outputs to data/generated and update reports")
-            safe_mode = gr.Checkbox(value=True, label="Safe mode (softer biases; avoid artifacts)")
-            clean_unicode = gr.Checkbox(value=True, label="Clean replacement characters (�) from outputs")
-            style_in_prompt = gr.Checkbox(value=True, label="Add style instruction to prompt")
-            show_cadence = gr.Checkbox(value=True, label="Show cadence charts (quick scorer)")
+            save_outputs = gr.Checkbox(
+                value=True,
+                label="Save outputs to data/generated and update reports",
+                info="Writes text and metadata so they appear in reports/generated/README.md.",
+            )
+            safe_mode = gr.Checkbox(
+                value=True,
+                label="Safe mode (softer biases; avoid artifacts)",
+                info="Tones down spike penalties/boosts to reduce sampling glitches.",
+            )
+            clean_unicode = gr.Checkbox(
+                value=True,
+                label="Clean replacement characters (�) from outputs",
+                info="Strips stray U+FFFD and non-printable tokens from the text boxes.",
+            )
+            style_in_prompt = gr.Checkbox(
+                value=True,
+                label="Add style instruction to prompt",
+                info="Prepends a natural-language directive describing the selected authors; uncheck to leave prompt untouched.",
+            )
+            show_cadence = gr.Checkbox(
+                value=True,
+                label="Show cadence charts (quick scorer)",
+                info="Runs a lightweight GPT-2 scorer to plot surprisal and cadence metrics for each output.",
+            )
 
         run_btn = gr.Button("Generate")
         status = gr.Markdown()
@@ -467,6 +636,10 @@ def build_ui() -> gr.Blocks:
                 seed,
                 author_seed_dd,
                 author_seed_custom,
+                author_seed_dd2,
+                author_seed_custom2,
+                author_mix,
+                author_strength,
                 author_stats_model,
                 engine,
                 rhyme,
@@ -490,7 +663,7 @@ def build_ui() -> gr.Blocks:
         refresh_btn.click(
             fn=_refresh_authors,
             inputs=[author_stats_model, model],
-            outputs=[author_seed_dd],
+            outputs=[author_seed_dd, author_seed_dd2],
         )
     return demo
 

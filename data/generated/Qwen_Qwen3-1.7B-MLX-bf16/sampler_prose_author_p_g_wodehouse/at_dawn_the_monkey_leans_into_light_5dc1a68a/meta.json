@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen3-1.7B-MLX-bf16",
+  "preset": "sampler_prose",
+  "prompt": "At dawn, the monkey leans into light:\n",
+  "author_seed": "P G Wodehouse",
+  "author_stats_model": "Qwen/Qwen3-1.7B-MLX-bf16",
+  "paths": {
+    "baseline": "data/generated/Qwen_Qwen3-1.7B-MLX-bf16/sampler_prose_author_p_g_wodehouse/at_dawn_the_monkey_leans_into_light_5dc1a68a/baseline.txt",
+    "fixed": "data/generated/Qwen_Qwen3-1.7B-MLX-bf16/sampler_prose_author_p_g_wodehouse/at_dawn_the_monkey_leans_into_light_5dc1a68a/fixed.txt"
+  }
+}

@@ -415,7 +415,7 @@ def write_report(model: str, outdir: Path, author_figs: List[Path], doc_figs: Li
 
 def main():
     ap = argparse.ArgumentParser(description='Generate author/document signature report')
-    ap.add_argument('--model', default='gpt2')
+    ap.add_argument('--model', default='mlx-community/Llama-3.2-3B-Instruct')
     args = ap.parse_args()
 
     outdir = Path('reports') / args.model

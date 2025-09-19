@@ -1249,7 +1249,7 @@ def build_parser():
     sub = p.add_subparsers(dest='cmd', required=True)
 
     def add_common(sp):
-        sp.add_argument('--model', default='gpt2', help='HuggingFace model id (e.g., gpt2)')
+        sp.add_argument('--model', default='mlx-community/Llama-3.2-3B-Instruct', help='HuggingFace model id (e.g., gpt2)')
         sp.add_argument('--backend', default='auto', choices=['auto','mlx','hf'], help='Backend: auto (prefer MLX), mlx, or hf')
         sp.add_argument('--k', type=int, default=10, help='top-k size')
         sp.add_argument('--p', type=float, default=0.9, help='nucleus p')
@@ -1269,12 +1269,12 @@ def build_parser():
     sp.set_defaults(func=cmd_tokens)
 
     sp = sub.add_parser('docs', help='Aggregate docs into a clean unique set')
-    sp.add_argument('--model', default='gpt2')
+    sp.add_argument('--model', default='mlx-community/Llama-3.2-3B-Instruct')
     sp.add_argument('--types', help='comma-separated subset: poem,shortstory,novel')
     sp.set_defaults(func=cmd_docs)
 
     sp = sub.add_parser('authors', help='Aggregate per-author signatures from docs')
-    sp.add_argument('--model', default='gpt2')
+    sp.add_argument('--model', default='mlx-community/Llama-3.2-3B-Instruct')
     sp.add_argument('--types', help='comma-separated subset: poem,shortstory,novel')
     sp.set_defaults(func=cmd_authors)
 

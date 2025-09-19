@@ -1,5 +1,5 @@
 {
-  "model": "Qwen/Qwen2.5-1.5B",
+  "model": "Qwen/Qwen2.5-7B",
   "k": 10,
   "p": 0.9,
   "context": 1024,
