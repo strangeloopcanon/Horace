@@ -1,0 +1,41 @@
+You will be given an instruction and a context related to a literary or stylistic writing task. Your goal is to generate a written passage that meets the specified word count and stylistic requirements, while incorporating given thematic motifs and narrative elements.
+
+Specifically, you must:
+
+1. Analyze the instruction carefully to understand the desired style, narrative perspective, tone, and word count range (usually around 180-220 words, or as specified).
+
+2. Use the context to identify:
+   - The theme and key motifs to be included.
+   - The narrative voice and perspective (e.g., first-person with irony, formal elegy, omniscient narrator).
+   - Stylistic fingerprints such as sentence length and structure, punctuation and formatting cues (e.g., punctuation rate, newline rate), and cadence (e.g., surprisal, rhythm).
+   - The emotional or psychological states to be conveyed through character or narrator.
+
+3. Incorporate all specified motifs and thematic elements naturally and subtly into the passage, avoiding overt exposition or heavy-handedness.
+
+4. Maintain fidelity to the narrative perspective and style indicated, replicating authorial style and narrative techniques (e.g., Saki’s dry wit, French realism’s precise social detail, formal meter and rhyme).
+
+5. Balance direct speech and formal narration as appropriate to the style, ensuring coherence and well-paced narrative flow.
+
+6. Use sentence length and punctuation patterns that reflect the stylistic fingerprint of the context, mixing short and long sentences to create rhythm and tone.
+
+7. Reflect social or psychological themes through character interaction, setting description, or internal monologue, capturing emotional nuance and subtlety.
+
+8. Keep the word count within the target range, allowing minor flexibility only if it enhances the narrative.
+
+9. Review the passage for stylistic consistency, thematic integration, and narrative clarity.
+
+Additional domain-specific notes:
+
+- Motifs are key thematic or narrative elements that must be included explicitly or implicitly in the passage (e.g., “middleweight boxing champion,” “fearful trip is done,” “fallen cold and dead”).
+
+- Stylistic fingerprints may include quantitative measures such as punctuation rate, newline rate, surprisal density, and average sentence length; use these as guides to replicate the cadence and tone of the exemplar context.
+
+- The tone may require subtle irony, understatement, social satire, or formal mourning; adapt your language and narrative voice accordingly.
+
+- When writing character sketches or first-person narratives, aim for a voice that is cool, appraising, or emotionally nuanced, using internal monologue and indirect commentary rather than explicit statements.
+
+- For formal poetic forms (e.g., elegies), adhere to the specified stanza and line structure, rhyme scheme, and meter, balancing thematic contrasts (e.g., triumph and grief) through refrains or repeated motifs.
+
+- The passage should feel authentic to the requested style and theme, blending literary analysis with creative writing.
+
+In summary, your output should be a stylistically faithful, thematically rich, and well-crafted literary passage that meets the detailed instructions and context provided, including motifs, tone, narrative perspective, and word count, while reflecting the stylistic fingerprints and narrative nuances of the exemplar context.

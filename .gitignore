@@ -1,56 +1,13 @@
-# OS / editor
+# Environment and OS
+.env
 .DS_Store
-*.swp
-*.swo
-*.orig
-*.log
-
-# Python
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
-.pytest_cache/
-.mypy_cache/
 
-# IDE
-.vscode/
-.idea/
-
-# Virtualenvs and caches
-.venv/
-venv/
-.env/
-env/
-.cache/
+# Caches and generated data
 mlx_cache/
+data/generated/
+data/grpo_runs/
 
-# Temporary import workspace
-.import_tmp/
-
-# Large model artifacts (do not track)
-models/
-checkpoints/
-*.safetensors
-*.bin
-*.pt
-
-# Reports: do not track generated PDFs
-reports/**/report.pdf
-reports/final/*.pdf
-
-# Optional: ignore very large generated text variants (keep index + meta + fixed/baseline by default)
-# Uncomment if push complains about size or quota
-# data/generated/**/*.txt
-
-# Documentation (hide interim docs from the repo)
-# Hide everything under docs/, but allow README.md files inside
-docs/**
-!docs/**/
-!docs/**/[Rr][Ee][Aa][Dd][Mm][Ee].[Mm][Dd]
-
-# Ignore all Markdown files anywhere except any README.md
-*.md
-!**/[Rr][Ee][Aa][Dd][Mm][Ee].[Mm][Dd]
-
-# Important HOWTO doc to keep tracked
-!signatures/HOWTO.md
+# GEPA run outputs (keep latest snapshot only)
+experiments/gepa_gemma3/outputs/

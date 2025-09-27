@@ -1,0 +1,703 @@
+[
+  {
+    "id": "novel_gatsby_reserve",
+    "doc_type": "novel",
+    "author": "F Scott Fitzgerald",
+    "title": "The Great Gatsby",
+    "path": "data/novel/f_scott_fitzgerald/the_great_gatsby.txt",
+    "instruction": "Write about 200 words that could open a Jazz Age memoir in Nick Carraway's voice. Let a father's warning about judgement frame a poised observation of privileged acquaintances.",
+    "context": "Theme: Inherited restraint and curiosity on the edge of Jazz Age excess.\nCadence fingerprint (gpt2 tokens=82358):\n- mean surprisal 3.40; high-surprise density 12.51 per 100 tokens.\n- punctuation rate 0.19; newline rate 0.08; content fraction 0.34.\nExcerpt stats: 210 words across 5 sentences; avg sentence length 42 words.\nStylistic cues:\n- Polished first-person narration with dry midwestern wit.\n- Periodic sentences layered with social detail and quiet tension.\n- Confessional tone that withholds judgement while hinting at intrigue.\nMotifs to weave:\n- include: reserve all judgements\n- include: secret griefs\n- include: wild, unknown men",
+    "answer": "In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since. \"Whenever you feel like criticizing anyone,\" he told me, \"just remember that all the people in this world haven't had the advantages that you've had.\" He didn't say any more, but we've always been unusually communicative in a reserved way, and I understood that he meant a great deal more than that. In consequence, I'm inclined to reserve all judgements, a habit that has opened up many curious natures to me and also made me the victim of not a few veteran bores. The abnormal mind is quick to detect and attach itself to this quality when it appears in a normal person, and so it came about that in college I was unjustly accused of being a politician, because I was privy to the secret griefs of wild, unknown men. Most of the confidences were unsought--frequently I have feigned sleep, preoccupation, or a hostile levity when I realized by some unmistakable sign that an intimate revelation was quivering on the horizon; for the intimate revelations of young men, or at least the terms in which they express them, are usually plagiaristic and marred by obvious suppressions.",
+    "min_words": 190,
+    "max_words": 220,
+    "motifs": [
+      "reserve all judgements",
+      "secret griefs",
+      "wild, unknown men"
+    ],
+    "theme": "Inherited restraint and curiosity on the edge of Jazz Age excess.",
+    "style_notes": [
+      "Polished first-person narration with dry midwestern wit.",
+      "Periodic sentences layered with social detail and quiet tension.",
+      "Confessional tone that withholds judgement while hinting at intrigue."
+    ],
+    "excerpt_metrics": {
+      "word_count": 210,
+      "unit_count": 5,
+      "avg_unit_words": 42,
+      "median_unit_words": 48,
+      "comma_rate_per_100": 6.19,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 82358,
+      "surprisal_mean": 3.401,
+      "high_surprise_rate_per_100": 12.511,
+      "punct_rate": 0.194,
+      "newline_rate": 0.082,
+      "content_fraction": 0.34
+    }
+  },
+  {
+    "id": "novel_farewell_riverfront",
+    "doc_type": "novel",
+    "author": "Ernest Hemingway",
+    "title": "A Farewell To Arms",
+    "path": "data/novel/ernest_hemingway/a_farewell_to_arms.txt",
+    "instruction": "Write roughly 200 words of a restrained wartime opening. Describe an Italian riverside village from a detached ambulance officer who lets repetition and weather carry the feeling.",
+    "context": "Theme: Columns of troops passing through a Lombardy village as war shimmered in the mountains.\nCadence fingerprint (gpt2 tokens=153150):\n- mean surprisal 2.81; high-surprise density 11.75 per 100 tokens.\n- punctuation rate 0.24; newline rate 0.09; content fraction 0.29.\nExcerpt stats: 208 words across 8 sentences; avg sentence length 26 words.\nStylistic cues:\n- Plain declarative sentences chained with repeated conjunctions.\n- Landscape and weather stand in for explicit emotion.\n- Observer's voice stays cool even as war presses at the edges.\nMotifs to weave:\n- include: late summer\n- include: dust rising\n- include: motor-tractors",
+    "answer": "In the late summer of that year we lived in a house in a village that looked across the river and the plain to the mountains. In the bed of the river there were pebbles and boulders, dry and white in the sun, and the water was clear and swiftly moving and blue in the channels. Troops went by the house and down the road and the dust they raised powdered the leaves of the trees. The trunks of the trees too were dusty and the leaves fell early that year and we saw the troops marching along the road and the dust rising and leaves, stirred by the breeze, falling and the soldiers marching and afterward the road bare and white except for the leaves. The plain was rich with crops; there were many orchards of fruit trees and beyond the plain the mountains were brown and bare. There was fighting in the mountains and at night we could see the flashes from the artillery. In the dark it was like summer lightning, but the nights were cool and there was not the feeling of a storm coming. Sometimes in the dark we heard the troops marching under the window and guns going past pulled by motor-tractors.",
+    "min_words": 190,
+    "max_words": 220,
+    "motifs": [
+      "late summer",
+      "dust rising",
+      "motor-tractors"
+    ],
+    "theme": "Columns of troops passing through a Lombardy village as war shimmered in the mountains.",
+    "style_notes": [
+      "Plain declarative sentences chained with repeated conjunctions.",
+      "Landscape and weather stand in for explicit emotion.",
+      "Observer's voice stays cool even as war presses at the edges."
+    ],
+    "excerpt_metrics": {
+      "word_count": 208,
+      "unit_count": 8,
+      "avg_unit_words": 26,
+      "median_unit_words": 23.0,
+      "comma_rate_per_100": 2.4,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 153150,
+      "surprisal_mean": 2.807,
+      "high_surprise_rate_per_100": 11.745,
+      "punct_rate": 0.236,
+      "newline_rate": 0.087,
+      "content_fraction": 0.287
+    }
+  },
+  {
+    "id": "novel_sun_rises_cohn",
+    "doc_type": "novel",
+    "author": "Ernest Hemingway",
+    "title": "The Sun Also Rises",
+    "path": "data/novel/ernest_hemingway/the_sun_also_rises.txt",
+    "instruction": "Write about 190 words of first-person character sketch. Keep the sentences spare yet cutting as you recount Robert Cohn's boxing title and the chip it left on his shoulder.",
+    "context": "Theme: A wry profile of Robert Cohn's Princeton boxing past and lingering insecurity.\nCadence fingerprint (gpt2 tokens=122184):\n- mean surprisal 2.87; high-surprise density 11.92 per 100 tokens.\n- punctuation rate 0.24; newline rate 0.09; content fraction 0.29.\nExcerpt stats: 182 words across 10 sentences; avg sentence length 18.2 words.\nStylistic cues:\n- Cool, appraising first-person voice with understated irony.\n- Mix short punches with longer clarifying sentences for rhythm.\n- Details from the ring reveal emotional insecurity more than overt commentary.\nMotifs to weave:\n- include: middleweight boxing champion\n- include: Spider Kelly\n- include: nose permanently flattened",
+    "answer": "Robert Cohn was once middleweight boxing champion of Princeton. Do not think that I am very much impressed by that as a boxing title, but it meant a lot to Cohn. He cared nothing for boxing, in fact he disliked it, but he learned it painfully and thoroughly to counteract the feeling of inferiority and shyness he had felt on being treated as a Jew at Princeton. There was a certain inner comfort in knowing he could knock down anybody who was snooty to him, although, being very shy and a thoroughly nice boy, he never fought except in the gym. He was Spider Kelly's star pupil. Spider Kelly taught all his young gentlemen to box like featherweights, no matter whether they weighed one hundred and five or two hundred and five pounds. But it seemed to fit Cohn. He was really very fast. He was so good that Spider promptly overmatched him and got his nose permanently flattened. This increased Cohn's distaste for boxing, but it gave him a certain satisfaction of some strange sort, and it certainly improved his nose.",
+    "min_words": 180,
+    "max_words": 210,
+    "motifs": [
+      "middleweight boxing champion",
+      "Spider Kelly",
+      "nose permanently flattened"
+    ],
+    "theme": "A wry profile of Robert Cohn's Princeton boxing past and lingering insecurity.",
+    "style_notes": [
+      "Cool, appraising first-person voice with understated irony.",
+      "Mix short punches with longer clarifying sentences for rhythm.",
+      "Details from the ring reveal emotional insecurity more than overt commentary."
+    ],
+    "excerpt_metrics": {
+      "word_count": 182,
+      "unit_count": 10,
+      "avg_unit_words": 18.2,
+      "median_unit_words": 18.5,
+      "comma_rate_per_100": 4.95,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 122184,
+      "surprisal_mean": 2.875,
+      "high_surprise_rate_per_100": 11.919,
+      "punct_rate": 0.245,
+      "newline_rate": 0.086,
+      "content_fraction": 0.289
+    }
+  },
+  {
+    "id": "novel_jeeves_keeper",
+    "doc_type": "novel",
+    "author": "P G Wodehouse",
+    "title": "Carry On Jeeves",
+    "path": "data/novel/p_g_wodehouse/carry_on_jeeves.txt",
+    "instruction": "Write 180 to 190 words of breezy first-person banter from Bertie Wooster. Explain why Jeeves is indispensable while recounting the silk-sock incident at Easeby.",
+    "context": "Theme: Bertie Wooster pays comic tribute to Jeeves after exposing a valet scandal at Easeby.\nCadence fingerprint (gpt2 tokens=118678):\n- mean surprisal 3.40; high-surprise density 11.73 per 100 tokens.\n- punctuation rate 0.13; newline rate 0.09; content fraction 0.32.\nExcerpt stats: 176 words across 10 sentences; avg sentence length 17.6 words.\nStylistic cues:\n- Chatty clubland tone with self-deprecating asides.\n- Light hyperbole and rhythmic repetition for comic snap.\n- Upper-class slang and quick pivots between London and country life.\nMotifs to weave:\n- include: Aunt Agatha\n- include: the man's a genius\n- include: silk socks",
+    "answer": "Now, touching this business of old Jeeves--my man, you know--how do we stand? Lots of people think I'm much too dependent on him. My Aunt Agatha, in fact, has even gone so far as to call him my keeper. Well, what I say is: Why not? The man's a genius. From the collar upward he stands alone, I gave up trying to run my own affairs within a week of his coming to me. That was about half a dozen years ago, directly after the rather rummy business of Florence Craye, my Uncle Willoughby's book, and Edwin, the Boy Scout. The thing really began when I got back to Easeby, my uncle's place in Shropshire. I was spending a week or so there, as I generally did in the summer; and I had had to break my visit to come back to London to get a new valet. I had found Meadowes, the fellow I had taken to Easeby with me, sneaking my silk socks, a thing no bloke of spirit could stick at any price.",
+    "min_words": 170,
+    "max_words": 200,
+    "motifs": [
+      "Aunt Agatha",
+      "the man's a genius",
+      "silk socks"
+    ],
+    "theme": "Bertie Wooster pays comic tribute to Jeeves after exposing a valet scandal at Easeby.",
+    "style_notes": [
+      "Chatty clubland tone with self-deprecating asides.",
+      "Light hyperbole and rhythmic repetition for comic snap.",
+      "Upper-class slang and quick pivots between London and country life."
+    ],
+    "excerpt_metrics": {
+      "word_count": 176,
+      "unit_count": 10,
+      "avg_unit_words": 17.6,
+      "median_unit_words": 15.5,
+      "comma_rate_per_100": 8.52,
+      "colon_rate_per_100": 0.57
+    },
+    "doc_metrics": {
+      "tokens_count": 118678,
+      "surprisal_mean": 3.4,
+      "high_surprise_rate_per_100": 11.731,
+      "punct_rate": 0.132,
+      "newline_rate": 0.09,
+      "content_fraction": 0.318
+    }
+  },
+  {
+    "id": "story_tell_tale_confession",
+    "doc_type": "shortstory",
+    "author": "Edgar Allan Poe",
+    "title": "The Tell-Tale Heart",
+    "path": "data/shortstory/edgar_allan_poe/the_tell_tale_heart.txt",
+    "instruction": "Write around 200 words of a fevered confession. Let the speaker deny madness even as heightened senses and the vulture eye dominate his thoughts.",
+    "context": "Theme: An obsessed narrator insists on his sanity while fixating on an old man's vulture eye.\nCadence fingerprint (gpt2 tokens=2896):\n- mean surprisal 3.29; high-surprise density 14.16 per 100 tokens.\n- punctuation rate 0.13; newline rate 0.01; content fraction 0.29.\nExcerpt stats: 199 words across 20 sentences; avg sentence length 9.95 words.\nStylistic cues:\n- First-person monologue full of dashes, repetition, and direct appeals to the listener.\n- Sensory imagery, especially sound, pushes the tension upward.\n- Rhetorical questions and emphatic italics replaced by punctuation.\nMotifs to weave:\n- include: very, very dreadfully\n- include: pale blue eye\n- include: blood ran cold",
+    "answer": "True! -- nervous -- very, very dreadfully nervous I had been and am; but why will you say that I am mad? The disease had sharpened my senses -- not destroyed -- not dulled them. Above all was the sense of hearing acute. I heard all things in the heaven and in the earth. I heard many things in hell. How, then, am I mad? Hearken! and observe how healthily -- how calmly I can tell you the whole story. It is impossible to say how first the idea entered my brain; but once conceived, it haunted me day and night. Object there was none. Passion there was none. I loved the old man. He had never wronged me. He had never given me insult. For his gold I had no desire. I think it was his eye! yes, it was this! One of his eyes resembled that of a vulture -- a pale blue eye, with a film over it. Whenever it fell upon me, my blood ran cold; and so by degrees -- very gradually -- I made up my mind to take the life of the old man, and thus rid myself of the eye forever.",
+    "min_words": 190,
+    "max_words": 210,
+    "motifs": [
+      "very, very dreadfully",
+      "pale blue eye",
+      "blood ran cold"
+    ],
+    "theme": "An obsessed narrator insists on his sanity while fixating on an old man's vulture eye.",
+    "style_notes": [
+      "First-person monologue full of dashes, repetition, and direct appeals to the listener.",
+      "Sensory imagery, especially sound, pushes the tension upward.",
+      "Rhetorical questions and emphatic italics replaced by punctuation."
+    ],
+    "excerpt_metrics": {
+      "word_count": 199,
+      "unit_count": 20,
+      "avg_unit_words": 9.95,
+      "median_unit_words": 6.0,
+      "comma_rate_per_100": 4.02,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 2896,
+      "surprisal_mean": 3.295,
+      "high_surprise_rate_per_100": 14.157,
+      "punct_rate": 0.13,
+      "newline_rate": 0.011,
+      "content_fraction": 0.289
+    }
+  },
+  {
+    "id": "story_cask_impunity",
+    "doc_type": "shortstory",
+    "author": "Edgar Allan Poe",
+    "title": "The Cask of Amontillado",
+    "path": "data/shortstory/edgar_allan_poe/the_cask_of_amontillado.txt",
+    "instruction": "Write about 210 words of Montresor's opening confession. Lay out the rules for perfect revenge while dwelling on Fortunato's weakness for wine.",
+    "context": "Theme: Montresor calmly outlines the revenge he will take on Fortunato for an unnamed insult.\nCadence fingerprint (gpt2 tokens=3641):\n- mean surprisal 2.96; high-surprise density 14.12 per 100 tokens.\n- punctuation rate 0.21; newline rate 0.05; content fraction 0.29.\nExcerpt stats: 210 words across 12 sentences; avg sentence length 17.5 words.\nStylistic cues:\n- Measured aristocratic voice that treats murder as a point of logic.\n- Complex sentences with legalistic precision and Latin echoes.\n- Ironic warmth masking the cruelty beneath the smile.\nMotifs to weave:\n- include: thousand injuries\n- include: punish with impunity\n- include: connoisseurship in wine",
+    "answer": "The thousand injuries of Fortunato I had borne as I best could, but when he ventured upon insult I vowed revenge. You, who so well know the nature of my soul, will not suppose, however, that I gave utterance to a threat. At length I would be avenged; this was a point definitely settled--but the very definitiveness with which it was resolved precluded the idea of risk. I must not only punish but punish with impunity. A wrong is unredressed when retribution overtakes its redresser. It is equally unredressed when the avenger fails to make himself felt as such to him who has done the wrong. It must be understood that neither by word nor deed had I given Fortunato cause to doubt my good will. I continued, as was my wont, to smile in his face, and he did not perceive that my smile now was at the thought of his immolation. He had a weak point--this Fortunato--although in other regards he was a man to be respected and even feared. He prided himself on his connoisseurship in wine. Few Italians have the true virtuoso spirit. For the most part their enthusiasm is adopted to suit the time and opportunity, to practise imposture upon the British and Austrian millionaires.",
+    "min_words": 200,
+    "max_words": 220,
+    "motifs": [
+      "thousand injuries",
+      "punish with impunity",
+      "connoisseurship in wine"
+    ],
+    "theme": "Montresor calmly outlines the revenge he will take on Fortunato for an unnamed insult.",
+    "style_notes": [
+      "Measured aristocratic voice that treats murder as a point of logic.",
+      "Complex sentences with legalistic precision and Latin echoes.",
+      "Ironic warmth masking the cruelty beneath the smile."
+    ],
+    "excerpt_metrics": {
+      "word_count": 210,
+      "unit_count": 12,
+      "avg_unit_words": 17.5,
+      "median_unit_words": 20.5,
+      "comma_rate_per_100": 4.29,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 3641,
+      "surprisal_mean": 2.956,
+      "high_surprise_rate_per_100": 14.117,
+      "punct_rate": 0.21,
+      "newline_rate": 0.047,
+      "content_fraction": 0.292
+    }
+  },
+  {
+    "id": "story_magi_pennies",
+    "doc_type": "shortstory",
+    "author": "O. Henry",
+    "title": "The Gift of the Magi",
+    "path": "data/shortstory/o_henry/the_gift_of_the_magi.txt",
+    "instruction": "Write about 210 words in O. Henry's playful omniscient voice. Count every coin with Della, sketch the threadbare flat, and set up the Christmas dilemma.",
+    "context": "Theme: Della reckons one dollar and eighty-seven cents on Christmas Eve in a shabby flat.\nCadence fingerprint (gpt2 tokens=2961):\n- mean surprisal 3.40; high-surprise density 14.79 per 100 tokens.\n- punctuation rate 0.16; newline rate 0.03; content fraction 0.35.\nExcerpt stats: 215 words across 16 sentences; avg sentence length 13.44 words.\nStylistic cues:\n- Narrator toggles between sentimental warmth and wry commentary.\n- Short punchy sentences give way to rolling, humorous descriptions.\n- Concrete dollar amounts anchor the emotional stakes.\nMotifs to weave:\n- include: one dollar and eighty-seven cents\n- include: shabby little couch\n- include: Mr. James Dillingham Young",
+    "answer": "One dollar and eighty-seven cents. That was all. And sixty cents of it was in pennies. Pennies saved one and two at a time by bulldozing the grocer and the vegetable man and the butcher until one's cheeks burned with the silent imputation of parsimony that such close dealing implied. Three times Della counted it. One dollar and eighty-seven cents. And the next day would be Christmas. There was clearly nothing to do but flop down on the shabby little couch and howl. So Della did it. Which instigates the moral reflection that life is made up of sobs, sniffles, and smiles, with sniffles predominating. While the mistress of the home is gradually subsiding from the first stage to the second, take a look at the home. A furnished flat at $8 per week. It did not exactly beggar description, but it certainly had that word on the look-out for the mendicancy squad. In the vestibule below was a letter-box into which no letter would go, and an electric button from which no mortal finger could coax a ring. Also appertaining thereunto was a card bearing the name \"Mr. James Dillingham Young.\" The \"Dillingham\" had been flung to the breeze during a former period of prosperity when its possessor was being paid $30 per week.",
+    "min_words": 200,
+    "max_words": 220,
+    "motifs": [
+      "one dollar and eighty-seven cents",
+      "shabby little couch",
+      "Mr. James Dillingham Young"
+    ],
+    "theme": "Della reckons one dollar and eighty-seven cents on Christmas Eve in a shabby flat.",
+    "style_notes": [
+      "Narrator toggles between sentimental warmth and wry commentary.",
+      "Short punchy sentences give way to rolling, humorous descriptions.",
+      "Concrete dollar amounts anchor the emotional stakes."
+    ],
+    "excerpt_metrics": {
+      "word_count": 215,
+      "unit_count": 16,
+      "avg_unit_words": 13.44,
+      "median_unit_words": 9.0,
+      "comma_rate_per_100": 2.79,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 2961,
+      "surprisal_mean": 3.401,
+      "high_surprise_rate_per_100": 14.792,
+      "punct_rate": 0.159,
+      "newline_rate": 0.029,
+      "content_fraction": 0.349
+    }
+  },
+  {
+    "id": "story_necklace_longing",
+    "doc_type": "shortstory",
+    "author": "Guy de Maupassant",
+    "title": "The Necklace",
+    "path": "data/shortstory/guy_de_maupassant/The_Necklace.txt",
+    "instruction": "Write roughly 190 words of free indirect narration tracing Mathilde's hunger for elegance. Contrast imagined salons with the drab apartment she despises.",
+    "context": "Theme: Mathilde Loisel aches for luxury and resents her modest clerk's home.\nCadence fingerprint (gpt2 tokens=3928):\n- mean surprisal 3.08; high-surprise density 14.41 per 100 tokens.\n- punctuation rate 0.18; newline rate 0.06; content fraction 0.30.\nExcerpt stats: 190 words across 7 sentences; avg sentence length 27.14 words.\nStylistic cues:\n- Flowing paragraphs saturated with sensory contrasts.\n- Sympathetic yet critical narrator sliding between observation and Mathilde's interior voice.\n- French realism: long sentences, precise social detail.\nMotifs to weave:\n- include: error of destiny\n- include: Ministry of Public Instruction\n- include: worn-out chairs",
+    "answer": "She was one of those pretty and charming girls, born, as if through an error of destiny, into a family of clerks. She had no dowry, no hopes, no means of being known, understood, loved, married by a man either rich or distinguished; and she let herself be married to a little clerk at the Ministry of Public Instruction. She dressed plainly because she could not dress well; but she was as unhappy as if she had really fallen from a higher station, since with women there is neither caste nor rank: and beauty, grace and charm act instead of family and birth. Natural ingenuity, instinct for what is elegant, a supple mind are their sole hierarchy, and make girls of the people the equals of the grand ladies. She suffered incessantly, feeling herself born for all the delicacies and all the luxuries. She suffered from the poverty of her dwelling, from the wretched look of the walls, from the worn-out chairs, from the ugliness of the curtains. All those things of which another woman of her rank would even not have been aware tormented her and made her angry.",
+    "min_words": 185,
+    "max_words": 205,
+    "motifs": [
+      "error of destiny",
+      "Ministry of Public Instruction",
+      "worn-out chairs"
+    ],
+    "theme": "Mathilde Loisel aches for luxury and resents her modest clerk's home.",
+    "style_notes": [
+      "Flowing paragraphs saturated with sensory contrasts.",
+      "Sympathetic yet critical narrator sliding between observation and Mathilde's interior voice.",
+      "French realism: long sentences, precise social detail."
+    ],
+    "excerpt_metrics": {
+      "word_count": 190,
+      "unit_count": 7,
+      "avg_unit_words": 27.14,
+      "median_unit_words": 25,
+      "comma_rate_per_100": 8.95,
+      "colon_rate_per_100": 0.53
+    },
+    "doc_metrics": {
+      "tokens_count": 3928,
+      "surprisal_mean": 3.079,
+      "high_surprise_rate_per_100": 14.409,
+      "punct_rate": 0.179,
+      "newline_rate": 0.055,
+      "content_fraction": 0.296
+    }
+  },
+  {
+    "id": "story_mallard_window",
+    "doc_type": "shortstory",
+    "author": "Kate Chopin",
+    "title": "The Story of an Hour",
+    "path": "data/shortstory/kate_chopin/the_story_of_an_hour.txt",
+    "instruction": "Write about 200 words in close third person. Show Louise receiving the news, moving toward the open window, and sensing the world beyond.",
+    "context": "Theme: News of a railroad disaster sends Louise Mallard into a private storm of grief and revelation.\nCadence fingerprint (gpt2 tokens=1184):\n- mean surprisal 3.56; high-surprise density 14.44 per 100 tokens.\n- punctuation rate 0.13; newline rate 0.02; content fraction 0.30.\nExcerpt stats: 197 words across 13 sentences; avg sentence length 15.15 words.\nStylistic cues:\n- Gentle omniscience with sudden surges of emotion.\n- Short clauses layered with tactile detail to track perception.\n- Shifts from social propriety to intimate interiority.\nMotifs to weave:\n- include: railroad disaster\n- include: storm of grief\n- include: open window",
+    "answer": "Knowing that Mrs. Mallard was afflicted with a heart trouble, great care was taken to break to her as gently as possible the news of her husband's death. It was her sister Josephine who told her, in broken sentences; her husband's friend Richards was there, too. It was he who had been in the newspaper office when intelligence of the railroad disaster was received. He had only taken the time to assure himself of its truth by a second telegram, and had hastened to forestall any less careful, less tender friend in bearing the sad message. She did not hear the story as many women have heard the same, with a paralyzed inability to accept its significance. She wept at once, with sudden, wild abandonment, in her sister's arms. When the storm of grief had spent itself she went away to her room alone. She would have no one follow her. There stood, facing the open window, a comfortable, roomy armchair. She sank into it. She could see in the open square before her house the tops of trees that were all aquiver with the new spring life. The delicious breath of rain was in the air.",
+    "min_words": 190,
+    "max_words": 210,
+    "motifs": [
+      "railroad disaster",
+      "storm of grief",
+      "open window"
+    ],
+    "theme": "News of a railroad disaster sends Louise Mallard into a private storm of grief and revelation.",
+    "style_notes": [
+      "Gentle omniscience with sudden surges of emotion.",
+      "Short clauses layered with tactile detail to track perception.",
+      "Shifts from social propriety to intimate interiority."
+    ],
+    "excerpt_metrics": {
+      "word_count": 197,
+      "unit_count": 13,
+      "avg_unit_words": 15.15,
+      "median_unit_words": 15,
+      "comma_rate_per_100": 6.09,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 1184,
+      "surprisal_mean": 3.564,
+      "high_surprise_rate_per_100": 14.443,
+      "punct_rate": 0.13,
+      "newline_rate": 0.024,
+      "content_fraction": 0.304
+    }
+  },
+  {
+    "id": "story_happy_prince_statue",
+    "doc_type": "shortstory",
+    "author": "Oscar Wilde",
+    "title": "The Happy Prince",
+    "path": "data/shortstory/oscar_wilde/the_happy_prince.txt",
+    "instruction": "Write about 210 words of luminous fairy tale narration. Describe the Happy Prince statue, the admiring townsfolk, and the first hints of sorrow.",
+    "context": "Theme: The jeweled statue of the Happy Prince watches a city in need from his tall column.\nCadence fingerprint (gpt2 tokens=3085):\n- mean surprisal 2.82; high-surprise density 13.61 per 100 tokens.\n- punctuation rate 0.19; newline rate 0.03; content fraction 0.29.\nExcerpt stats: 213 words across 9 sentences; avg sentence length 23.67 words.\nStylistic cues:\n- Ornate yet playful storyteller voice suited for children and adults.\n- Bright color imagery set against moral contrast.\n- Dialogue snippets that reveal social attitudes with a wink.\nMotifs to weave:\n- include: tall column\n- include: bright sapphires\n- include: crying for the moon",
+    "answer": "High above the city, on a tall column, stood the statue of the Happy Prince. He was gilded all over with thin leaves of fine gold, for eyes he had two bright sapphires, and a large red ruby glowed on his sword-hilt. He was very much admired indeed. \"He is as beautiful as a weathercock,\" remarked one of the Town Councillors who wished to gain a reputation for having artistic tastes; \"only not quite so useful,\" he added, fearing lest people should think him unpractical, which he really was not. \"Why can't you be like the Happy Prince?\" asked a sensible mother of her little boy who was crying for the moon. \"The Happy Prince never dreams of crying for anything.\" \"I am glad there is some one in the world who is quite happy,\" muttered a disappointed man as he gazed at the wonderful statue. \"He looks just like an angel,\" said the Charity Children as they came out of the cathedral in their bright scarlet cloaks and their clean white pinafores. \"How do you know?\" said the Mathematical Master, \"you have never seen one.\" \"Ah! but we have, in our dreams,\" answered the children; and the Mathematical Master frowned and looked very severe, for he did not approve of children dreaming.",
+    "min_words": 200,
+    "max_words": 220,
+    "motifs": [
+      "tall column",
+      "bright sapphires",
+      "crying for the moon"
+    ],
+    "theme": "The jeweled statue of the Happy Prince watches a city in need from his tall column.",
+    "style_notes": [
+      "Ornate yet playful storyteller voice suited for children and adults.",
+      "Bright color imagery set against moral contrast.",
+      "Dialogue snippets that reveal social attitudes with a wink."
+    ],
+    "excerpt_metrics": {
+      "word_count": 213,
+      "unit_count": 9,
+      "avg_unit_words": 23.67,
+      "median_unit_words": 26,
+      "comma_rate_per_100": 6.57,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 3085,
+      "surprisal_mean": 2.818,
+      "high_surprise_rate_per_100": 13.614,
+      "punct_rate": 0.193,
+      "newline_rate": 0.034,
+      "content_fraction": 0.288
+    }
+  },
+  {
+    "id": "story_jumping_frog_wheeler",
+    "doc_type": "shortstory",
+    "author": "Mark Twain",
+    "title": "The Celebrated Jumping Frog of Calaveras County",
+    "path": "data/shortstory/mark_twain/The_Celebrated_Jumping_Frog_of_Calaveras_County.txt",
+    "instruction": "Write about 190 words in Mark Twain's dry comic frame. Let the narrator grumble about Simon Wheeler while setting up the infamous frog story.",
+    "context": "Theme: A visiting narrator endures Simon Wheeler's rambling tale about Jim Smiley.\nCadence fingerprint (gpt2 tokens=1657):\n- mean surprisal 3.61; high-surprise density 13.28 per 100 tokens.\n- punctuation rate 0.16; newline rate 0.01; content fraction 0.37.\nExcerpt stats: 195 words across 9 sentences; avg sentence length 21.67 words.\nStylistic cues:\n- First-person frame with formal diction punctured by frontier vernacular.\n- Long, looping sentences that build humor through exaggeration.\n- Wry contrast between Eastern narrator and Western storyteller.\nMotifs to weave:\n- include: Simon Wheeler\n- include: Jim Smiley\n- include: ancient mining camp",
+    "answer": "In compliance with the request of a friend of mine, who wrote me from the East, I called on good-natured, garrulous old Simon Wheeler, and inquired after my friend's friend, Leonidas W. Smiley, as requested to do, and I hereunto append the result. I have a lurking suspicion that Leonidas W. Smiley is a myth; that my friend never knew such a personage; and that he only conjectured that if I asked old Wheeler about him, it would remind him of his infamous Jim Smiley, and he would go to work and bore me to death with some infernal reminiscence of him as long and tedious as it should be useless to me. If that was the design, it succeeded. I found Simon Wheeler dozing comfortably by the bar-room stove of the old, dilapidated tavern in the ancient mining camp of Angel's. I noticed that he was fat and bald-headed, and had an expression of winning gentleness and simplicity upon his tranquil countenance. He roused up and gave me good-day. I told him that a friend of mine had commissioned me to make some inquiries about a cherished companion of his boyhood named Leonidas W.",
+    "min_words": 185,
+    "max_words": 205,
+    "motifs": [
+      "Simon Wheeler",
+      "Jim Smiley",
+      "ancient mining camp"
+    ],
+    "theme": "A visiting narrator endures Simon Wheeler's rambling tale about Jim Smiley.",
+    "style_notes": [
+      "First-person frame with formal diction punctured by frontier vernacular.",
+      "Long, looping sentences that build humor through exaggeration.",
+      "Wry contrast between Eastern narrator and Western storyteller."
+    ],
+    "excerpt_metrics": {
+      "word_count": 195,
+      "unit_count": 9,
+      "avg_unit_words": 21.67,
+      "median_unit_words": 21,
+      "comma_rate_per_100": 6.15,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 1657,
+      "surprisal_mean": 3.609,
+      "high_surprise_rate_per_100": 13.277,
+      "punct_rate": 0.158,
+      "newline_rate": 0.008,
+      "content_fraction": 0.371
+    }
+  },
+  {
+    "id": "story_open_window_nerves",
+    "doc_type": "shortstory",
+    "author": "Saki",
+    "title": "The Open Window",
+    "path": "data/shortstory/saki/The_Open_Window.txt",
+    "instruction": "Write about 200 words in Saki's arch omniscient style. Stage the conversation between Vera and Framton, noting his nerves and her quick invention.",
+    "context": "Theme: Framton Nuttel meets a poised niece while waiting nervously in a country sitting room.\nCadence fingerprint (gpt2 tokens=1723):\n- mean surprisal 3.40; high-surprise density 13.81 per 100 tokens.\n- punctuation rate 0.18; newline rate 0.03; content fraction 0.35.\nExcerpt stats: 199 words across 8 sentences; avg sentence length 24.88 words.\nStylistic cues:\n- Crisp Edwardian prose with sly understatement.\n- Dialogue punctuated by formal narration that undercuts itself.\n- Social satire targeting anxious visitors and mischievous adolescents.\nMotifs to weave:\n- include: Mr. Nuttel\n- include: nerve cure\n- include: letters of introduction",
+    "answer": "\"My aunt will be down presently, Mr. Nuttel,\" said a very self-possessed young lady of fifteen; \"in the meantime you must try and put up with me.\" Framton Nuttel endeavoured to say the correct something which should duly flatter the niece of the moment without unduly discounting the aunt that was to come. Privately he doubted more than ever whether these formal visits on a succession of total strangers would do much towards helping the nerve cure which he was supposed to be undergoing. \"I know how it will be,\" his sister had said when he was preparing to migrate to this rural retreat; \"you will bury yourself down there and not speak to a living soul, and your nerves will be worse than ever from moping. I shall just give you letters of introduction to all the people I know there. Some of them, as far as I can remember, were quite nice.\" Framton wondered whether Mrs. Sappleton, the lady to whom he was presenting one of the letters of introduction, came into the nice division. \"Do you know many of the people round here?\" asked the niece, when she judged that they had had sufficient silent communion.",
+    "min_words": 190,
+    "max_words": 210,
+    "motifs": [
+      "Mr. Nuttel",
+      "nerve cure",
+      "letters of introduction"
+    ],
+    "theme": "Framton Nuttel meets a poised niece while waiting nervously in a country sitting room.",
+    "style_notes": [
+      "Crisp Edwardian prose with sly understatement.",
+      "Dialogue punctuated by formal narration that undercuts itself.",
+      "Social satire targeting anxious visitors and mischievous adolescents."
+    ],
+    "excerpt_metrics": {
+      "word_count": 199,
+      "unit_count": 8,
+      "avg_unit_words": 24.88,
+      "median_unit_words": 20.5,
+      "comma_rate_per_100": 4.52,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 1723,
+      "surprisal_mean": 3.402,
+      "high_surprise_rate_per_100": 13.813,
+      "punct_rate": 0.176,
+      "newline_rate": 0.031,
+      "content_fraction": 0.349
+    }
+  },
+  {
+    "id": "poem_dickinson_carriage",
+    "doc_type": "poem",
+    "author": "Emily Dickinson",
+    "title": "Because I could not stop for Death",
+    "path": "data/poem/emily_dickinson/Because_I_Could_Not_Stop_for_Death.txt",
+    "instruction": "Write the full poem in common meter. Let Death drive the speaker past school, grain, and setting sun toward the grave-house.",
+    "context": "Theme: A calm carriage ride with Death moves from schoolyard to fields to a grave-house.\nCadence fingerprint (gpt2 tokens=206):\n- mean surprisal 5.05; high-surprise density 14.08 per 100 tokens.\n- punctuation rate 0.03; newline rate 0.14; content fraction 0.36.\nExcerpt stats: 149 words across 24 lines; avg line length 6.21 words.\nStylistic cues:\n- Quatrains in slant-rhymed common meter.\n- Capitalized abstractions and domestic imagery for the eternal journey.\n- Even tone that blends awe with quiet companionship.\nMotifs to weave:\n- include: carriage held but just ourselves\n- include: Fields of Gazing Grain\n- include: Horses' Heads",
+    "answer": "Because I could not stop for Death -- He kindly stopped for me -- The Carriage held but just Ourselves -- And Immortality. We slowly drove -- He knew no haste And I had put away My labor and my leisure too, For His Civility -- We passed the School, where Children strove At Recess -- in the Ring -- We passed the Fields of Gazing Grain -- We passed the Setting Sun -- Or rather -- He passed Us -- The Dews drew quivering and Chill -- For only Gossamer, my Gown -- My Tippet -- only Tulle -- We paused before a House that seemed A Swelling of the Ground -- The Roof was scarcely visible -- The Cornice -- in the Ground -- Since then -- 'tis Centuries -- and yet Feels shorter than the Day I first surmised the Horses' Heads Were toward Eternity --",
+    "min_words": 140,
+    "max_words": 170,
+    "motifs": [
+      "carriage held but just ourselves",
+      "Fields of Gazing Grain",
+      "Horses' Heads"
+    ],
+    "theme": "A calm carriage ride with Death moves from schoolyard to fields to a grave-house.",
+    "style_notes": [
+      "Quatrains in slant-rhymed common meter.",
+      "Capitalized abstractions and domestic imagery for the eternal journey.",
+      "Even tone that blends awe with quiet companionship."
+    ],
+    "excerpt_metrics": {
+      "word_count": 149,
+      "unit_count": 24,
+      "avg_unit_words": 6.21,
+      "median_unit_words": 6.0,
+      "comma_rate_per_100": 2.01,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 206,
+      "surprisal_mean": 5.051,
+      "high_surprise_rate_per_100": 14.078,
+      "punct_rate": 0.034,
+      "newline_rate": 0.141,
+      "content_fraction": 0.364
+    }
+  },
+  {
+    "id": "poem_hughes_crystal_stair",
+    "doc_type": "poem",
+    "author": "Langston Hughes",
+    "title": "Mother to Son",
+    "path": "data/poem/langston_hughes/Mother_to_Son.txt",
+    "instruction": "Write the poem as a dramatic monologue. Use plain speech, dropped consonants, and stair imagery to encourage the son to keep climbing.",
+    "context": "Theme: A mother tells her son that life for her has been no crystal stair, urging him to keep climbing.\nCadence fingerprint (gpt2 tokens=208):\n- mean surprisal 3.49; high-surprise density 13.94 per 100 tokens.\n- punctuation rate 0.30; newline rate 0.11; content fraction 0.31.\nExcerpt stats: 99 words across 20 lines; avg line length 4.95 words.\nStylistic cues:\n- Free verse built from blues cadence and spoken rhythm.\n- Colloquial grammar with deliberate repetitions.\n- Imagery of worn stairs, tacks, and splinters standing for resilience.\nMotifs to weave:\n- include: crystal stair\n- include: tacks in it\n- include: I'se still climbin'",
+    "answer": "Well, son, I'll tell you: Life for me ain't been no crystal stair. It's had tacks in it, And splinters, And boards torn up, And places with no carpet on the floor-- Bare. But all the time I'se been a-climbin' on, And reachin' landin's, And turnin' corners, And sometimes goin' in the dark Where there ain't been no light. So boy, don't you turn back. Don't you set down on the steps 'Cause you finds it's kinder hard. Don't you fall now-- For I'se still goin', honey, I'se still climbin', And life for me ain't been no crystal stair.",
+    "min_words": 90,
+    "max_words": 120,
+    "motifs": [
+      "crystal stair",
+      "tacks in it",
+      "I'se still climbin'"
+    ],
+    "theme": "A mother tells her son that life for her has been no crystal stair, urging him to keep climbing.",
+    "style_notes": [
+      "Free verse built from blues cadence and spoken rhythm.",
+      "Colloquial grammar with deliberate repetitions.",
+      "Imagery of worn stairs, tacks, and splinters standing for resilience."
+    ],
+    "excerpt_metrics": {
+      "word_count": 99,
+      "unit_count": 20,
+      "avg_unit_words": 4.95,
+      "median_unit_words": 5.0,
+      "comma_rate_per_100": 12.12,
+      "colon_rate_per_100": 1.01
+    },
+    "doc_metrics": {
+      "tokens_count": 208,
+      "surprisal_mean": 3.49,
+      "high_surprise_rate_per_100": 13.942,
+      "punct_rate": 0.298,
+      "newline_rate": 0.106,
+      "content_fraction": 0.308
+    }
+  },
+  {
+    "id": "poem_frost_two_roads",
+    "doc_type": "poem",
+    "author": "Robert Frost",
+    "title": "The Road Not Taken",
+    "path": "data/poem/robert_frost/The_Road_Not_Taken.txt",
+    "instruction": "Write the poem in four quintains with ABAAB rhyme. Contrast the twin forest roads and end with the reflective sigh in the future.",
+    "context": "Theme: A traveler weighs two forest paths and chooses the one less traveled by.\nCadence fingerprint (gpt2 tokens=201):\n- mean surprisal 4.29; high-surprise density 13.43 per 100 tokens.\n- punctuation rate 0.09; newline rate 0.13; content fraction 0.32.\nExcerpt stats: 151 words across 22 lines; avg line length 6.86 words.\nStylistic cues:\n- Past-tense narration with conversational diction and formal meter.\n- Nature imagery supports a meditation on choice and regret.\n- Closing volte-face delivered with understated irony.\nMotifs to weave:\n- include: two roads diverged\n- include: yellow wood\n- include: one less traveled by",
+    "answer": "The Road Not Taken by Robert Frost Two roads diverged in a yellow wood, And sorry I could not travel both And be one traveler, long I stood And looked down one as far as I could To where it bent in the undergrowth; Then took the other, as just as fair, And having perhaps the better claim, Because it was grassy and wanted wear; Though as for that the passing there Had worn them really about the same, And both that morning equally lay In leaves no step had trodden black. Oh, I kept the first for another day! Yet knowing how way leads on to way, I doubted if I should ever come back. I shall be telling this with a sigh Somewhere ages and ages hence: Two roads diverged in a wood, and I-- I took the one less traveled by, And that has made all the difference.",
+    "min_words": 140,
+    "max_words": 170,
+    "motifs": [
+      "two roads diverged",
+      "yellow wood",
+      "one less traveled by"
+    ],
+    "theme": "A traveler weighs two forest paths and chooses the one less traveled by.",
+    "style_notes": [
+      "Past-tense narration with conversational diction and formal meter.",
+      "Nature imagery supports a meditation on choice and regret.",
+      "Closing volte-face delivered with understated irony."
+    ],
+    "excerpt_metrics": {
+      "word_count": 151,
+      "unit_count": 22,
+      "avg_unit_words": 6.86,
+      "median_unit_words": 7.0,
+      "comma_rate_per_100": 6.62,
+      "colon_rate_per_100": 0.66
+    },
+    "doc_metrics": {
+      "tokens_count": 201,
+      "surprisal_mean": 4.292,
+      "high_surprise_rate_per_100": 13.433,
+      "punct_rate": 0.09,
+      "newline_rate": 0.129,
+      "content_fraction": 0.323
+    }
+  },
+  {
+    "id": "poem_whitman_captain",
+    "doc_type": "poem",
+    "author": "Walt Whitman",
+    "title": "O Captain! My Captain!",
+    "path": "data/poem/walt_whitman/O_Captain_My_Captain.txt",
+    "instruction": "Write the full elegy in three eight-line stanzas. Balance triumphant bells with the repeated grief over the captain's death.",
+    "context": "Theme: A sailor celebrates the ship's return while mourning the fallen captain.\nCadence fingerprint (gpt2 tokens=369):\n- mean surprisal 3.76; high-surprise density 13.55 per 100 tokens.\n- punctuation rate 0.15; newline rate 0.08; content fraction 0.28.\nExcerpt stats: 206 words across 26 lines; avg line length 7.92 words.\nStylistic cues:\n- Structured meter and rhyme unusual for Whitman, signaling formal mourning.\n- Refrains that contrast public celebration with private anguish.\n- Maritime imagery stands in for national trauma.\nMotifs to weave:\n- include: fearful trip is done\n- include: dear father\n- include: fallen cold and dead",
+    "answer": "O Captain! My Captain! by Walt Whitman O Captain! my Captain! our fearful trip is done, The ship has weather'd every rack, the prize we sought is won, The port is near, the bells I hear, the people all exulting, While follow eyes the steady keel, the vessel grim and daring; But O heart! heart! heart! O the bleeding drops of red, Where on the deck my Captain lies, Fallen cold and dead. O Captain! my Captain! rise up and hear the bells; Rise up--for you the flag is flung--for you the bugle trills, For you bouquets and ribbon'd wreaths--for you the shores a-crowding, For you they call, the swaying mass, their eager faces turning; Here Captain! dear father! This arm beneath your head! It is some dream that on the deck, You've fallen cold and dead. My Captain does not answer, his lips are pale and still, My father does not feel my arm, he has no pulse nor will, The ship is anchor'd safe and sound, its voyage closed and done, From fearful trip the victor ship comes in with object won; Exult O shores, and ring O bells! But I with mournful tread, Walk the deck my Captain lies, Fallen cold and dead.",
+    "min_words": 190,
+    "max_words": 220,
+    "motifs": [
+      "fearful trip is done",
+      "dear father",
+      "fallen cold and dead"
+    ],
+    "theme": "A sailor celebrates the ship's return while mourning the fallen captain.",
+    "style_notes": [
+      "Structured meter and rhyme unusual for Whitman, signaling formal mourning.",
+      "Refrains that contrast public celebration with private anguish.",
+      "Maritime imagery stands in for national trauma."
+    ],
+    "excerpt_metrics": {
+      "word_count": 206,
+      "unit_count": 26,
+      "avg_unit_words": 7.92,
+      "median_unit_words": 7.5,
+      "comma_rate_per_100": 11.17,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 369,
+      "surprisal_mean": 3.762,
+      "high_surprise_rate_per_100": 13.55,
+      "punct_rate": 0.149,
+      "newline_rate": 0.079,
+      "content_fraction": 0.279
+    }
+  },
+  {
+    "id": "poem_blake_tyger",
+    "doc_type": "poem",
+    "author": "William Blake",
+    "title": "The Tyger",
+    "path": "data/poem/william_blake/The_Tyger.txt",
+    "instruction": "Write the poem in rhymed couplets. Use hammer, anvil, and burning imagery to ask what power shaped the Tyger.",
+    "context": "Theme: A speaker questions the creator of the Tyger's fearful symmetry.\nCadence fingerprint (gpt2 tokens=211):\n- mean surprisal 4.25; high-surprise density 14.22 per 100 tokens.\n- punctuation rate 0.13; newline rate 0.14; content fraction 0.28.\nExcerpt stats: 143 words across 24 lines; avg line length 5.96 words.\nStylistic cues:\n- Trochaic catalectic meter with insistent anaphora.\n- Apocalyptic forge imagery contrasted with innocent lamb.\nMotifs to weave:\n- include: burning bright\n- include: dread hand\n- include: fearful symmetry",
+    "answer": "Tyger! Tyger! burning bright In the forests of the night, What immortal hand or eye Could frame thy fearful symmetry? In what distant deeps or skies Burnt the fire of thine eyes? On what wings dare he aspire? What the hand, dare seize the fire? And what shoulder, & what art, Could twist the sinews of thy heart? And when thy heart began to beat, What dread hand? & what dread feet? What the hammer? what the chain? In what furnace was thy brain? What the anvil? what dread grasp Dare its deadly terrors clasp? When the stars threw down their spears, And water'd heaven with their tears, Did he smile his work to see? Did he who made the Lamb make thee? Tyger! Tyger! burning bright In the forests of the night, What immortal hand or eye Dare frame thy fearful symmetry?",
+    "min_words": 130,
+    "max_words": 160,
+    "motifs": [
+      "burning bright",
+      "dread hand",
+      "fearful symmetry"
+    ],
+    "theme": "A speaker questions the creator of the Tyger's fearful symmetry.",
+    "style_notes": [
+      "Trochaic catalectic meter with insistent anaphora.",
+      "Apocalyptic forge imagery contrasted with innocent lamb."
+    ],
+    "excerpt_metrics": {
+      "word_count": 143,
+      "unit_count": 24,
+      "avg_unit_words": 5.96,
+      "median_unit_words": 6.0,
+      "comma_rate_per_100": 5.59,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 211,
+      "surprisal_mean": 4.246,
+      "high_surprise_rate_per_100": 14.218,
+      "punct_rate": 0.128,
+      "newline_rate": 0.137,
+      "content_fraction": 0.28
+    }
+  },
+  {
+    "id": "poem_rossetti_midwinter",
+    "doc_type": "poem",
+    "author": "Christina Rossetti",
+    "title": "In the Bleak Midwinter",
+    "path": "data/poem/christina_rossetti/In_the_Bleak_Midwinter.txt",
+    "instruction": "Write the carol in five verses. Combine frozen landscape with devotional tenderness and end on the gift of the heart.",
+    "context": "Theme: Midwinter quiet frames the Nativity and the speaker's humble gift.\nCadence fingerprint (gpt2 tokens=287):\n- mean surprisal 4.18; high-surprise density 11.85 per 100 tokens.\n- punctuation rate 0.10; newline rate 0.15; content fraction 0.29.\nExcerpt stats: 166 words across 40 lines; avg line length 4.15 words.\nStylistic cues:\n- Simple hymn meter with gentle internal repetition.\n- Contrast between cosmic scale and intimate domesticity.\n- Soft consonance and imagery of snow, angels, and humble offerings.\nMotifs to weave:\n- include: snow on snow\n- include: stable-place sufficed\n- include: give my heart",
+    "answer": "In the bleak midwinter Frosty wind made moan; Earth stood hard as iron, Water like a stone; Snow had fallen, snow on snow, Snow on snow, In the bleak midwinter, Long ago. Our God, Heaven cannot hold Him, Nor earth sustain; Heaven and earth shall flee away When He comes to reign. In the bleak midwinter A stable-place sufficed The Lord God Almighty, Jesus Christ. Enough for Him, whom cherubim Worship night and day, A breastful of milk And a mangerful of hay; Enough for Him, whom angels Fall down before, The ox and ass and camel Which adore. Angels and archangels May have gathered there, Cherubim and seraphim Thronged the air; But only His mother In her maiden bliss Worshipped the Beloved With a kiss. What can I give Him, Poor as I am? If I were a shepherd I would bring a lamb; If I were a Wise Man I would do my part; Yet what I can I give Him, Give my heart.",
+    "min_words": 160,
+    "max_words": 190,
+    "motifs": [
+      "snow on snow",
+      "stable-place sufficed",
+      "give my heart"
+    ],
+    "theme": "Midwinter quiet frames the Nativity and the speaker's humble gift.",
+    "style_notes": [
+      "Simple hymn meter with gentle internal repetition.",
+      "Contrast between cosmic scale and intimate domesticity.",
+      "Soft consonance and imagery of snow, angels, and humble offerings."
+    ],
+    "excerpt_metrics": {
+      "word_count": 166,
+      "unit_count": 40,
+      "avg_unit_words": 4.15,
+      "median_unit_words": 4.0,
+      "comma_rate_per_100": 9.04,
+      "colon_rate_per_100": 0.0
+    },
+    "doc_metrics": {
+      "tokens_count": 287,
+      "surprisal_mean": 4.184,
+      "high_surprise_rate_per_100": 11.847,
+      "punct_rate": 0.105,
+      "newline_rate": 0.153,
+      "content_fraction": 0.293
+    }
+  }
+]
