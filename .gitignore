@@ -11,3 +11,8 @@ data/grpo_runs/
 
 # GEPA run outputs (keep latest snapshot only)
 experiments/gepa_gemma3/outputs/
+experiments/gepa_gemma3/outputs_json/
+
+# Local model folders and eval logs
+models/
+reflection_eval_*.jsonl

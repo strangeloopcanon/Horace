@@ -5,3 +5,4 @@ transformers>=4.46.0
 torch>=2.5.1
 sentencepiece>=0.2.0
 google-genai>=0.2.0
+jsonschema>=4.23.0

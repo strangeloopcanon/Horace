@@ -1,41 +1,47 @@
-You will be given an instruction and a context related to a literary or stylistic writing task. Your goal is to generate a written passage that meets the specified word count and stylistic requirements, while incorporating given thematic motifs and narrative elements.
+You are given a literary or creative writing prompt that includes:
 
-Specifically, you must:
+1. An instruction specifying:
+   - The desired word count or length.
+   - The narrative perspective or voice (e.g., close third person, first-person banter, rhymed couplets, fairy tale narration).
+   - Specific thematic or stylistic elements to include (e.g., motifs, imagery, tone, cadence).
+   - Sometimes a particular scene or event to describe.
 
-1. Analyze the instruction carefully to understand the desired style, narrative perspective, tone, and word count range (usually around 180-220 words, or as specified).
+2. Contextual information about the theme, style, and cadence fingerprint of a target text or genre, including:
+   - Theme summary.
+   - Statistical and stylistic cues such as mean surprisal, punctuation rate, newline rate, content fraction.
+   - Excerpt stats (word count, sentence count, average sentence length).
+   - Stylistic cues describing voice, tone, rhythm, and narrative style.
+   - Motifs to weave into the text (specific words, phrases, or concepts that must appear).
 
-2. Use the context to identify:
-   - The theme and key motifs to be included.
-   - The narrative voice and perspective (e.g., first-person with irony, formal elegy, omniscient narrator).
-   - Stylistic fingerprints such as sentence length and structure, punctuation and formatting cues (e.g., punctuation rate, newline rate), and cadence (e.g., surprisal, rhythm).
-   - The emotional or psychological states to be conveyed through character or narrator.
+Your task is to generate a creative written response that:
 
-3. Incorporate all specified motifs and thematic elements naturally and subtly into the passage, avoiding overt exposition or heavy-handedness.
+- Matches the specified word count range.
+- Adheres closely to the requested narrative perspective and voice.
+- Incorporates all or most of the required motifs explicitly.
+- Reflects the thematic and stylistic cues provided, including cadence, tone, and rhythm.
+- Uses appropriate language, sentence length, and punctuation density to approximate the cadence fingerprint.
+- Balances narrative description, sensory detail, and emotional or thematic resonance as indicated.
+- When dialogue or character voice is requested, captures the distinctive style and mannerisms.
+- When poetry is requested, follows the specified meter, rhyme scheme, and imagery.
 
-4. Maintain fidelity to the narrative perspective and style indicated, replicating authorial style and narrative techniques (e.g., Saki’s dry wit, French realism’s precise social detail, formal meter and rhyme).
+Additional domain-specific details:
 
-5. Balance direct speech and formal narration as appropriate to the style, ensuring coherence and well-paced narrative flow.
+- Motifs are critical and should be explicitly included; missing motifs reduce the quality of the response.
+- Word count targets are strict; responses should be within the specified range.
+- Cadence fingerprint statistics (mean surprisal, punctuation rate, newline rate, content fraction) guide the stylistic texture and complexity of the writing.
+- Stylistic cues often include narrative voice (e.g., gentle omniscience, ornate storyteller, chatty clubland tone), sentence structure (short clauses, rhythmic repetition), and thematic contrasts.
+- Thematic elements often require weaving in symbolic or metaphorical language (e.g., “storm of grief,” “fearful symmetry,” “crying for the moon”).
+- Responses should balance explicit narrative action with interiority or emotional subtext as appropriate.
+- When dialogue is included, it should reveal character and social attitudes consistent with the context.
+- For poetry, maintain rhyme scheme, meter, and repeated motifs or refrains as specified.
 
-6. Use sentence length and punctuation patterns that reflect the stylistic fingerprint of the context, mixing short and long sentences to create rhythm and tone.
+Generalizable strategy:
 
-7. Reflect social or psychological themes through character interaction, setting description, or internal monologue, capturing emotional nuance and subtlety.
+- Carefully parse the instruction and context to identify all required motifs and stylistic elements.
+- Plan the response structure to ensure inclusion of motifs and narrative beats.
+- Use the cadence fingerprint and stylistic cues to guide sentence length, punctuation, and rhythm.
+- Employ vivid sensory and emotional detail to evoke the requested tone.
+- Review the response to confirm word count compliance and motif inclusion.
+- Adjust language and sentence structure to approximate the target cadence and style.
 
-8. Keep the word count within the target range, allowing minor flexibility only if it enhances the narrative.
-
-9. Review the passage for stylistic consistency, thematic integration, and narrative clarity.
-
-Additional domain-specific notes:
-
-- Motifs are key thematic or narrative elements that must be included explicitly or implicitly in the passage (e.g., “middleweight boxing champion,” “fearful trip is done,” “fallen cold and dead”).
-
-- Stylistic fingerprints may include quantitative measures such as punctuation rate, newline rate, surprisal density, and average sentence length; use these as guides to replicate the cadence and tone of the exemplar context.
-
-- The tone may require subtle irony, understatement, social satire, or formal mourning; adapt your language and narrative voice accordingly.
-
-- When writing character sketches or first-person narratives, aim for a voice that is cool, appraising, or emotionally nuanced, using internal monologue and indirect commentary rather than explicit statements.
-
-- For formal poetic forms (e.g., elegies), adhere to the specified stanza and line structure, rhyme scheme, and meter, balancing thematic contrasts (e.g., triumph and grief) through refrains or repeated motifs.
-
-- The passage should feel authentic to the requested style and theme, blending literary analysis with creative writing.
-
-In summary, your output should be a stylistically faithful, thematically rich, and well-crafted literary passage that meets the detailed instructions and context provided, including motifs, tone, narrative perspective, and word count, while reflecting the stylistic fingerprints and narrative nuances of the exemplar context.
+In summary, produce a creative text that is faithful to the prompt’s narrative, thematic, stylistic, and formal requirements, with particular attention to motif inclusion, word count, and cadence fidelity.
