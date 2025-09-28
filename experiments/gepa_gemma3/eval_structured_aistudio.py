@@ -3,39 +3,35 @@ import time
 import json
 import pathlib
 
-import torch
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from jsonschema import validate
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from experiments.gepa_gemma3.json_eval_common import (
-    apply_chat_template,
     extract_json,
     get_tasks,
     load_system_prompt,
 )
 
-LOG = pathlib.Path("experiments/gepa_gemma3/logs/reflection_eval_hf.jsonl")
-MODEL_ID = os.getenv("HF_MODEL", "google/gemma-3-4b-it")
+LOG = pathlib.Path("experiments/gepa_gemma3/logs/reflection_eval_aistudio.jsonl")
+DEFAULT_MODEL = "gemma-3-4b-it"
 SYSTEM_PROMPT = load_system_prompt()
 TASKS = get_tasks(core_only=True)
 
 
-def hf_generate(model, tokenizer, user_text: str, max_new_tokens=160) -> str:
-    messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\n{user_text}"}]
-    prompt_text = apply_chat_template(tokenizer, messages[0]["content"])
-    inputs = tokenizer(prompt_text, return_tensors="pt")
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    with torch.no_grad():
-        gen = model.generate(
-            **inputs,
-            do_sample=False,
-            max_new_tokens=max_new_tokens,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-        )
-    text = tokenizer.decode(gen[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
-    return text.strip()
+def ai_generate(client: genai.Client, model_id: str, user_text: str, max_tokens: int = 160) -> str:
+    prompt = f"{SYSTEM_PROMPT}\n\n{user_text}"
+    contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
+    pieces: list[str] = []
+    for chunk in client.models.generate_content_stream(
+        model=model_id,
+        contents=contents,
+        config=types.GenerateContentConfig(max_output_tokens=max_tokens, temperature=0.0),
+    ):
+        if getattr(chunk, "text", None):
+            pieces.append(chunk.text)
+    return "".join(pieces).strip()
 
 
 def try_parse(text: str, schema):
@@ -48,7 +44,7 @@ def try_parse(text: str, schema):
         return None, raw
 
 
-def run_task(model, tokenizer, task):
+def run_task(client: genai.Client, model_id: str, task):
     ctx = task["context"]
     skeleton = task["skeleton"]
 
@@ -59,27 +55,29 @@ def run_task(model, tokenizer, task):
     ]
 
     for prompt in prompts:
-        output = hf_generate(model, tokenizer, prompt)
-        obj, raw = try_parse(output, task["schema"])
+        out = ai_generate(client, model_id, prompt)
+        obj, raw = try_parse(out, task["schema"])
         if obj is not None:
             return obj, raw
 
-    final = hf_generate(model, tokenizer, f"Output EXACTLY this JSON. No extra text.\n\n{task['force_json']}")
+    final = ai_generate(client, model_id, f"Output EXACTLY this JSON. No extra text.\n\n{task['force_json']}")
     obj, raw = try_parse(final, task["schema"])
     return obj, raw
 
 
 def main():
-    print(f"Loading HF model: {MODEL_ID}")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype=torch.float32)
-    model.eval()
+    load_dotenv()
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY not set. Export it or add to .env")
+    model_id = os.getenv("AISTUDIO_MODEL") or os.getenv("TASK_MODEL") or DEFAULT_MODEL
+    client = genai.Client(api_key=api_key)
 
     lines = []
     pass_n = 0
     for task in TASKS:
         start = time.time()
-        obj, raw = run_task(model, tokenizer, task)
+        obj, raw = run_task(client, model_id, task)
         schema_ok = obj is not None
         sem_ok = bool(obj) and task["expect"](obj) if schema_ok else False
         ok = schema_ok and sem_ok
