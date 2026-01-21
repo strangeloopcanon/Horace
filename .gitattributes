@@ -3,3 +3,6 @@ reports/** linguist-documentation
 reports/final/report.html linguist-generated=true
 reports/generated/** linguist-documentation
 
+
+# Use bd merge for beads JSONL files
+.beads/issues.jsonl merge=beads

@@ -11,6 +11,7 @@ It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
 
 - Overview
 - Quick Links
+- Horace Studio Quickstart
 - Install
 - Data Layout
 - Analysis Pipeline
@@ -36,8 +37,33 @@ It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
 - [Cross‑Model Compare (GPT‑2 vs Qwen)](reports/compare_gpt2_vs_Qwen_Qwen2.5-1.5B/README.md)
 - [All Generated Before/After Examples](reports/generated/README.md)
 - [GRPO Reward Plan (v0)](docs/reward.md)
+- [Horace Studio (paste → score/profile/suggestions/rewrites)](docs/studio.md)
+- [Studio Benchmark (data + held-out eval)](docs/benchmark.md)
 - [Signatures CLI HOWTO](signatures/HOWTO.md)
  
+## Horace Studio Quickstart
+
+So what: paste any writing and get a **score (0–100)** plus a **breakdown** and **suggestions**.
+
+Local UI:
+```bash
+make setup
+make run-ui  # http://127.0.0.1:7861
+```
+
+Local API (for building a frontend):
+```bash
+make run-api  # http://127.0.0.1:8000
+```
+
+Modal setup + remote scoring:
+```bash
+make setup-modal
+make modal-token
+```
+
+More: `docs/studio.md`.
+
 ## Signatures Index
 
 - GPT‑2 (MLX, full): `reports/signatures_gpt2_mlx_full/`
@@ -178,9 +204,13 @@ After both complete, compare per‑doc or per‑author signatures across `data/a
 - Saved outputs go to `data/generated/...` and aggregate at `reports/generated/README.md`.
 
 ## Local Web UI
+- Install deps: `make setup`
 - Launch the full UI with authors/presets/charts: `python tools/ui.py --host 127.0.0.1 --port 7860`
 - Use any HF or MLX model id in the Model box (e.g., `Qwen/Qwen3-1.7B-MLX-bf16`).
 - The earlier minimal demo under `examples/gradio_app.py` has been removed.
+- Launch Horace Studio (paste arbitrary text): `python tools/studio_ui.py --host 127.0.0.1 --port 7861`
+- Launch Horace Studio API (for building a custom frontend): `python -m tools.studio_api --host 127.0.0.1 --port 8000`
+  - Open the built-in page at `http://127.0.0.1:8000/`
 
 ## Make the Final Book
 - Build curated README (Markdown), DOCX, and HTML (one‑page), pulling in figures and latest samples:

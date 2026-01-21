@@ -1,0 +1,137 @@
+# Horace Studio — "Great authors" allowlist (v1)
+# One author name per line. Matching is case-insensitive and normalizes common Gutenberg formats.
+#
+# So what: this provides an explicit great-authors vs others distinction for building datasets.
+
+Jane Austen
+Charlotte Brontë
+Emily Brontë
+Anne Brontë
+Charles Dickens
+William Shakespeare
+Mark Twain
+Herman Melville
+Nathaniel Hawthorne
+Edgar Allan Poe
+Oscar Wilde
+Mary Shelley
+Bram Stoker
+Leo Tolstoy
+Fyodor Dostoyevsky
+Anton Chekhov
+Nikolai Gogol
+Ivan Turgenev
+Alexander Pushkin
+Jules Verne
+H. G. Wells
+Arthur Conan Doyle
+Robert Louis Stevenson
+Lewis Carroll
+Jonathan Swift
+Daniel Defoe
+Samuel Johnson
+John Milton
+Geoffrey Chaucer
+Miguel de Cervantes Saavedra
+Victor Hugo
+Gustave Flaubert
+Honoré de Balzac
+Stendhal
+Alexandre Dumas
+Émile Zola
+Guy de Maupassant
+Voltaire
+Jean-Jacques Rousseau
+Molière
+Johann Wolfgang von Goethe
+Friedrich Schiller
+Heinrich Heine
+E. T. A. Hoffmann
+Hans Christian Andersen
+Brothers Grimm
+Jacob Grimm
+Wilhelm Grimm
+James Fenimore Cooper
+Louisa May Alcott
+Henry James
+Joseph Conrad
+Rudyard Kipling
+H. P. Lovecraft
+Jack London
+Edith Wharton
+George Eliot
+Thomas Hardy
+Charles Kingsley
+George Gissing
+Wilkie Collins
+Anthony Trollope
+Thomas Carlyle
+Edward Gibbon
+Charles Darwin
+Charles Lamb
+William Wordsworth
+Samuel Taylor Coleridge
+William Blake
+Percy Bysshe Shelley
+Mary Wollstonecraft
+John Keats
+Lord Byron
+Alfred Tennyson
+Robert Browning
+Elizabeth Barrett Browning
+Walt Whitman
+Emily Dickinson
+Henry Wadsworth Longfellow
+Ralph Waldo Emerson
+Henry David Thoreau
+Washington Irving
+James Joyce
+Virginia Woolf
+Katherine Mansfield
+D. H. Lawrence
+James Boswell
+Frances Hodgson Burnett
+L. M. Montgomery
+Edmund Burke
+Thomas Paine
+Benjamin Franklin
+Abraham Lincoln
+Frederick Douglass
+W. E. B. Du Bois
+Upton Sinclair
+H. L. Mencken
+Hilaire Belloc
+G. K. Chesterton
+Arthur Machen
+Ambrose Bierce
+O. Henry
+Khalil Gibran
+Hector Hugh Munro
+Saki
+Knut Hamsun
+Selma Lagerlöf
+Rabindranath Tagore
+Robert Frost
+W. B. Yeats
+T. S. Eliot
+Ezra Pound
+Rainer Maria Rilke
+Herman Hesse
+Henrik Ibsen
+August Strindberg
+Sophocles
+Euripides
+Aeschylus
+Homer
+Virgil
+Dante Alighieri
+Giovanni Boccaccio
+Niccolò Machiavelli
+Mary Eleanor Wilkins Freeman
+Kate Chopin
+Stephen Crane
+F. Scott Fitzgerald
+Ernest Hemingway
+William Faulkner
+George Orwell
+H. H. Munro

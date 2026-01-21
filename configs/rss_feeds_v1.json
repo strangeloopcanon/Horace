@@ -1,0 +1,35 @@
+[
+  {
+    "name": "theconversation_us",
+    "url": "https://theconversation.com/us/articles.atom"
+  },
+  {
+    "name": "propublica",
+    "url": "https://www.propublica.org/feeds/propublica/main"
+  },
+  {
+    "name": "bbc_news",
+    "url": "https://feeds.bbci.co.uk/news/rss.xml"
+  },
+  {
+    "name": "guardian_world",
+    "url": "https://www.theguardian.com/world/rss"
+  },
+  {
+    "name": "npr_news",
+    "url": "https://feeds.npr.org/1001/rss.xml"
+  },
+  {
+    "name": "aljazeera_all",
+    "url": "https://www.aljazeera.com/xml/rss/all.xml"
+  },
+  {
+    "name": "arstechnica",
+    "url": "https://feeds.arstechnica.com/arstechnica/index"
+  },
+  {
+    "name": "hn_frontpage",
+    "url": "https://hnrss.org/frontpage"
+  }
+]
+
