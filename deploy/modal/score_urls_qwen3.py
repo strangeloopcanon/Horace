@@ -177,6 +177,91 @@ def _extract_substack_body(html: str) -> Optional[str]:
     return out or None
 
 
+def _extract_div_by_class(html: str, *, class_tokens: Tuple[str, ...]) -> Optional[str]:
+    """Extract plaintext from the first <div> whose class contains a target token.
+
+    This is a lightweight fallback for WordPress-style sites (e.g. Slate Star Codex uses
+    `div.pjgm-postcontent`). We avoid adding third-party HTML parsing deps.
+    """
+    from html.parser import HTMLParser
+
+    targets = tuple(str(t).strip().lower() for t in (class_tokens or ()) if str(t).strip())
+    if not targets:
+        return None
+
+    class _DivParser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=False)
+            self.capture = False
+            self.depth = 0
+            self.ignore_depth = 0
+            self.parts: List[str] = []
+            self._pending_space = False
+            self._block_stack: List[str] = []
+
+        def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
+            t = tag.lower()
+            attr = {k.lower(): (v or "") for k, v in attrs}
+            if self.capture and t in ("script", "style"):
+                self.ignore_depth += 1
+                return
+            if t == "div":
+                cls = (attr.get("class", "") or "").lower()
+                if not self.capture and any(tok in cls for tok in targets):
+                    self.capture = True
+                    self.depth = 1
+                    return
+                if self.capture:
+                    self.depth += 1
+            if not self.capture or self.ignore_depth > 0:
+                return
+            if t in ("p", "li", "blockquote", "h1", "h2", "h3"):
+                self._block_stack.append(t)
+            if t == "br":
+                self.parts.append("\n")
+
+        def handle_endtag(self, tag: str) -> None:
+            t = tag.lower()
+            if not self.capture:
+                return
+            if self.ignore_depth > 0 and t in ("script", "style"):
+                self.ignore_depth -= 1
+                return
+            if t == "div":
+                self.depth -= 1
+                if self.depth <= 0:
+                    self.capture = False
+                    return
+            if self.ignore_depth > 0:
+                return
+            if self._block_stack and self._block_stack[-1] == t:
+                self._block_stack.pop()
+                self.parts.append("\n\n")
+
+        def handle_data(self, data: str) -> None:
+            if not self.capture or self.ignore_depth > 0:
+                return
+            s = _html.unescape(data)
+            if not s:
+                return
+            if s.isspace():
+                self._pending_space = True
+                return
+            if self._pending_space:
+                self.parts.append(" ")
+                self._pending_space = False
+            self.parts.append(s)
+
+    p = _DivParser()
+    p.feed(html)
+    out = "".join(p.parts)
+    out = re.sub(r"[ \t]+\n", "\n", out)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = out.strip()
+    return out or None
+
+
 def _extract_fallback_article(html: str) -> Optional[str]:
     m = re.search(r"<article[^>]*>(.*?)</article>", html, flags=re.S | re.I)
     if not m:
@@ -190,7 +275,11 @@ def _extract_fallback_article(html: str) -> Optional[str]:
 
 
 def _extract_essay(html: str) -> Optional[str]:
-    return _extract_substack_body(html) or _extract_fallback_article(html)
+    return (
+        _extract_substack_body(html)
+        or _extract_div_by_class(html, class_tokens=("pjgm-postcontent", "entry-content", "post-content"))
+        or _extract_fallback_article(html)
+    )
 
 
 def _rubric_for_text(
