@@ -85,6 +85,211 @@ def _detect_content(surface: str, is_punct: bool) -> bool:
     return len(letters) >= 3
 
 
+_WORD_RE = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
+_SYMBOL_CHARS = set("{}[]();<>/\\=+-*#@")
+_PUNCT_CHARS = set(",.;:!?…—–-()[]{}\"'“”‘’")
+
+
+def _slice_text_for_offsets(text: str, offsets: List[Tuple[int, int]]) -> str:
+    if not text or not offsets:
+        return text or ""
+    end = 0
+    for _, ce in offsets:
+        try:
+            e = int(ce)
+        except Exception:
+            continue
+        if e > end:
+            end = e
+    if 0 < end <= len(text):
+        return text[:end]
+    return text
+
+
+def _estimate_syllables(word: str) -> int:
+    w = re.sub(r"[^a-z]", "", (word or "").lower())
+    if not w:
+        return 0
+    vowels = "aeiouy"
+    count = 0
+    prev_vowel = False
+    for ch in w:
+        is_vowel = ch in vowels
+        if is_vowel and not prev_vowel:
+            count += 1
+        prev_vowel = is_vowel
+    if w.endswith("e") and count > 1 and not w.endswith(("le", "ye")):
+        count -= 1
+    return max(1, int(count))
+
+
+def _surface_metrics(text: str, *, sent_spans: List[Tuple[int, int]]) -> Dict[str, Optional[float]]:
+    t = text or ""
+    chars = len(t)
+    if chars <= 0:
+        return {
+            "chars_count": 0.0,
+            "alpha_char_fraction": None,
+            "digit_char_fraction": None,
+            "symbol_char_fraction": None,
+            "whitespace_char_fraction": None,
+            "punct_charset_size": None,
+            "punct_variety_per_1000_chars": None,
+            "word_count": 0.0,
+            "word_unique": 0.0,
+            "word_ttr": None,
+            "word_hapax_ratio": None,
+            "word_top5_frac": None,
+            "adjacent_word_repeat_rate": None,
+            "bigram_repeat_rate": None,
+            "trigram_repeat_rate": None,
+            "word_len_mean": None,
+            "word_len_p90": None,
+            "word_len_cv": None,
+            "syllables_per_word_mean": None,
+            "syllables_per_word_p90": None,
+            "syllables_per_word_cv": None,
+            "sent_words_mean": None,
+            "sent_words_p90": None,
+            "sent_words_cv": None,
+            "line_code_fraction": None,
+            "line_list_fraction": None,
+            "line_heading_fraction": None,
+            "line_quote_fraction": None,
+            "line_indented_fraction": None,
+        }
+
+    alpha = sum(1 for ch in t if ch.isalpha())
+    digit = sum(1 for ch in t if ch.isdigit())
+    whitespace = sum(1 for ch in t if ch.isspace())
+    symbol = sum(1 for ch in t if ch in _SYMBOL_CHARS)
+    punct_chars = {ch for ch in t if ch in _PUNCT_CHARS}
+    punct_size = len(punct_chars)
+    punct_var = float(punct_size) / (float(chars) / 1000.0) if chars >= 200 else None
+
+    words = [m.group(0).lower() for m in _WORD_RE.finditer(t)]
+    if len(words) > 6000:
+        words = words[:6000]
+    n_words = len(words)
+    freq: Dict[str, int] = {}
+    for w in words:
+        freq[w] = freq.get(w, 0) + 1
+    uniq = len(freq)
+    hapax = sum(1 for c in freq.values() if c == 1)
+    top5 = 0
+    if freq:
+        top5 = sum(c for _, c in sorted(freq.items(), key=lambda kv: kv[1], reverse=True)[:5])
+
+    adjacent_rep = None
+    if n_words >= 2:
+        adjacent = sum(1 for i in range(1, n_words) if words[i] == words[i - 1])
+        adjacent_rep = float(adjacent) / float(n_words - 1)
+
+    bigram_rep = None
+    trigram_rep = None
+    if n_words >= 3:
+        bigrams = [(words[i], words[i + 1]) for i in range(n_words - 1)]
+        bigram_rep = 1.0 - (float(len(set(bigrams))) / float(len(bigrams))) if bigrams else None
+        trigrams = [(words[i], words[i + 1], words[i + 2]) for i in range(n_words - 2)]
+        trigram_rep = 1.0 - (float(len(set(trigrams))) / float(len(trigrams))) if trigrams else None
+
+    word_lens = np.array([len(w) for w in words], dtype=np.float32) if words else np.array([], dtype=np.float32)
+    word_len_mean = float(np.mean(word_lens)) if word_lens.size else None
+    word_len_p90 = float(np.percentile(word_lens, 90)) if word_lens.size else None
+    word_len_cv = None
+    if word_lens.size >= 2 and word_len_mean and abs(word_len_mean) > 1e-12:
+        word_len_cv = float(np.std(word_lens) / float(abs(word_len_mean)))
+
+    syll = np.array([_estimate_syllables(w) for w in words], dtype=np.float32) if words else np.array([], dtype=np.float32)
+    syll_mean = float(np.mean(syll)) if syll.size else None
+    syll_p90 = float(np.percentile(syll, 90)) if syll.size else None
+    syll_cv = None
+    if syll.size >= 2 and syll_mean and abs(syll_mean) > 1e-12:
+        syll_cv = float(np.std(syll) / float(abs(syll_mean)))
+
+    sent_counts: List[int] = []
+    for s0, s1 in sent_spans:
+        if not (0 <= int(s0) < int(s1) <= chars):
+            continue
+        seg = t[int(s0) : int(s1)]
+        sent_counts.append(len(_WORD_RE.findall(seg)))
+    sent_words_mean = None
+    sent_words_p90 = None
+    sent_words_cv = None
+    if sent_counts:
+        arr = np.array(sent_counts, dtype=np.float32)
+        sent_words_mean = float(np.mean(arr))
+        sent_words_p90 = float(np.percentile(arr, 90))
+        if arr.size >= 2 and sent_words_mean and abs(sent_words_mean) > 1e-12:
+            sent_words_cv = float(np.std(arr) / float(abs(sent_words_mean)))
+
+    lines = t.split("\n")
+    nonempty = [ln for ln in lines if ln.strip()]
+    n_lines = len(nonempty)
+    code_pat = re.compile(
+        r"^\s*(?:def |class |from |import |package |#include|using |public |private |func |let |var )",
+        flags=re.I,
+    )
+    bullet_pat = re.compile(r"^\s*(?:[-*+]|•|\d+[.)])\s+\S")
+    heading_pat = re.compile(r"^\s*#{1,6}\s+\S")
+    quote_pat = re.compile(r"^\s*>\s+\S")
+    indented_pat = re.compile(r"^(?:\t+|\s{4,})\S")
+
+    code_lines = 0
+    list_lines = 0
+    heading_lines = 0
+    quote_lines = 0
+    indented_lines = 0
+    for ln in nonempty:
+        s = ln.rstrip()
+        if indented_pat.match(s):
+            indented_lines += 1
+        if quote_pat.match(s):
+            quote_lines += 1
+        if bullet_pat.match(s):
+            list_lines += 1
+        if heading_pat.match(s):
+            heading_lines += 1
+        sym = sum(1 for ch in s if ch in _SYMBOL_CHARS)
+        a = sum(1 for ch in s if ch.isalpha())
+        sym_ratio = float(sym) / float(max(1, a + sym))
+        if code_pat.match(s) or sym_ratio >= 0.33:
+            code_lines += 1
+
+    denom_lines = float(max(1, n_lines))
+    return {
+        "chars_count": float(chars),
+        "alpha_char_fraction": float(alpha) / float(chars),
+        "digit_char_fraction": float(digit) / float(chars),
+        "symbol_char_fraction": float(symbol) / float(chars),
+        "whitespace_char_fraction": float(whitespace) / float(chars),
+        "punct_charset_size": float(punct_size),
+        "punct_variety_per_1000_chars": float(punct_var) if punct_var is not None else None,
+        "word_count": float(n_words),
+        "word_unique": float(uniq),
+        "word_ttr": (float(uniq) / float(n_words)) if n_words else None,
+        "word_hapax_ratio": (float(hapax) / float(n_words)) if n_words else None,
+        "word_top5_frac": (float(top5) / float(n_words)) if n_words else None,
+        "adjacent_word_repeat_rate": adjacent_rep,
+        "bigram_repeat_rate": float(bigram_rep) if bigram_rep is not None else None,
+        "trigram_repeat_rate": float(trigram_rep) if trigram_rep is not None else None,
+        "word_len_mean": word_len_mean,
+        "word_len_p90": word_len_p90,
+        "word_len_cv": word_len_cv,
+        "syllables_per_word_mean": syll_mean,
+        "syllables_per_word_p90": syll_p90,
+        "syllables_per_word_cv": syll_cv,
+        "sent_words_mean": sent_words_mean,
+        "sent_words_p90": sent_words_p90,
+        "sent_words_cv": sent_words_cv,
+        "line_code_fraction": float(code_lines) / denom_lines if n_lines else None,
+        "line_list_fraction": float(list_lines) / denom_lines if n_lines else None,
+        "line_heading_fraction": float(heading_lines) / denom_lines if n_lines else None,
+        "line_quote_fraction": float(quote_lines) / denom_lines if n_lines else None,
+        "line_indented_fraction": float(indented_lines) / denom_lines if n_lines else None,
+    }
+
+
 def _line_pos_for_char(line_spans: List[Tuple[int, int]], cs: int, ce: int) -> str:
     if not line_spans:
         return "middle"
@@ -190,9 +395,12 @@ def analyze_text(
         input_ids = input_ids[:max_input_tokens]
         offsets = offsets[:max_input_tokens]
 
-    # Precompute spans
-    line_spans = _line_spans(text)
-    sent_spans = _sentence_spans(text)
+    text_used = _slice_text_for_offsets(text, offsets)
+
+    # Precompute spans (align to the analyzed prefix if truncated)
+    line_spans = _line_spans(text_used)
+    sent_spans = _sentence_spans(text_used)
+    surface_metrics = _surface_metrics(text_used, sent_spans=sent_spans)
 
     # Sliding-window settings (kept similar to tools/analyze.py)
     max_ctx = min(int(context), int(getattr(model, "max_context")() or context), 2048)
@@ -485,16 +693,17 @@ def analyze_text(
         "ipi_p50": ipi_p50,
         "cooldown_entropy_drop_3": cooldown_drop_3,
     }
+    doc_metrics.update(surface_metrics)
 
     # Cohesion delta (shuffled units) – expensive, but useful; run once if possible.
     if compute_cohesion:
         try:
             kind = "poem" if doc_type_norm == "poem" else "prose"
-            units = paragraph_units(text, kind)
+            units = paragraph_units(text_used, kind)
             if len(units) >= 3:
                 shuffled = units[:]
                 random.Random(0).shuffle(shuffled)
-                shuf_text = "".join(text[s:e] for s, e in shuffled)
+                shuf_text = "".join(text_used[s:e] for s, e in shuffled)
                 enc_s = model.tokenize(shuf_text)
                 ids_s = list(enc_s.get("input_ids") or [])
                 if max_input_tokens and len(ids_s) > max_input_tokens:
@@ -561,7 +770,7 @@ def analyze_text(
         return means, token_counts, cv, len_cv
 
     sent_means, sent_counts, burst_cv_sent, len_cv_sent = _segment_series(sent_spans)
-    para_spans = paragraph_units(text, "prose")
+    para_spans = paragraph_units(text_used, "prose")
     para_means, para_counts, burst_cv_para, len_cv_para = _segment_series(para_spans)
     line_means, line_counts, burst_cv_line, len_cv_line = _segment_series(line_spans)
 

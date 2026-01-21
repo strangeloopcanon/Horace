@@ -104,15 +104,38 @@ def suggest_edits(
     # 4) Cohesion (order sensitivity)
     coh = score.categories.get("cohesion")
     coh_delta = m("cohesion_delta")
+    tri_rep = m("trigram_repeat_rate")
     if coh is not None and coh < 0.55:
-        why = "Word-order cohesion is weaker than the baseline; shuffled order would read similarly."
+        why = "Order-level cohesion and phrase novelty differ from the baseline."
         if coh_delta and coh_delta.percentile is not None:
             why = f"Cohesion delta is {_pctl_hint(coh_delta.percentile)} vs baseline."
+        if tri_rep and tri_rep.percentile is not None and tri_rep.percentile > 80:
+            why = (why + " ") if why else ""
+            why += f"Trigram repetition is {_pctl_hint(tri_rep.percentile)} vs baseline."
         what = (
             "Thread 1–2 motifs across the piece (a repeated object, a verb family, or a sensory register). "
             "Add one intentional callback near the end that reuses earlier diction in a new meaning."
         )
         suggestions.append(Suggestion(title="Increase connective tissue", why=why, what_to_try=what))
+
+    # 4b) Distinctiveness (lexical diversity / over-repetition)
+    dist = score.categories.get("distinctiveness")
+    ttr = m("word_ttr")
+    hapax = m("word_hapax_ratio")
+    if dist is not None and dist < 0.55:
+        why_parts = []
+        if ttr:
+            why_parts.append(f"TTR {_pctl_hint(ttr.percentile)}")
+        if hapax:
+            why_parts.append(f"hapax {_pctl_hint(hapax.percentile)}")
+        if tri_rep and tri_rep.percentile is not None and tri_rep.percentile > 80:
+            why_parts.append(f"repeated phrases {_pctl_hint(tri_rep.percentile)}")
+        why = "Diction variety differs from the reference band" + (": " + ", ".join(why_parts) if why_parts else ".")
+        what = (
+            "Mark your 5 most repeated content words and replace 2 of them with *more specific* nouns/verbs. "
+            "Then cut 1–2 generic modifiers and add one image-detail that anchors the paragraph."
+        )
+        suggestions.append(Suggestion(title="Increase diction variety", why=why, what_to_try=what))
 
     # 5) Broader-level burstiness (sentence rhythm)
     burst_cv = ((segments.get("sentences") or {}).get("burst_cv")) if segments else None
