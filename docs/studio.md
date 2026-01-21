@@ -205,6 +205,18 @@ Distill the (slow) rubric into a single fast scorer (Qwen3 + LoRA example):
   --lora-r 16 --lora-alpha 32 --lora-dropout 0.05 --grad-accum-steps 16 --gradient-checkpointing --bf16 --merge-lora
 ```
 
+### Modal training for the single scorer model (recommended: mixed supervision)
+
+So what: pure rubric distillation can drift away from the “great authors vs others” anchor. This job:
+- starts from the best aligned scorer (`/vol/models/scorer_qwen3_great_other_v1`)
+- adds rubric-v2 teacher labels on Standard Ebooks + RSS (+ light corruptions)
+- keeps a held-out great/other test split clean for AUC sanity checks
+
+Run:
+```bash
+make modal-train-scorer-qwen3-mixed-supervision
+```
+
 ### Modal “train” for the scorer (now: calibrator)
 
 Before training a full reward model, you can train a tiny **calibrator** that learns a better overall score from the rubric outputs (still deterministic at inference).

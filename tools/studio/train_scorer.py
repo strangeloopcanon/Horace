@@ -28,6 +28,14 @@ def _sigmoid(x: np.ndarray) -> np.ndarray:
     return out
 
 
+def _tqdm_disabled() -> bool:
+    for k in ("HORACE_TQDM_DISABLE", "TQDM_DISABLE"):
+        v = str(os.environ.get(k) or "").strip().lower()
+        if v in ("1", "true", "yes", "y", "on"):
+            return True
+    return False
+
+
 def _auc_roc(y_true: np.ndarray, y_score: np.ndarray) -> Optional[float]:
     y = y_true.astype(np.int64, copy=False)
     s = y_score.astype(np.float64, copy=False)
@@ -427,7 +435,7 @@ def train_scorer(
     optim.zero_grad(set_to_none=True)
     for epoch in range(max(1, int(epochs))):
         model.train()
-        pbar = tqdm(train_loader, desc=f"epoch {epoch+1}/{epochs}", leave=False)
+        pbar = tqdm(train_loader, desc=f"epoch {epoch+1}/{epochs}", leave=False, disable=_tqdm_disabled())
         for micro_step, batch in enumerate(pbar, start=1):
             labels = batch.pop("labels").to(dev)
             batch.pop("meta", None)

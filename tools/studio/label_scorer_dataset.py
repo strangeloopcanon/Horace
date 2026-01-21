@@ -5,6 +5,7 @@ import json
 import math
 import random
 import time
+import os
 from pathlib import Path
 from typing import List, Optional, Sequence
 
@@ -13,6 +14,14 @@ from tqdm import tqdm
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.dataset_utils import iter_jsonl, make_sample_id
 from tools.studio.windowed_rubric import windowed_rubric_for_text
+
+
+def _tqdm_disabled() -> bool:
+    for k in ("HORACE_TQDM_DISABLE", "TQDM_DISABLE"):
+        v = str(os.environ.get(k) or "").strip().lower()
+        if v in ("1", "true", "yes", "y", "on"):
+            return True
+    return False
 
 
 def _pick_rows(rows: List[dict], *, seed: int, max_samples: Optional[int]) -> List[dict]:
@@ -65,7 +74,7 @@ def label_jsonl(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     n = 0
     with out_path.open("w", encoding="utf-8") as f:
-        for r in tqdm(picked, desc=f"label {in_path.name}", unit="sample"):
+        for r in tqdm(picked, desc=f"label {in_path.name}", unit="sample", disable=_tqdm_disabled()):
             text = str(r.get("text") or "")
             if not text.strip():
                 continue
