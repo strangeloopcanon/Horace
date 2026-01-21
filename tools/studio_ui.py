@@ -97,6 +97,36 @@ def _md_score(score, baseline_model: str, doc_type: str, *, tokens_count: int, t
     return "\n".join(lines)
 
 
+def _md_trained_breakdown(trained_score) -> str:
+    by_label = getattr(trained_score, "head_probs_by_label", None)
+    if not isinstance(by_label, dict) or not by_label:
+        return ""
+
+    labels = list(getattr(trained_score, "head_labels", ()) or ())
+    if not labels:
+        labels = list(by_label.keys())
+
+    lines = []
+    lines.append("**Trained breakdown**")
+    for lab in labels:
+        p = by_label.get(lab)
+        if isinstance(p, (int, float)):
+            lines.append(f"- `{lab}`: {100.0 * float(p):.1f}/100")
+
+    pmeta = getattr(trained_score, "primary_from_heads", None)
+    if isinstance(pmeta, dict) and pmeta.get("kind") == "weighted_sum":
+        weights = pmeta.get("weights")
+        if isinstance(weights, dict) and weights:
+            w_parts = []
+            for k, v in weights.items():
+                if isinstance(v, (int, float)):
+                    w_parts.append(f"{k}={float(v):.2f}")
+            if w_parts:
+                lines.append(f"_Primary = weighted sum ({', '.join(w_parts)})_")
+
+    return "\n".join(lines)
+
+
 def _md_profile(score) -> str:
     # Show rubric metrics with percentiles
     lines = []
@@ -176,6 +206,10 @@ def run_analyze(
         score_md.append(f"- prob: `{trained_score.prob_0_1:.3f}`")
         score_md.append(f"- model: `{trained_score.model_path_or_id}`")
         score_md.append(f"- device: `{trained_score.device}`")
+        breakdown = _md_trained_breakdown(trained_score)
+        if breakdown:
+            score_md.append("")
+            score_md.append(breakdown)
         out_json = {"trained_score": asdict(trained_score)}
         return "\n".join(score_md), "", "", "", None, out_json
 
@@ -223,11 +257,14 @@ def run_analyze(
         except Exception as e:
             score_md += f"\n\n_Calibrator failed: {type(e).__name__}: {e}_"
     if trained_score is not None:
-        score_md = (
+        breakdown = _md_trained_breakdown(trained_score)
+        prefix = (
             f"### Primary score: **{trained_score.score_0_100:.1f}/100** (trained scorer)\n"
-            f"- model: `{trained_score.model_path_or_id}`\n\n"
-            + score_md
+            f"- model: `{trained_score.model_path_or_id}`\n"
         )
+        if breakdown:
+            prefix += "\n" + breakdown + "\n"
+        score_md = prefix + "\n" + score_md
     if trained_err is not None:
         score_md += f"\n\n_Trained scorer failed: {trained_err}_"
     profile_md = _md_profile(score)

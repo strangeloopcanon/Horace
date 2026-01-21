@@ -130,6 +130,12 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
                 "model_path_or_id": ts.model_path_or_id,
                 "device": ts.device,
                 "max_length": ts.max_length,
+                "n_windows": ts.n_windows,
+                "windows_capped": ts.windows_capped,
+                "head_labels": list(ts.head_labels),
+                "head_probs_0_1": list(ts.head_probs_0_1),
+                "head_probs_by_label": dict(ts.head_probs_by_label),
+                "primary_from_heads": dict(ts.primary_from_heads),
             }
         except Exception as e:
             trained_err = f"{type(e).__name__}: {e}"

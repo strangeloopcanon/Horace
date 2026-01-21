@@ -1,4 +1,4 @@
-.PHONY: setup setup-modal modal-token check test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-qwen3-great-other modal-train-scorer-qwen3-mixed-supervision
+.PHONY: setup setup-modal modal-token check test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-qwen3-great-other modal-train-scorer-qwen3-mixed-supervision modal-train-scorer-qwen3-multihead
 .PHONY: modal-score-urls
 
 VENV ?= .venv
@@ -39,6 +39,8 @@ RSS_MAX_ITEMS_PER_FEED ?= 80
 RSS_EXCERPTS_PER_ITEM ?= 1
 RSS_SLEEP_S ?= 0.0
 TRAINED_SCORER_MODEL ?= /vol/models/scorer_standardebooks_distilled
+SCORER_QWEN3_MULTIHEAD_OUT ?= /vol/models/scorer_qwen3_multihead_v1
+SCORER_QWEN3_MULTIHEAD_ARGS ?=
 REBUILD ?= 0
 DISTILL_DIR_V4_SMOKE ?= data/benchmarks/studio_benchmark_v4_distill_smoke
 
@@ -216,6 +218,9 @@ modal-train-scorer-qwen3-great-other: setup-modal
 
 modal-train-scorer-qwen3-mixed-supervision: setup-modal
 	$(MODAL) run deploy/modal/studio_train_scorer_qwen3_mixed_supervision.py --out-dir /vol/models/scorer_qwen3_mixed_supervision_v1
+
+modal-train-scorer-qwen3-multihead: setup-modal
+	$(MODAL) run deploy/modal/studio_train_scorer_qwen3_multihead.py --out-dir $(SCORER_QWEN3_MULTIHEAD_OUT) $(SCORER_QWEN3_MULTIHEAD_ARGS)
 
 clean:
 	rm -rf $(VENV) .pytest_cache __pycache__

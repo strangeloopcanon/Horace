@@ -392,6 +392,10 @@ def main(
                 "max_length": ts.get("max_length"),
                 "n_windows": ts.get("n_windows"),
                 "windows_capped": ts.get("windows_capped"),
+                "head_labels": ts.get("head_labels"),
+                "head_probs_0_1": ts.get("head_probs_0_1"),
+                "head_probs_by_label": ts.get("head_probs_by_label"),
+                "primary_from_heads": ts.get("primary_from_heads"),
             }
         except Exception as e:
             trained_err = f"{type(e).__name__}: {e}"

@@ -217,6 +217,17 @@ Run:
 make modal-train-scorer-qwen3-mixed-supervision
 ```
 
+### Modal training for one score + breakdown (multi-head)
+
+So what: instead of mixing “greatness” and rubric teacher into one scalar target, train a single model with multiple outputs:
+- `greatness`: great_author vs other_author (primary fast score)
+- `rubric_overall` + `rubric_*` categories: fast approximation of the rubric breakdown
+
+Run:
+```bash
+make modal-train-scorer-qwen3-multihead
+```
+
 ### Modal “train” for the scorer (now: calibrator)
 
 Before training a full reward model, you can train a tiny **calibrator** that learns a better overall score from the rubric outputs (still deterministic at inference).

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import math
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -116,6 +117,10 @@ class ScorerResult:
     window_stride: int = 0
     window_probs: Tuple[float, ...] = ()
     windows_capped: bool = False
+    head_labels: Tuple[str, ...] = ()
+    head_probs_0_1: Tuple[float, ...] = ()
+    head_probs_by_label: Dict[str, float] = field(default_factory=dict)
+    primary_from_heads: Dict[str, Any] = field(default_factory=dict)
 
 
 def score_with_scorer(
@@ -165,22 +170,101 @@ def score_with_scorer(
     tensors = {k: v.to(dev) for k, v in tensors.items()}
     with torch.no_grad():
         out = model(**tensors)
-        logits = out.logits.squeeze(-1)
+        logits = out.logits
+        if logits.ndim == 1:
+            logits = logits.unsqueeze(-1)
         probs = torch.sigmoid(logits).detach().cpu().numpy()
 
-    ps = [float(x) for x in probs.reshape(-1).tolist()] if probs.size else []
-    ps = [0.0 if not math.isfinite(p) else max(0.0, min(1.0, float(p))) for p in ps]
-    p = float(sum(ps) / len(ps)) if ps else 0.0
+    if probs.ndim == 1:
+        probs = probs.reshape(-1, 1)
+
+    n_heads = int(probs.shape[1]) if probs.size else 1
+    head_labels: List[str] = []
+    try:
+        id2label = getattr(model.config, "id2label", None)
+        if isinstance(id2label, dict):
+            head_labels = [str(id2label.get(i) or f"head_{i}") for i in range(n_heads)]
+    except Exception:
+        head_labels = []
+    if not head_labels:
+        head_labels = [f"head_{i}" for i in range(n_heads)]
+
+    mean_probs = probs.mean(axis=0).astype(float).tolist() if probs.size else [0.0] * n_heads
+    mean_probs = [0.0 if not math.isfinite(p) else max(0.0, min(1.0, float(p))) for p in mean_probs]
+    head_probs_by_label = {lab: float(p) for lab, p in zip(head_labels, mean_probs)}
+
+    primary_from_heads: Dict[str, Any] = {}
+    primary_prob = float(mean_probs[0]) if mean_probs else 0.0
+
+    if n_heads > 1:
+        try:
+            cfg = getattr(model.config, "horace_primary", None)
+            if isinstance(cfg, dict) and cfg.get("kind") == "weighted_sum":
+                weights = cfg.get("heads")
+                if isinstance(weights, dict):
+                    total_w = 0.0
+                    acc = 0.0
+                    used: Dict[str, float] = {}
+                    for lab, w in weights.items():
+                        if lab not in head_probs_by_label:
+                            continue
+                        wf = float(w)
+                        if not math.isfinite(wf) or wf <= 0:
+                            continue
+                        used[str(lab)] = float(wf)
+                        total_w += wf
+                        acc += wf * float(head_probs_by_label[str(lab)])
+                    if total_w > 0:
+                        primary_prob = float(acc / total_w)
+                        primary_from_heads = {"kind": "weighted_sum", "weights": used}
+        except Exception:
+            primary_from_heads = {}
+
+    primary_prob = 0.0 if not math.isfinite(primary_prob) else max(0.0, min(1.0, float(primary_prob)))
+
+    # Per-window primary probs (for debugging/plots)
+    window_probs: List[float] = []
+    if probs.size:
+        if n_heads <= 1 or not primary_from_heads:
+            window_probs = [float(x) for x in probs[:, 0].astype(float).tolist()]
+        else:
+            weights = primary_from_heads.get("weights") or {}
+            if isinstance(weights, dict):
+                total_w = float(sum(float(w) for w in weights.values() if isinstance(w, (int, float)) and float(w) > 0))
+                if total_w > 0:
+                    acc = np.zeros((probs.shape[0],), dtype=np.float64)
+                    for lab, w in weights.items():
+                        if lab not in head_probs_by_label:
+                            continue
+                        try:
+                            idx = head_labels.index(str(lab))
+                        except ValueError:
+                            continue
+                        wf = float(w)
+                        if not math.isfinite(wf) or wf <= 0:
+                            continue
+                        acc += wf * probs[:, idx].astype(np.float64)
+                    window_probs = (acc / float(total_w)).astype(float).tolist()
+                else:
+                    window_probs = [float(x) for x in probs[:, 0].astype(float).tolist()]
+            else:
+                window_probs = [float(x) for x in probs[:, 0].astype(float).tolist()]
+
+    window_probs = [0.0 if not math.isfinite(p) else max(0.0, min(1.0, float(p))) for p in window_probs]
     return ScorerResult(
-        score_0_100=float(100.0 * p),
-        prob_0_1=float(p),
+        score_0_100=float(100.0 * primary_prob),
+        prob_0_1=float(primary_prob),
         model_path_or_id=str(model_path_or_id),
         device=str(dev),
         max_length=int(max_length),
         doc_type=dt,
         normalized=bool(normalize_text),
-        n_windows=int(len(ps)),
+        n_windows=int(len(window_probs)),
         window_stride=int(stride_len),
-        window_probs=tuple(ps[:64]),
+        window_probs=tuple(window_probs[:64]),
         windows_capped=bool(windows_capped),
+        head_labels=tuple(head_labels),
+        head_probs_0_1=tuple(float(x) for x in mean_probs),
+        head_probs_by_label=head_probs_by_label,
+        primary_from_heads=primary_from_heads,
     )
