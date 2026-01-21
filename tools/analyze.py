@@ -157,6 +157,216 @@ class HFBackend(ModelBackend):
             new_cache = out.past_key_values if hasattr(out, 'past_key_values') else out.past
             return logits, new_cache
 
+    def metrics_for_input_ids(self, input_ids: List[int], k: int, nucleus_p: float, nucleus_topk_k: int = 2048):
+        """Compute per-token metrics for a teacher-forced input.
+
+        Returns arrays aligned to labels input_ids[1:], i.e. length (L-1).
+
+        Implementation notes:
+        - Uses KV-cache incremental inference to avoid materializing [T, V] logits,
+          which can blow up memory for interactive workloads (UI/API, Modal).
+        - Computes exact logp_true and entropy per step.
+        """
+        use_full_logits = str(os.environ.get("HORACE_HF_FULL_LOGITS") or "").strip().lower() in ("1", "true", "yes")
+        if use_full_logits:
+            return self._metrics_for_input_ids_full_logits(
+                input_ids=input_ids,
+                k=k,
+                nucleus_p=nucleus_p,
+                nucleus_topk_k=nucleus_topk_k,
+            )
+        torch = self.torch
+        # Ensure python ints
+        try:
+            input_ids = [int(x) for x in input_ids]
+        except Exception:
+            pass
+        if len(input_ids) < 2:
+            return {
+                'p_true': np.zeros((0,), dtype=np.float32),
+                'logp': np.zeros((0,), dtype=np.float32),
+                'H': np.zeros((0,), dtype=np.float32),
+                'eff': np.zeros((0,), dtype=np.float32),
+                'rk': np.zeros((0,), dtype=np.int32),
+                'tk_vals': np.zeros((0, 0), dtype=np.float32),
+                'tk_idx': np.zeros((0, 0), dtype=np.int32),
+                'cum_topk': np.zeros((0,), dtype=np.float32),
+                'tail_mass': np.zeros((0,), dtype=np.float32),
+                'w': np.zeros((0,), dtype=np.int32),
+            }
+
+        T = len(input_ids) - 1
+        tk_k = int(max(1, min(int(k), int(self.vocab_size()))))
+        topk_k = int(max(tk_k, min(int(nucleus_topk_k), int(self.vocab_size()))))
+
+        p_true = np.zeros((T,), dtype=np.float32)
+        logp = np.zeros((T,), dtype=np.float32)
+        H = np.zeros((T,), dtype=np.float32)
+        eff = np.zeros((T,), dtype=np.float32)
+        rk = np.zeros((T,), dtype=np.int32)
+        tk_vals = np.zeros((T, tk_k), dtype=np.float32)
+        tk_idx = np.zeros((T, tk_k), dtype=np.int32)
+        cum_topk = np.zeros((T,), dtype=np.float32)
+        tail_mass = np.zeros((T,), dtype=np.float32)
+        w = np.zeros((T,), dtype=np.int32)
+
+        nuc_p = float(nucleus_p)
+
+        with torch.no_grad():
+            # Prime cache with the first token to get logits for the 2nd token.
+            first = torch.tensor([[input_ids[0]]], dtype=torch.long, device=self.dev)
+            out = self.model(input_ids=first, use_cache=True)
+            cache = out.past_key_values if hasattr(out, 'past_key_values') else out.past
+            logits = out.logits[0, -1, :]  # predicts token 1
+
+            for t in range(T):
+                label = int(input_ids[t + 1])
+                lf = logits.float()
+                logZ = torch.logsumexp(lf, dim=-1)
+                logit_true = lf[label]
+                lp = (logit_true - logZ).to(dtype=torch.float32)
+                logp[t] = float(lp.item())
+                pt = torch.exp(lp)
+                p_true[t] = float(pt.item())
+
+                # Entropy: H = logZ - E[logits] under softmax
+                probs = torch.softmax(lf, dim=-1)
+                El = torch.sum(probs * lf)
+                Ht = (logZ - El).to(dtype=torch.float32)
+                H[t] = float(Ht.item())
+                eff[t] = float(torch.exp(Ht).item())
+
+                rk[t] = int(torch.sum(lf >= logit_true).to(dtype=torch.int32).item())
+
+                # Top-k probs under full normalization
+                tk_logit, tk_id = torch.topk(lf, k=tk_k, dim=-1)
+                tk_p = torch.exp((tk_logit - logZ).to(dtype=torch.float32))
+                tk_vals[t, :] = tk_p.detach().to('cpu').numpy().astype(np.float32, copy=False)
+                tk_idx[t, :] = tk_id.to(dtype=torch.int32).detach().to('cpu').numpy().astype(np.int32, copy=False)
+                ctk = float(torch.sum(tk_p).item())
+                cum_topk[t] = ctk
+                tail_mass[t] = float(1.0 - ctk)
+
+                # Approx nucleus width using top-k sorted probs (k large enough to cover p mass)
+                if topk_k == tk_k:
+                    nuc_pvals = tk_p
+                else:
+                    nuc_logit, _ = torch.topk(lf, k=topk_k, dim=-1)
+                    nuc_pvals = torch.exp((nuc_logit - logZ).to(dtype=torch.float32))
+                csum = torch.cumsum(nuc_pvals, dim=-1)
+                hit = csum >= nuc_p
+                if bool(torch.any(hit).item()):
+                    wi = int(torch.argmax(hit.to(dtype=torch.int32)).item()) + 1
+                else:
+                    wi = int(topk_k)
+                w[t] = wi
+
+                # Advance cache except after the last label
+                if t < T - 1:
+                    nxt = torch.tensor([[label]], dtype=torch.long, device=self.dev)
+                    out = self.model(input_ids=nxt, past_key_values=cache, use_cache=True)
+                    cache = out.past_key_values if hasattr(out, 'past_key_values') else out.past
+                    logits = out.logits[0, -1, :]
+
+        return {
+            'p_true': p_true,
+            'logp': logp,
+            'H': H,
+            'eff': eff,
+            'rk': rk,
+            'tk_vals': tk_vals,
+            'tk_idx': tk_idx,
+            'cum_topk': cum_topk,
+            'tail_mass': tail_mass,
+            'w': w,
+        }
+
+    def _metrics_for_input_ids_full_logits(
+        self,
+        *,
+        input_ids: List[int],
+        k: int,
+        nucleus_p: float,
+        nucleus_topk_k: int,
+    ) -> Dict[str, np.ndarray]:
+        """Vectorized metrics path using a single forward pass for the full sequence.
+
+        So what: speeds up offline labeling/training on GPU by avoiding per-token Python loops.
+        """
+        torch = self.torch
+
+        # Ensure python ints
+        try:
+            input_ids = [int(x) for x in input_ids]
+        except Exception:
+            pass
+        if len(input_ids) < 2:
+            return {
+                'p_true': np.zeros((0,), dtype=np.float32),
+                'logp': np.zeros((0,), dtype=np.float32),
+                'H': np.zeros((0,), dtype=np.float32),
+                'eff': np.zeros((0,), dtype=np.float32),
+                'rk': np.zeros((0,), dtype=np.int32),
+                'tk_vals': np.zeros((0, 0), dtype=np.float32),
+                'tk_idx': np.zeros((0, 0), dtype=np.int32),
+                'cum_topk': np.zeros((0,), dtype=np.float32),
+                'tail_mass': np.zeros((0,), dtype=np.float32),
+                'w': np.zeros((0,), dtype=np.int32),
+            }
+
+        T = len(input_ids) - 1
+        vocab = int(self.vocab_size())
+        tk_k = int(max(1, min(int(k), vocab)))
+        topk_k = int(max(tk_k, min(int(nucleus_topk_k), vocab)))
+        nuc_p = float(nucleus_p)
+
+        with torch.no_grad():
+            ids = torch.tensor([input_ids], dtype=torch.long, device=self.dev)
+            out = self.model(input_ids=ids)
+            logits_full = out.logits[0]  # [L, V]
+            pred = logits_full[:-1, :]  # [T, V]
+            labels = torch.tensor(input_ids[1:], dtype=torch.long, device=self.dev)  # [T]
+
+            pred_f = pred.float()
+            log_probs = torch.log_softmax(pred_f, dim=-1)  # [T, V]
+            logp_true = log_probs.gather(-1, labels.unsqueeze(-1)).squeeze(-1)  # [T]
+
+            probs = torch.exp(log_probs)
+            H = -(probs * log_probs).sum(dim=-1)  # [T]
+            eff = torch.exp(H)
+
+            logit_true = pred_f.gather(-1, labels.unsqueeze(-1)).squeeze(-1)  # [T]
+            rk = torch.sum(pred_f >= logit_true.unsqueeze(-1), dim=-1).to(dtype=torch.int32)  # [T]
+
+            top_logit, top_id = torch.topk(pred_f, k=topk_k, dim=-1)  # [T, topk_k]
+            top_logp = log_probs.gather(-1, top_id)  # [T, topk_k]
+            top_p = torch.exp(top_logp).to(dtype=torch.float32)  # [T, topk_k]
+
+            tk_vals_t = top_p[:, :tk_k]
+            tk_idx_t = top_id[:, :tk_k].to(dtype=torch.int32)
+            cum_topk_t = tk_vals_t.sum(dim=-1).to(dtype=torch.float32)
+            tail_mass_t = (1.0 - cum_topk_t).to(dtype=torch.float32)
+
+            csum = torch.cumsum(top_p, dim=-1)
+            hit = csum >= nuc_p
+            wi = torch.argmax(hit.to(dtype=torch.int32), dim=-1) + 1
+            has_hit = torch.any(hit, dim=-1)
+            wi = torch.where(has_hit, wi, torch.full_like(wi, int(topk_k)))
+            w = wi.to(dtype=torch.int32)
+
+            return {
+                'p_true': torch.exp(logp_true).to(dtype=torch.float32).detach().to('cpu').numpy().astype(np.float32, copy=False),
+                'logp': logp_true.to(dtype=torch.float32).detach().to('cpu').numpy().astype(np.float32, copy=False),
+                'H': H.to(dtype=torch.float32).detach().to('cpu').numpy().astype(np.float32, copy=False),
+                'eff': eff.to(dtype=torch.float32).detach().to('cpu').numpy().astype(np.float32, copy=False),
+                'rk': rk.detach().to('cpu').numpy().astype(np.int32, copy=False),
+                'tk_vals': tk_vals_t.detach().to('cpu').numpy().astype(np.float32, copy=False),
+                'tk_idx': tk_idx_t.detach().to('cpu').numpy().astype(np.int32, copy=False),
+                'cum_topk': cum_topk_t.detach().to('cpu').numpy().astype(np.float32, copy=False),
+                'tail_mass': tail_mass_t.detach().to('cpu').numpy().astype(np.float32, copy=False),
+                'w': w.detach().to('cpu').numpy().astype(np.int32, copy=False),
+            }
+
 
 def pick_backend(model_id: str, prefer_mlx: bool = True, device: Optional[str] = None, backend: Optional[str] = None) -> ModelBackend:
     # backend: 'auto'|'mlx'|'hf' (None treated as 'auto')
@@ -200,6 +410,13 @@ class MLXBackend(ModelBackend):
                 self.hf_tok = AutoTokenizer.from_pretrained(model_id, use_fast=True, trust_remote_code=True)
             except TypeError:
                 self.hf_tok = AutoTokenizer.from_pretrained(model_id, use_fast=True)
+            # Silence long-seq warning by bumping max length if available
+            try:
+                if hasattr(self.hf_tok, 'model_max_length') and isinstance(self.hf_tok.model_max_length, int):
+                    if self.hf_tok.model_max_length < 10**8:
+                        self.hf_tok.model_max_length = 10**8
+            except Exception:
+                pass
         except Exception:
             self.hf_tok = None
 

@@ -1,13 +1,23 @@
 # Environment and OS
 .env
 .DS_Store
+.venv/
 __pycache__/
 *.pyc
+.beads/
+AGENTS.md
 
 # Caches and generated data
 mlx_cache/
 data/generated/
 data/grpo_runs/
+data/baselines/
+data/eval_sets/
+data/benchmarks/
+data/cache/
+data/baselines_smoke*/
+data/corpora/
+models/
 
 # GEPA run outputs (keep latest snapshot only)
 experiments/gepa_gemma3/outputs/
