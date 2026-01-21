@@ -294,10 +294,9 @@ def _rubric_for_text(
     compute_cohesion: bool,
 ) -> Dict[str, Any]:
     # Local rubric computation (deterministic); Modal is used only for the trained scorer inference.
-    from tools.studio.analyze import analyze_text
     from tools.studio.baselines import load_baseline_cached
     from tools.studio.critique import suggest_edits
-    from tools.studio.score import score_text
+    from tools.studio.windowed_rubric import windowed_rubric_for_text
 
     ident = (baseline_model or "").strip() or "gpt2"
     p = Path(ident)
@@ -306,16 +305,18 @@ def _rubric_for_text(
     else:
         baseline = load_baseline_cached(ident)
 
-    analysis = analyze_text(
+    wr = windowed_rubric_for_text(
         text,
-        model_id=str(scoring_model_id),
         doc_type=str(doc_type),
+        scoring_model_id=str(scoring_model_id),
+        baseline=baseline,
         backend=str(backend),
         max_input_tokens=int(max_input_tokens),
         normalize_text=bool(normalize_text),
         compute_cohesion=bool(compute_cohesion),
     )
-    score = score_text(analysis["doc_metrics"], baseline, doc_type=str(doc_type))
+    analysis = wr.worst_analysis
+    score = wr.worst
     critique = suggest_edits(
         doc_metrics=analysis["doc_metrics"],
         score=score,
@@ -324,18 +325,23 @@ def _rubric_for_text(
     )
     return {
         "analysis_meta": {
-            "model_id": analysis.get("model_id"),
+            "model_id": analysis.get("model_id") or str(scoring_model_id),
             "truncated": bool(analysis.get("truncated")),
             "tokens_count": int((analysis.get("doc_metrics") or {}).get("tokens_count") or 0),
-            "text_normalization": analysis.get("text_normalization") or {},
+            "text_normalization": wr.text_normalization or {},
         },
         "rubric_score": {
-            "overall_0_100": float(score.overall_0_100),
-            "categories": dict(score.categories),
+            "overall_0_100": float(wr.aggregate.overall_0_100),
+            "categories": dict(wr.aggregate.categories),
             "metrics": {
                 k: {"value": v.value, "percentile": v.percentile, "score_0_1": v.score_0_1, "mode": v.mode}
                 for k, v in score.metrics.items()
             },
+        },
+        "rubric_windows": {
+            "worst_window_index": int(wr.worst_window_index),
+            "best_window_index": int(wr.best_window_index),
+            "windows": list(wr.windows),
         },
         "critique": critique,
     }

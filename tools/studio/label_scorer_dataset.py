@@ -10,10 +10,9 @@ from typing import List, Optional, Sequence
 
 from tqdm import tqdm
 
-from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.dataset_utils import iter_jsonl, make_sample_id
-from tools.studio.score import score_text
+from tools.studio.windowed_rubric import windowed_rubric_for_text
 
 
 def _pick_rows(rows: List[dict], *, seed: int, max_samples: Optional[int]) -> List[dict]:
@@ -57,6 +56,8 @@ def label_jsonl(
         "max_input_tokens": int(max_input_tokens),
         "normalize_text": bool(normalize_text),
         "compute_cohesion": bool(compute_cohesion),
+        "window_chars": 9000,
+        "max_windows": 4,
         "seed": int(seed),
     }
 
@@ -72,29 +73,37 @@ def label_jsonl(
             title = str(r.get("title") or "")
             url = str(r.get("url") or "")
             sid = str(r.get("sample_id") or "").strip() or make_sample_id(src, title, url, text)
-            analysis = analyze_text(
+            wr = windowed_rubric_for_text(
                 text,
-                model_id=str(teacher_model_id),
+                baseline=baseline,
+                scoring_model_id=str(teacher_model_id),
                 doc_type=str(doc_type),
                 backend=str(backend),
                 max_input_tokens=int(max_input_tokens),
                 normalize_text=bool(normalize_text),
                 compute_cohesion=bool(compute_cohesion),
+                window_chars=9000,
+                max_windows=4,
             )
-            score = score_text((analysis.get("doc_metrics") or {}), baseline, doc_type=str(doc_type))
-            y0_100 = float(score.overall_0_100)
+            y0_100 = float(wr.aggregate.overall_0_100)
             y = y0_100 / 100.0
             y = max(0.0, min(1.0, y)) if math.isfinite(y) else 0.0
 
+            analysis = wr.worst_analysis
             out_row = dict(r)
             out_row["sample_id"] = sid
             out_row["fetched_at_unix"] = int(r.get("fetched_at_unix") or now)
             out_row["label"] = float(y)
             out_row["teacher_overall_0_100"] = float(y0_100)
-            out_row["teacher_categories_0_1"] = {k: float(v) for k, v in (score.categories or {}).items()}
+            out_row["teacher_categories_0_1"] = {k: float(v) for k, v in (wr.aggregate.categories or {}).items()}
             out_row["teacher_meta"] = dict(teacher_meta)
             out_row["teacher_tokens_count"] = int((analysis.get("doc_metrics") or {}).get("tokens_count") or 0)
             out_row["teacher_truncated"] = bool(analysis.get("truncated"))
+            out_row["teacher_windows"] = {
+                "worst_window_index": int(wr.worst_window_index),
+                "best_window_index": int(wr.best_window_index),
+                "n_windows": int(len(wr.windows)),
+            }
 
             f.write(json.dumps(out_row, ensure_ascii=False) + "\n")
             n += 1

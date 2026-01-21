@@ -37,24 +37,28 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
     "focus": {
         "weight": 0.25,
         "metrics": {
-            "entropy_mean": {"weight": 0.5, "mode": "match_baseline"},
-            "nucleus_w_mean": {"weight": 0.5, "mode": "match_baseline"},
+            "entropy_mean": {"weight": 0.375, "mode": "match_baseline"},
+            "nucleus_w_mean": {"weight": 0.375, "mode": "match_baseline"},
+            "word_ttr": {"weight": 0.25, "mode": "match_baseline"},
         },
     },
     "cadence": {
         "weight": 0.25,
         "metrics": {
-            "high_surprise_rate_per_100": {"weight": 0.30, "mode": "match_baseline"},
-            "ipi_mean": {"weight": 0.30, "mode": "match_baseline"},
+            "high_surprise_rate_per_100": {"weight": 0.25, "mode": "match_baseline"},
+            "ipi_mean": {"weight": 0.25, "mode": "match_baseline"},
             "cooldown_entropy_drop_3": {"weight": 0.20, "mode": "higher_is_better"},
             "sent_burst_cv": {"weight": 0.10, "mode": "match_baseline"},
             "para_burst_cv": {"weight": 0.10, "mode": "match_baseline"},
+            "sent_words_cv": {"weight": 0.07, "mode": "match_baseline"},
+            "syllables_per_word_cv": {"weight": 0.03, "mode": "match_baseline"},
         },
     },
     "cohesion": {
         "weight": 0.20,
         "metrics": {
-            "cohesion_delta": {"weight": 1.0, "mode": "lower_is_better"},
+            "cohesion_delta": {"weight": 0.70, "mode": "lower_is_better"},
+            "trigram_repeat_rate": {"weight": 0.30, "mode": "lower_is_better"},
         },
     },
     "alignment": {
@@ -67,7 +71,9 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
     "distinctiveness": {
         "weight": 0.15,
         "metrics": {
-            "content_fraction": {"weight": 1.0, "mode": "match_baseline"},
+            "content_fraction": {"weight": 0.40, "mode": "match_baseline"},
+            "word_hapax_ratio": {"weight": 0.35, "mode": "match_baseline"},
+            "punct_variety_per_1000_chars": {"weight": 0.25, "mode": "match_baseline"},
         },
     },
 }

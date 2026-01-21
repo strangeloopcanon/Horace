@@ -31,7 +31,7 @@ What you get:
 - Optional: **Trained scorer (fast)**: a single HF model that can score text without token-level analysis (enable “Fast mode” + provide a model path).
 - **Rewrite + Rerank** tab: generates N candidates and reranks them by Horace score (slow).
 - Optional: **LLM Critique** accordion for a non-deterministic editor voice (grounded in measured metrics/spikes).
-- **Formatting normalization (default on for prose)**: fixes hard-wrapped plaintext (single newlines), common in Gutenberg/RFC copies.
+- **Formatting normalization (default on for prose)**: fixes hard-wrapped plaintext (single newlines), common in Gutenberg/RFC copies; preserves newlines when the input looks like code, lists, or verse.
 
 To quickly get a local fast scorer to play with:
 ```bash
@@ -152,6 +152,8 @@ Score URLs (trained scorer on Modal; optional rubric breakdown computed locally)
 .venv/bin/modal run deploy/modal/score_urls_qwen3.py --urls https://example.com/a --include-rubric
 ```
 
+Note: rubric breakdown is **windowed** for long inputs (multiple slices across the document), which reduces “intro bias” from only scoring the first N tokens. The JSON includes a `rubric_windows` section with per-window summaries.
+
 Tip: if you want machine-readable JSON on stdout, use Modal’s quiet flag to suppress progress output:
 ```bash
 .venv/bin/python -m modal run -q deploy/modal/score_urls_qwen3.py --urls https://example.com/a --include-rubric > out.json
@@ -192,6 +194,15 @@ runs GRPO full training on a GPU and persists:
 Example:
 ```bash
 .venv/bin/modal run deploy/modal/grpo_full_train.py --config configs/grpo_full_hf_smoke.json --out-dir /vol/grpo_runs/demo --limit-steps 10
+```
+
+Distill the (slow) rubric into a single fast scorer (Qwen3 + LoRA example):
+```bash
+.venv/bin/python -m modal run -q deploy/modal/studio_distill_scorer_mixed.py \
+  --out-dir /vol/models/scorer_mixed_distilled_qwen3_rubricv2_v1 \
+  --teacher-model Qwen/Qwen2.5-1.5B --teacher-max-input-tokens 512 \
+  --base-model Qwen/Qwen3-1.7B --scorer-max-length 512 --scorer-batch-size 1 --scorer-lr 1e-4 --scorer-epochs 1 \
+  --lora-r 16 --lora-alpha 32 --lora-dropout 0.05 --grad-accum-steps 16 --gradient-checkpointing --bf16 --merge-lora
 ```
 
 ### Modal “train” for the scorer (now: calibrator)

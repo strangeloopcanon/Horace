@@ -58,6 +58,7 @@ image = (
         "tqdm>=4.66.0",
         "sentencepiece>=0.2.0",
         "safetensors>=0.4.0",
+        "peft>=0.10.0",
     )
 )
 if (_LOCAL_REPO_ROOT / "tools").exists():
@@ -259,6 +260,13 @@ def distill_mixed_remote(
     scorer_lr: float,
     scorer_weight_decay: float,
     scorer_epochs: int,
+    lora_r: int,
+    lora_alpha: int,
+    lora_dropout: float,
+    grad_accum_steps: int,
+    gradient_checkpointing: bool,
+    bf16: bool,
+    merge_lora: bool,
 ) -> str:
     _bootstrap_repo()
     from tools.studio.baselines import safe_model_id
@@ -379,6 +387,13 @@ def distill_mixed_remote(
         epochs=int(scorer_epochs),
         seed=int(seed),
         device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
+        lora_r=int(lora_r),
+        lora_alpha=int(lora_alpha),
+        lora_dropout=float(lora_dropout),
+        gradient_checkpointing=bool(gradient_checkpointing),
+        bf16=bool(bf16),
+        grad_accum_steps=int(grad_accum_steps),
+        merge_lora=bool(merge_lora),
     )
 
     data_vol.commit()
@@ -418,6 +433,13 @@ def main(
     scorer_lr: float = 2e-5,
     scorer_weight_decay: float = 0.01,
     scorer_epochs: int = 2,
+    lora_r: int = 0,
+    lora_alpha: int = 32,
+    lora_dropout: float = 0.05,
+    grad_accum_steps: int = 1,
+    gradient_checkpointing: bool = False,
+    bf16: bool = False,
+    merge_lora: bool = False,
 ) -> None:  # pragma: no cover
     print(
         distill_mixed_remote.remote(
@@ -438,5 +460,12 @@ def main(
             scorer_lr=float(scorer_lr),
             scorer_weight_decay=float(scorer_weight_decay),
             scorer_epochs=int(scorer_epochs),
+            lora_r=int(lora_r),
+            lora_alpha=int(lora_alpha),
+            lora_dropout=float(lora_dropout),
+            grad_accum_steps=int(grad_accum_steps),
+            gradient_checkpointing=bool(gradient_checkpointing),
+            bf16=bool(bf16),
+            merge_lora=bool(merge_lora),
         )
     )
