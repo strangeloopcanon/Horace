@@ -92,6 +92,33 @@ Build on Modal (recommended for larger runs; writes to `/vol/corpora/standardebo
 make modal-build-standardebooks-corpus
 ```
 
+## Great authors vs others (raw → windows → teacher labels)
+
+So what: to train a single fast scorer without losing interpretability, we want:
+- an explicit **great-author vs other-author** anchor label (from an allowlist), and
+- optional **rubric teacher labels** (slow, diagnostic) for breakdown supervision.
+
+Data sources:
+- Standard Ebooks (EPUB → cleaned text)
+- Project Gutenberg (via official `pg_catalog.csv` for broader coverage)
+
+Build locally (gitignored, resumable):
+```bash
+# 1) Download raw full texts and bucket into great_author/other_author
+make download-gutenberg-raw GUTENBERG_ID_SOURCE=catalog
+make download-standardebooks-raw
+
+# 2) Sample leakage-safe fixed windows and merge into one corpus with splits
+make build-mixed-windows-corpus
+
+# 3) Build a baseline from great-author train groups and label splits with the rubric teacher
+make label-mixed-windows LABEL_MAX_SAMPLES=0
+```
+
+Notes:
+- Set caps like `GUTENBERG_MAX_BYTES=30000000000` (≈30GB) / `STD_EBOOKS_MAX_BYTES=...` to control disk usage.
+- Allowlist: `configs/great_authors_v1.txt`.
+
 ## Modern prose corpus (RSS / essays / news)
 
 So what: to avoid “literary == old public-domain prose” shortcuts, we ingest modern prose via RSS/Atom

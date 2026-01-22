@@ -1,4 +1,4 @@
-.PHONY: setup setup-modal modal-token check test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-qwen3-great-other modal-train-scorer-qwen3-mixed-supervision modal-train-scorer-qwen3-multihead
+.PHONY: setup setup-modal modal-token check test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other sample-windows-se-great sample-windows-se-other build-mixed-windows-corpus build-rss-corpus build-great-baseline label-mixed-windows eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-qwen3-great-other modal-train-scorer-qwen3-mixed-supervision modal-train-scorer-qwen3-multihead
 .PHONY: modal-score-urls
 
 VENV ?= .venv
@@ -14,20 +14,30 @@ STD_EBOOKS_DIR ?= data/corpora/standardebooks_corpus_v1
 STD_EBOOKS_MAX_PAGES ?= 30
 STD_EBOOKS_START_PAGE ?= 1
 STD_EBOOKS_MAX_BOOKS ?= 240
+STD_EBOOKS_MAX_BYTES ?= 0
 STD_EBOOKS_EXCERPTS_PER_BOOK ?= 2
 STD_EBOOKS_MAX_CHARS ?= 3800
 STD_EBOOKS_MIN_CHARS ?= 900
 STD_EBOOKS_SLEEP_S ?= 0.6
 STD_EBOOKS_RAW_DIR ?= data/corpora/standardebooks_raw_v1
+STD_EBOOKS_ONLY_GREAT ?= 0
 GUTENBERG_RAW_DIR ?= data/corpora/gutenberg_raw_v1
 GUTENBERG_START_INDEX ?= 1
 GUTENBERG_MAX_PAGES ?= 200
 GUTENBERG_MAX_BOOKS ?= 3000
 GUTENBERG_MAX_BYTES ?= 0
 GUTENBERG_SLEEP_S ?= 0.1
+GUTENBERG_KEEP ?= all
+GUTENBERG_ID_SOURCE ?= downloads
+GUTENBERG_CATALOG_URL ?= https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv
+GUTENBERG_CATALOG_LANGUAGE ?= en
+GUTENBERG_SHUFFLE_IDS ?= 0
 GREAT_AUTHORS_FILE ?= configs/great_authors_v1.txt
 GREAT_WINDOWS_DIR ?= data/corpora/gutenberg_great_windows_v1
 OTHER_WINDOWS_DIR ?= data/corpora/gutenberg_other_windows_v1
+STD_EBOOKS_GREAT_WINDOWS_DIR ?= data/corpora/standardebooks_great_windows_v1
+STD_EBOOKS_OTHER_WINDOWS_DIR ?= data/corpora/standardebooks_other_windows_v1
+MIXED_WINDOWS_DIR ?= data/corpora/mixed_windows_v2
 WINDOWS_MAX_CHARS ?= 3800
 WINDOWS_MIN_CHARS ?= 900
 WINDOWS_PER_DOC ?= 8
@@ -43,6 +53,24 @@ SCORER_QWEN3_MULTIHEAD_OUT ?= /vol/models/scorer_qwen3_multihead_v1
 SCORER_QWEN3_MULTIHEAD_ARGS ?=
 REBUILD ?= 0
 DISTILL_DIR_V4_SMOKE ?= data/benchmarks/studio_benchmark_v4_distill_smoke
+
+TEACHER_MODEL ?= gpt2
+TEACHER_BACKEND ?= hf
+TEACHER_MAX_INPUT_TOKENS ?= 512
+BASELINE_MAX_GROUPS ?= 1200
+LABEL_MAX_SAMPLES ?= 0
+
+SAFE_TEACHER_ID := $(subst /,_,$(TEACHER_MODEL))
+STD_EBOOKS_ONLY_GREAT_FLAG :=
+GUTENBERG_SHUFFLE_IDS_FLAG :=
+ifeq ($(STD_EBOOKS_ONLY_GREAT),1)
+STD_EBOOKS_ONLY_GREAT_FLAG := --only-great
+endif
+ifeq ($(GUTENBERG_SHUFFLE_IDS),1)
+GUTENBERG_SHUFFLE_IDS_FLAG := --shuffle-ids
+endif
+TEACHER_BASELINE_PATH ?= data/baselines/$(SAFE_TEACHER_ID)_great_corpus_$(TEACHER_MAX_INPUT_TOKENS)_docs.json
+MIXED_WINDOWS_LABELED_DIR ?= data/corpora/mixed_windows_v2_labels_$(SAFE_TEACHER_ID)_$(TEACHER_MAX_INPUT_TOKENS)
 
 SETUP_SENTINEL := $(VENV)/.horace_setup
 
@@ -103,10 +131,10 @@ build-standardebooks-corpus: setup
 	fi
 
 download-standardebooks-raw: setup
-	HORACE_HTTP_RETRIES=3 HORACE_HTTP_RETRY_BASE_SLEEP_S=1.2 $(PYTHON) -m tools.studio.download_standardebooks_raw --out-dir $(STD_EBOOKS_RAW_DIR) --start-page $(STD_EBOOKS_START_PAGE) --max-pages $(STD_EBOOKS_MAX_PAGES) --max-books $(STD_EBOOKS_MAX_BOOKS) --sleep-s $(STD_EBOOKS_SLEEP_S) --normalize-text --great-authors $(GREAT_AUTHORS_FILE)
+	HORACE_HTTP_NO_CACHE=1 HORACE_HTTP_RETRIES=3 HORACE_HTTP_RETRY_BASE_SLEEP_S=1.2 $(PYTHON) -m tools.studio.download_standardebooks_raw --out-dir $(STD_EBOOKS_RAW_DIR) --start-page $(STD_EBOOKS_START_PAGE) --max-pages $(STD_EBOOKS_MAX_PAGES) --max-books $(STD_EBOOKS_MAX_BOOKS) --max-bytes $(STD_EBOOKS_MAX_BYTES) --sleep-s $(STD_EBOOKS_SLEEP_S) --normalize-text --great-authors $(GREAT_AUTHORS_FILE) $(STD_EBOOKS_ONLY_GREAT_FLAG)
 
 download-gutenberg-raw: setup
-	HORACE_HTTP_RETRIES=2 HORACE_HTTP_RETRY_BASE_SLEEP_S=0.8 $(PYTHON) -m tools.studio.download_gutenberg_raw --out-dir $(GUTENBERG_RAW_DIR) --start-index $(GUTENBERG_START_INDEX) --max-pages $(GUTENBERG_MAX_PAGES) --max-books $(GUTENBERG_MAX_BOOKS) --max-bytes $(GUTENBERG_MAX_BYTES) --sleep-s $(GUTENBERG_SLEEP_S) --normalize-text --great-authors $(GREAT_AUTHORS_FILE) --keep all
+	HORACE_HTTP_NO_CACHE=1 HORACE_HTTP_RETRIES=2 HORACE_HTTP_RETRY_BASE_SLEEP_S=0.8 $(PYTHON) -m tools.studio.download_gutenberg_raw --out-dir $(GUTENBERG_RAW_DIR) --start-index $(GUTENBERG_START_INDEX) --max-pages $(GUTENBERG_MAX_PAGES) --max-books $(GUTENBERG_MAX_BOOKS) --max-bytes $(GUTENBERG_MAX_BYTES) --sleep-s $(GUTENBERG_SLEEP_S) --normalize-text --great-authors $(GREAT_AUTHORS_FILE) --keep $(GUTENBERG_KEEP) --id-source $(GUTENBERG_ID_SOURCE) --catalog-url $(GUTENBERG_CATALOG_URL) --catalog-language $(GUTENBERG_CATALOG_LANGUAGE) $(GUTENBERG_SHUFFLE_IDS_FLAG)
 
 sample-windows-great: setup
 	$(PYTHON) -m tools.studio.sample_windows_from_raw --raw-dir $(GUTENBERG_RAW_DIR) --out-dir $(GREAT_WINDOWS_DIR) --bucket great_author --max-chars $(WINDOWS_MAX_CHARS) --min-chars $(WINDOWS_MIN_CHARS) --windows-per-doc $(WINDOWS_PER_DOC)
@@ -114,10 +142,27 @@ sample-windows-great: setup
 sample-windows-other: setup
 	$(PYTHON) -m tools.studio.sample_windows_from_raw --raw-dir $(GUTENBERG_RAW_DIR) --out-dir $(OTHER_WINDOWS_DIR) --bucket other_author --max-chars $(WINDOWS_MAX_CHARS) --min-chars $(WINDOWS_MIN_CHARS) --windows-per-doc $(WINDOWS_PER_DOC)
 
+sample-windows-se-great: setup
+	$(PYTHON) -m tools.studio.sample_windows_from_raw --raw-dir $(STD_EBOOKS_RAW_DIR) --out-dir $(STD_EBOOKS_GREAT_WINDOWS_DIR) --bucket great_author --max-chars $(WINDOWS_MAX_CHARS) --min-chars $(WINDOWS_MIN_CHARS) --windows-per-doc $(WINDOWS_PER_DOC)
+
+sample-windows-se-other: setup
+	$(PYTHON) -m tools.studio.sample_windows_from_raw --raw-dir $(STD_EBOOKS_RAW_DIR) --out-dir $(STD_EBOOKS_OTHER_WINDOWS_DIR) --bucket other_author --max-chars $(WINDOWS_MAX_CHARS) --min-chars $(WINDOWS_MIN_CHARS) --windows-per-doc $(WINDOWS_PER_DOC)
+
+build-mixed-windows-corpus: download-gutenberg-raw download-standardebooks-raw sample-windows-great sample-windows-other sample-windows-se-great sample-windows-se-other
+	$(PYTHON) -m tools.studio.build_mixed_windows_corpus --out-dir $(MIXED_WINDOWS_DIR) --input $(GREAT_WINDOWS_DIR)/samples.jsonl --input $(OTHER_WINDOWS_DIR)/samples.jsonl --input $(STD_EBOOKS_GREAT_WINDOWS_DIR)/samples.jsonl --input $(STD_EBOOKS_OTHER_WINDOWS_DIR)/samples.jsonl
+
 build-rss-corpus: setup
 	@if [ "$(REBUILD)" = "1" ] || [ ! -f "$(RSS_DIR)/samples.jsonl" ]; then \
 		$(PYTHON) -m tools.studio.build_rss_corpus --out-dir $(RSS_DIR) --feeds-json $(RSS_FEEDS_JSON) --max-items-per-feed $(RSS_MAX_ITEMS_PER_FEED) --excerpts-per-item $(RSS_EXCERPTS_PER_ITEM) --max-chars $(RSS_MAX_CHARS) --min-chars $(RSS_MIN_CHARS) --sleep-s $(RSS_SLEEP_S) --normalize-text; \
 	fi
+
+build-great-baseline: build-mixed-windows-corpus
+	$(PYTHON) -m tools.studio.build_baseline_corpus --in $(MIXED_WINDOWS_DIR)/splits/train.jsonl --source great_author --model-id $(TEACHER_MODEL) --backend $(TEACHER_BACKEND) --doc-type prose --max-input-tokens $(TEACHER_MAX_INPUT_TOKENS) --max-groups $(BASELINE_MAX_GROUPS) --normalize-text --out-path $(TEACHER_BASELINE_PATH)
+
+label-mixed-windows: build-great-baseline
+	$(PYTHON) -m tools.studio.label_scorer_dataset --in $(MIXED_WINDOWS_DIR)/splits/train.jsonl --out $(MIXED_WINDOWS_LABELED_DIR)/splits/train.jsonl --max-samples $(LABEL_MAX_SAMPLES) --teacher-model $(TEACHER_MODEL) --baseline-model $(TEACHER_BASELINE_PATH) --doc-type prose --backend $(TEACHER_BACKEND) --max-input-tokens $(TEACHER_MAX_INPUT_TOKENS) --normalize-text
+	$(PYTHON) -m tools.studio.label_scorer_dataset --in $(MIXED_WINDOWS_DIR)/splits/val.jsonl --out $(MIXED_WINDOWS_LABELED_DIR)/splits/val.jsonl --max-samples $(LABEL_MAX_SAMPLES) --teacher-model $(TEACHER_MODEL) --baseline-model $(TEACHER_BASELINE_PATH) --doc-type prose --backend $(TEACHER_BACKEND) --max-input-tokens $(TEACHER_MAX_INPUT_TOKENS) --normalize-text
+	$(PYTHON) -m tools.studio.label_scorer_dataset --in $(MIXED_WINDOWS_DIR)/splits/test.jsonl --out $(MIXED_WINDOWS_LABELED_DIR)/splits/test.jsonl --max-samples $(LABEL_MAX_SAMPLES) --teacher-model $(TEACHER_MODEL) --baseline-model $(TEACHER_BASELINE_PATH) --doc-type prose --backend $(TEACHER_BACKEND) --max-input-tokens $(TEACHER_MAX_INPUT_TOKENS) --normalize-text
 
 eval-web: setup
 	$(PYTHON) -m tools.studio.eval_web

@@ -29,6 +29,7 @@ def download_standardebooks_raw(
     start_page: int,
     max_pages: int,
     max_books: int,
+    max_bytes: int,
     sleep_s: float,
     normalize_text: bool,
     doc_type: str,
@@ -54,6 +55,7 @@ def download_standardebooks_raw(
         "start_page": int(start_page),
         "max_pages": int(max_pages),
         "max_books": int(max_books),
+        "max_bytes": int(max_bytes),
         "sleep_s": float(sleep_s),
         "normalize_text": bool(normalize_text),
         "doc_type": str(doc_type),
@@ -71,6 +73,9 @@ def download_standardebooks_raw(
 
     now = int(time.time())
     for i, p in enumerate(paths, 1):
+        if int(max_bytes) > 0 and int(stats["bytes_text_saved"]) >= int(max_bytes):
+            break
+
         stats["books_attempted"] += 1
         doc_stage = "init"
         eb = None
@@ -90,6 +95,10 @@ def download_standardebooks_raw(
             text_path = _book_text_path(out_dir, doc_id)
             if text_path.exists():
                 stats["books_skipped_existing"] += 1
+                try:
+                    stats["bytes_text_saved"] += int(text_path.stat().st_size)
+                except Exception:
+                    pass
                 continue
 
             doc_stage = "download_epub"
@@ -186,6 +195,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--start-page", type=int, default=1)
     ap.add_argument("--max-pages", type=int, default=120)
     ap.add_argument("--max-books", type=int, default=2000)
+    ap.add_argument("--max-bytes", type=int, default=0, help="Stop after this many bytes of saved texts (0 = unlimited)")
     ap.add_argument("--sleep-s", type=float, default=0.1)
     ap.add_argument("--normalize-text", action="store_true")
     ap.add_argument("--no-normalize-text", action="store_true")
@@ -204,6 +214,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         start_page=int(args.start_page),
         max_pages=int(args.max_pages),
         max_books=int(args.max_books),
+        max_bytes=int(args.max_bytes),
         sleep_s=float(args.sleep_s),
         normalize_text=bool(normalize_text),
         doc_type=str(args.doc_type),
