@@ -272,7 +272,11 @@ def train_remote(cfg_json: str) -> str:
         _write_jsonl(out_path, merged)
         teacher_counts[split] = {"standardebooks": int(len(se_rows)), "rss": int(len(rss_rows)), "total": int(len(merged))}
 
-    baseline_path = Path(f"/vol/baselines/{safe_model_id(teacher_model)}_se_{teacher_max_input_tokens}_docs.json")
+    # Baselines affect rubric percentiles; tie to the teacher corpus dir so bigger/new corpora
+    # don't silently reuse an older tiny baseline.
+    baseline_path = Path(
+        f"/vol/baselines/{safe_model_id(teacher_model)}_{teacher_corpus_root.name}_{teacher_max_input_tokens}_docs.json"
+    )
     if not baseline_path.exists():
         rows = _iter_jsonl(se_splits / "train.jsonl")
         rng.shuffle(rows)
