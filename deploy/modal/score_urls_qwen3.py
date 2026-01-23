@@ -16,14 +16,11 @@ Include rubric diagnostics (token-level metrics + suggestions):
 
 from __future__ import annotations
 
-import html as _html
 import json
 import os
-import re
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-from urllib.request import Request, urlopen
+from typing import Any, Dict, List, Optional
 
 
 def _lazy_import_modal():
@@ -98,190 +95,6 @@ def score_remote(
     return asdict(res)
 
 
-def _fetch_html(url: str) -> str:
-    req = Request(str(url), headers={"User-Agent": "Mozilla/5.0"})
-    with urlopen(req, timeout=45) as resp:
-        return resp.read().decode("utf-8", errors="replace")
-
-
-def _extract_og_title(html: str) -> Optional[str]:
-    m = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]+)"', html, flags=re.I)
-    if m:
-        return _html.unescape(m.group(1)).strip()
-    m = re.search(r"<title>(.*?)</title>", html, flags=re.I | re.S)
-    if m:
-        t = re.sub(r"\s+", " ", m.group(1))
-        return _html.unescape(t).strip()
-    return None
-
-
-def _extract_substack_body(html: str) -> Optional[str]:
-    # Preferred: Substack renders post content in a `div.body.markup`.
-    from html.parser import HTMLParser
-
-    class _BodyParser(HTMLParser):
-        def __init__(self) -> None:
-            super().__init__(convert_charrefs=False)
-            self.in_body = False
-            self.depth = 0
-            self.parts: List[str] = []
-            self._pending_space = False
-            self._block_stack: List[str] = []
-
-        def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
-            attr = {k.lower(): (v or "") for k, v in attrs}
-            if tag.lower() == "div":
-                cls = attr.get("class", "")
-                if not self.in_body and "body" in cls and "markup" in cls:
-                    self.in_body = True
-                    self.depth = 1
-                    return
-                if self.in_body:
-                    self.depth += 1
-            if self.in_body:
-                if tag.lower() in ("p", "li", "blockquote", "h1", "h2", "h3"):
-                    self._block_stack.append(tag.lower())
-
-        def handle_endtag(self, tag: str) -> None:
-            if self.in_body:
-                if tag.lower() == "div":
-                    self.depth -= 1
-                    if self.depth <= 0:
-                        self.in_body = False
-                        return
-                if self._block_stack and self._block_stack[-1] == tag.lower():
-                    self._block_stack.pop()
-                    self.parts.append("\n\n")
-
-        def handle_data(self, data: str) -> None:
-            if not self.in_body:
-                return
-            s = _html.unescape(data)
-            if not s:
-                return
-            if s.isspace():
-                self._pending_space = True
-                return
-            if self._pending_space:
-                self.parts.append(" ")
-                self._pending_space = False
-            self.parts.append(s)
-
-    p = _BodyParser()
-    p.feed(html)
-    out = "".join(p.parts)
-    out = re.sub(r"[ \t]+\n", "\n", out)
-    out = re.sub(r"\n{3,}", "\n\n", out)
-    out = re.sub(r"[ \t]{2,}", " ", out)
-    out = out.strip()
-    return out or None
-
-
-def _extract_div_by_class(html: str, *, class_tokens: Tuple[str, ...]) -> Optional[str]:
-    """Extract plaintext from the first <div> whose class contains a target token.
-
-    This is a lightweight fallback for WordPress-style sites (e.g. Slate Star Codex uses
-    `div.pjgm-postcontent`). We avoid adding third-party HTML parsing deps.
-    """
-    from html.parser import HTMLParser
-
-    targets = tuple(str(t).strip().lower() for t in (class_tokens or ()) if str(t).strip())
-    if not targets:
-        return None
-
-    class _DivParser(HTMLParser):
-        def __init__(self) -> None:
-            super().__init__(convert_charrefs=False)
-            self.capture = False
-            self.depth = 0
-            self.ignore_depth = 0
-            self.parts: List[str] = []
-            self._pending_space = False
-            self._block_stack: List[str] = []
-
-        def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
-            t = tag.lower()
-            attr = {k.lower(): (v or "") for k, v in attrs}
-            if self.capture and t in ("script", "style"):
-                self.ignore_depth += 1
-                return
-            if t == "div":
-                cls = (attr.get("class", "") or "").lower()
-                if not self.capture and any(tok in cls for tok in targets):
-                    self.capture = True
-                    self.depth = 1
-                    return
-                if self.capture:
-                    self.depth += 1
-            if not self.capture or self.ignore_depth > 0:
-                return
-            if t in ("p", "li", "blockquote", "h1", "h2", "h3"):
-                self._block_stack.append(t)
-            if t == "br":
-                self.parts.append("\n")
-
-        def handle_endtag(self, tag: str) -> None:
-            t = tag.lower()
-            if not self.capture:
-                return
-            if self.ignore_depth > 0 and t in ("script", "style"):
-                self.ignore_depth -= 1
-                return
-            if t == "div":
-                self.depth -= 1
-                if self.depth <= 0:
-                    self.capture = False
-                    return
-            if self.ignore_depth > 0:
-                return
-            if self._block_stack and self._block_stack[-1] == t:
-                self._block_stack.pop()
-                self.parts.append("\n\n")
-
-        def handle_data(self, data: str) -> None:
-            if not self.capture or self.ignore_depth > 0:
-                return
-            s = _html.unescape(data)
-            if not s:
-                return
-            if s.isspace():
-                self._pending_space = True
-                return
-            if self._pending_space:
-                self.parts.append(" ")
-                self._pending_space = False
-            self.parts.append(s)
-
-    p = _DivParser()
-    p.feed(html)
-    out = "".join(p.parts)
-    out = re.sub(r"[ \t]+\n", "\n", out)
-    out = re.sub(r"\n{3,}", "\n\n", out)
-    out = re.sub(r"[ \t]{2,}", " ", out)
-    out = out.strip()
-    return out or None
-
-
-def _extract_fallback_article(html: str) -> Optional[str]:
-    m = re.search(r"<article[^>]*>(.*?)</article>", html, flags=re.S | re.I)
-    if not m:
-        return None
-    frag = m.group(1)
-    frag = re.sub(r"<(script|style)[^>]*>.*?</\\1>", " ", frag, flags=re.S | re.I)
-    frag = re.sub(r"<[^>]+>", " ", frag)
-    frag = _html.unescape(frag)
-    frag = re.sub(r"\s+", " ", frag).strip()
-    return frag or None
-
-
-def _extract_essay(html: str) -> Optional[str]:
-    return (
-        _extract_substack_body(html)
-        or _extract_div_by_class(html, class_tokens=("pjgm-postcontent", "entry-content", "post-content"))
-        or _extract_fallback_article(html)
-    )
-
-
 def _rubric_for_text(
     text: str,
     *,
@@ -350,6 +163,7 @@ def _rubric_for_text(
 @app.local_entrypoint()
 def main(
     urls: str = "",
+    snapshot: str = "",
     scorer_model_path: str = "/vol/models/scorer_qwen3_great_other_v1",
     scorer_max_length: int = 512,
     include_rubric: bool = False,
@@ -364,16 +178,43 @@ def main(
         "https://www.strangeloopcanon.com/p/life-in-india-is-a-series-of-bilateral",
         "https://hollisrobbinsanecdotal.substack.com/p/llm-poetry-and-the-greatness-question",
     ]
-    url_list = [u.strip() for u in str(urls).split(",") if u.strip()] or default_urls
+    url_list = [u.strip() for u in str(urls).split(",") if u.strip()] or []
+
+    snap_map: Optional[Dict[str, dict]] = None
+    if str(snapshot).strip():
+        from tools.studio.url_snapshot import load_snapshot_text_by_url
+
+        paths = [Path(p.strip()) for p in str(snapshot).split(",") if p.strip()]
+        snap_map = load_snapshot_text_by_url(paths)
+        if not url_list:
+            url_list = sorted(snap_map.keys())
+
+    if not url_list:
+        url_list = default_urls
 
     rows: List[Dict[str, Any]] = []
     for url in url_list:
-        html = _fetch_html(url)
-        title = _extract_og_title(html)
-        text = _extract_essay(html)
-        if not text:
-            rows.append({"url": url, "title": title, "error": "extract_failed"})
-            continue
+        title = None
+        text = None
+        extractor = None
+        if snap_map is not None:
+            snap = snap_map.get(str(url))
+            if isinstance(snap, dict):
+                title = snap.get("title")
+                text = snap.get("text")
+                extractor = snap.get("extractor") or "snapshot"
+            if not text:
+                rows.append({"url": url, "title": title, "error": "snapshot_missing_or_empty"})
+                continue
+        else:
+            from tools.studio.url_extract import extract_text, extract_title, fetch_html
+
+            html = fetch_html(url)
+            title = extract_title(html)
+            text, extractor = extract_text(url, html)
+            if not text:
+                rows.append({"url": url, "title": title, "error": "extract_failed"})
+                continue
         trained_score = None
         trained_err = None
         try:
@@ -420,6 +261,7 @@ def main(
         row: Dict[str, Any] = {
             "url": url,
             "title": title,
+            "extractor": extractor,
             "chars": len(text),
         }
         if trained_score is not None:

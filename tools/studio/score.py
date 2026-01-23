@@ -46,15 +46,22 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
     "cadence": {
         "weight": 0.25,
         "metrics": {
-            "high_surprise_rate_per_100": {"weight": 0.22, "mode": "match_baseline"},
-            "ipi_mean": {"weight": 0.22, "mode": "match_baseline"},
-            "cooldown_entropy_drop_3": {"weight": 0.20, "mode": "higher_is_better"},
-            "sent_burst_cv": {"weight": 0.10, "mode": "match_baseline"},
-            "para_burst_cv": {"weight": 0.10, "mode": "match_baseline"},
-            "sent_words_mean": {"weight": 0.06, "mode": "match_baseline"},
-            "sent_words_p90": {"weight": 0.06, "mode": "match_baseline"},
+            # Token-level cadence (v1)
+            "high_surprise_rate_per_100": {"weight": 0.14, "mode": "match_baseline"},
+            "ipi_mean": {"weight": 0.14, "mode": "match_baseline"},
+            "cooldown_entropy_drop_3": {"weight": 0.12, "mode": "higher_is_better"},
+            "sent_burst_cv": {"weight": 0.08, "mode": "match_baseline"},
+            "para_burst_cv": {"weight": 0.08, "mode": "match_baseline"},
+            "sent_words_mean": {"weight": 0.05, "mode": "match_baseline"},
+            "sent_words_p90": {"weight": 0.05, "mode": "match_baseline"},
             "sent_words_cv": {"weight": 0.02, "mode": "match_baseline"},
             "syllables_per_word_cv": {"weight": 0.02, "mode": "match_baseline"},
+            # Spike-event "heartbeat" (v2): clustered spikes + multi-scale regularity.
+            "spike_event_rate_per_100": {"weight": 0.08, "mode": "match_baseline"},
+            "spike_event_ipi_cv": {"weight": 0.07, "mode": "match_baseline"},
+            "spike_event_cooldown_to_median_mean": {"weight": 0.06, "mode": "match_baseline"},
+            "turn_aligned_spike_event_lift": {"weight": 0.04, "mode": "match_baseline"},
+            "spike_events_per_sentence_cv": {"weight": 0.03, "mode": "match_baseline"},
         },
     },
     "cohesion": {

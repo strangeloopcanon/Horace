@@ -20,9 +20,10 @@ import json
 import os
 import random
 import time
+import traceback
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def _lazy_import_modal():
@@ -146,6 +147,51 @@ def train_remote(cfg_json: str) -> str:
     from tools.studio.text_corrupt import corrupt_text
     from tools.studio.train_multihead_scorer import eval_multihead_scorer, train_multihead_scorer
 
+    def _write_json(path: Path, obj: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    started_unix = int(time.time())
+    out_dir_name = Path(str(cfg.get("out_dir") or "unknown")).name or "unknown"
+    run_dir = Path("/vol/reports/train_runs") / f"{out_dir_name}_{started_unix}"
+
+    def _checkpoint(stage: str, *, extra: Optional[Dict[str, Any]] = None) -> None:
+        payload: Dict[str, Any] = {
+            "stage": str(stage),
+            "started_unix": int(started_unix),
+            "now_unix": int(time.time()),
+            "out_dir": str(cfg.get("out_dir") or ""),
+        }
+        if extra:
+            payload["extra"] = extra
+        _write_json(run_dir / "status.json", payload)
+        try:
+            data_vol.commit()
+        except Exception:
+            pass
+
+    def _write_error(stage: str, *, extra: Optional[Dict[str, Any]] = None) -> None:
+        payload: Dict[str, Any] = {
+            "stage": str(stage),
+            "started_unix": int(started_unix),
+            "now_unix": int(time.time()),
+            "out_dir": str(cfg.get("out_dir") or ""),
+            "traceback": traceback.format_exc(),
+        }
+        if extra:
+            payload["extra"] = extra
+        _write_json(run_dir / "error.json", payload)
+        try:
+            data_vol.commit()
+        except Exception:
+            pass
+        try:
+            hf_cache_vol.commit()
+        except Exception:
+            pass
+
+    _checkpoint("start", extra={"cfg": cfg})
+
     seed = int(cfg.get("seed") or 1337)
     rng = random.Random(int(seed) ^ 0x1234)
 
@@ -160,39 +206,45 @@ def train_remote(cfg_json: str) -> str:
     teacher_splits = teacher_corpus_root / "splits"
     teacher_splits.mkdir(parents=True, exist_ok=True)
 
-    _ensure_corpus(
-        out_dir=se_root,
-        args=[
-            "--out-dir",
-            str(se_root),
-            "--max-books",
-            str(int(cfg.get("standardebooks_max_books") or 240)),
-            "--max-pages",
-            str(int(cfg.get("standardebooks_max_pages") or 30)),
-            "--excerpts-per-book",
-            str(int(cfg.get("standardebooks_excerpts_per_book") or 2)),
-            "--sleep-s",
-            str(float(cfg.get("standardebooks_sleep_s") or 0.6)),
-            "--normalize-text",
-        ],
-        builder_main=build_se_main,
-    )
-    _ensure_corpus(
-        out_dir=rss_root,
-        args=[
-            "--out-dir",
-            str(rss_root),
-            "--feeds-json",
-            str(cfg.get("feeds_json") or "configs/rss_feeds_v1.json"),
-            "--max-items-per-feed",
-            str(int(cfg.get("rss_max_items_per_feed") or 120)),
-            "--excerpts-per-item",
-            str(int(cfg.get("rss_excerpts_per_item") or 1)),
-            "--normalize-text",
-        ],
-        builder_main=build_rss_main,
-    )
-    data_vol.commit()
+    try:
+        _checkpoint("build_corpus_standardebooks", extra={"out_dir": str(se_root)})
+        _ensure_corpus(
+            out_dir=se_root,
+            args=[
+                "--out-dir",
+                str(se_root),
+                "--max-books",
+                str(int(cfg.get("standardebooks_max_books") or 240)),
+                "--max-pages",
+                str(int(cfg.get("standardebooks_max_pages") or 30)),
+                "--excerpts-per-book",
+                str(int(cfg.get("standardebooks_excerpts_per_book") or 2)),
+                "--sleep-s",
+                str(float(cfg.get("standardebooks_sleep_s") or 0.6)),
+                "--normalize-text",
+            ],
+            builder_main=build_se_main,
+        )
+        _checkpoint("build_corpus_rss", extra={"out_dir": str(rss_root)})
+        _ensure_corpus(
+            out_dir=rss_root,
+            args=[
+                "--out-dir",
+                str(rss_root),
+                "--feeds-json",
+                str(cfg.get("feeds_json") or "configs/rss_feeds_v1.json"),
+                "--max-items-per-feed",
+                str(int(cfg.get("rss_max_items_per_feed") or 120)),
+                "--excerpts-per-item",
+                str(int(cfg.get("rss_excerpts_per_item") or 1)),
+                "--normalize-text",
+            ],
+            builder_main=build_rss_main,
+        )
+        data_vol.commit()
+    except Exception:
+        _write_error("build_corpora", extra={"standardebooks_dir": str(se_root), "rss_dir": str(rss_root)})
+        raise
 
     corruption_kinds = [k.strip() for k in str(cfg.get("corruption_kinds") or "flatten,drop_punct,repeat_sentences").split(",") if k.strip()]
     corruptions_per_sample = int(cfg.get("corruptions_per_sample") or 1)
@@ -277,56 +329,73 @@ def train_remote(cfg_json: str) -> str:
     baseline_path = Path(
         f"/vol/baselines/{safe_model_id(teacher_model)}_{teacher_corpus_root.name}_{teacher_max_input_tokens}_docs.json"
     )
-    if not baseline_path.exists():
-        rows = _iter_jsonl(se_splits / "train.jsonl")
-        rng.shuffle(rows)
-        if baseline_max_samples > 0:
-            rows = rows[: int(baseline_max_samples)]
-        metric_rows: List[Dict[str, Any]] = []
-        for r in rows:
-            text = str(r.get("text") or "")
-            if not text.strip():
-                continue
-            res = analyze_text(
-                text,
-                model_id=str(teacher_model),
+    try:
+        _checkpoint("build_baseline", extra={"baseline_path": str(baseline_path)})
+        if not baseline_path.exists():
+            rows = _iter_jsonl(se_splits / "train.jsonl")
+            rng.shuffle(rows)
+            if baseline_max_samples > 0:
+                rows = rows[: int(baseline_max_samples)]
+            metric_rows: List[Dict[str, Any]] = []
+            for r in rows:
+                text = str(r.get("text") or "")
+                if not text.strip():
+                    continue
+                res = analyze_text(
+                    text,
+                    model_id=str(teacher_model),
+                    doc_type="prose",
+                    backend="hf",
+                    max_input_tokens=int(teacher_max_input_tokens),
+                    normalize_text=True,
+                    compute_cohesion=False,
+                )
+                dm = res.get("doc_metrics") or {}
+                if isinstance(dm, dict) and dm:
+                    metric_rows.append(dm)
+            if not metric_rows:
+                raise RuntimeError("Failed to build baseline (no metric rows)")
+            baseline_path.parent.mkdir(parents=True, exist_ok=True)
+            build_baseline_from_rows(str(teacher_model), metric_rows, out_path=baseline_path)
+            data_vol.commit()
+            hf_cache_vol.commit()
+    except Exception:
+        _write_error("build_baseline", extra={"baseline_path": str(baseline_path)})
+        raise
+
+    labels_root = teacher_corpus_root / f"labels_{label_version}_{safe_model_id(teacher_model)}_{teacher_max_input_tokens}"
+    labels_root.mkdir(parents=True, exist_ok=True)
+    for split in ("train", "val", "test"):
+        _checkpoint("label_teacher_split", extra={"split": str(split), "labels_root": str(labels_root)})
+        out_path = labels_root / f"{split}.jsonl"
+        if out_path.exists():
+            continue
+        try:
+            label_jsonl(
+                in_path=teacher_splits / f"{split}.jsonl",
+                out_path=out_path,
+                max_samples=int(cfg.get("label_max_samples") or 0) or None,
+                seed=int(seed),
+                teacher_model_id=str(teacher_model),
+                baseline_model=str(baseline_path),
                 doc_type="prose",
                 backend="hf",
                 max_input_tokens=int(teacher_max_input_tokens),
                 normalize_text=True,
                 compute_cohesion=False,
             )
-            dm = res.get("doc_metrics") or {}
-            if isinstance(dm, dict) and dm:
-                metric_rows.append(dm)
-        if not metric_rows:
-            raise RuntimeError("Failed to build baseline (no metric rows)")
-        baseline_path.parent.mkdir(parents=True, exist_ok=True)
-        build_baseline_from_rows(str(teacher_model), metric_rows, out_path=baseline_path)
-        data_vol.commit()
-        hf_cache_vol.commit()
-
-    labels_root = teacher_corpus_root / f"labels_{label_version}_{safe_model_id(teacher_model)}_{teacher_max_input_tokens}"
-    labels_root.mkdir(parents=True, exist_ok=True)
-    for split in ("train", "val", "test"):
-        out_path = labels_root / f"{split}.jsonl"
-        if out_path.exists():
-            continue
-        label_jsonl(
-            in_path=teacher_splits / f"{split}.jsonl",
-            out_path=out_path,
-            max_samples=int(cfg.get("label_max_samples") or 0) or None,
-            seed=int(seed),
-            teacher_model_id=str(teacher_model),
-            baseline_model=str(baseline_path),
-            doc_type="prose",
-            backend="hf",
-            max_input_tokens=int(teacher_max_input_tokens),
-            normalize_text=True,
-            compute_cohesion=False,
-        )
-        data_vol.commit()
-        hf_cache_vol.commit()
+            data_vol.commit()
+            hf_cache_vol.commit()
+        except Exception:
+            _write_error(
+                "label_teacher_split",
+                extra={
+                    "split": str(split),
+                    "out_path": str(out_path),
+                    "labels_root": str(labels_root),
+                },
+            )
+            raise
 
     go_root = Path(f"{REPO_REMOTE_PATH}/data/corpora/mixed_windows_v1/splits")
     go_train = _iter_jsonl(go_root / "train.jsonl")
@@ -359,7 +428,8 @@ def train_remote(cfg_json: str) -> str:
     lr = float(cfg.get("lr") or 8e-5)
     epochs = int(cfg.get("epochs") or 1)
 
-    lora_r = int(cfg.get("lora_r") or 16)
+    lora_r_val = cfg.get("lora_r")
+    lora_r = int(lora_r_val) if lora_r_val is not None else 0
     lora_alpha = int(cfg.get("lora_alpha") or 32)
     lora_dropout = float(cfg.get("lora_dropout") or 0.05)
     grad_accum_steps = int(cfg.get("grad_accum_steps") or 16)
@@ -375,70 +445,84 @@ def train_remote(cfg_json: str) -> str:
     if not isinstance(primary, dict):
         primary = {"greatness": 1.0}
 
-    train_summary = train_multihead_scorer(
-        train_path=mixed_splits / "train.jsonl",
-        val_path=mixed_splits / "val.jsonl",
-        out_dir=out_dir,
-        base_model=str(init_model),
-        init_model_for_head0=str(init_model),
-        doc_type="prose",
-        normalize_text=True,
-        positive_sources=("great_author",),
-        negative_sources=("other_author",),
-        teacher_label_key="label",
-        teacher_categories_key="teacher_categories_0_1",
-        rubric_categories=rubric_categories,
-        head_weights=tuple(float(x) for x in head_weights),
-        max_length=max_length,
-        batch_size=batch_size,
-        lr=lr,
-        weight_decay=float(cfg.get("weight_decay") or 0.01),
-        epochs=epochs,
-        seed=seed,
-        device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
-        trust_remote_code=True,
-        lora_r=lora_r,
-        lora_alpha=lora_alpha,
-        lora_dropout=lora_dropout,
-        gradient_checkpointing=bool(cfg.get("gradient_checkpointing", True)),
-        bf16=bool(cfg.get("bf16", True)),
-        grad_accum_steps=grad_accum_steps,
-        merge_lora=True,
-        freeze_backbone=bool(cfg.get("freeze_backbone", False)),
-        primary_weights={str(k): float(v) for k, v in primary.items()},
+    _checkpoint(
+        "train_multihead_scorer",
+        extra={"out_dir": str(out_dir), "mixed_train": int(len(mixed_train)), "mixed_val": int(len(mixed_val))},
     )
+    try:
+        train_summary = train_multihead_scorer(
+            train_path=mixed_splits / "train.jsonl",
+            val_path=mixed_splits / "val.jsonl",
+            out_dir=out_dir,
+            base_model=str(init_model),
+            init_model_for_head0=str(init_model),
+            doc_type="prose",
+            normalize_text=True,
+            positive_sources=("great_author",),
+            negative_sources=("other_author",),
+            teacher_label_key="label",
+            teacher_categories_key="teacher_categories_0_1",
+            rubric_categories=rubric_categories,
+            head_weights=tuple(float(x) for x in head_weights),
+            max_length=max_length,
+            batch_size=batch_size,
+            lr=lr,
+            weight_decay=float(cfg.get("weight_decay") or 0.01),
+            epochs=epochs,
+            seed=seed,
+            device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
+            trust_remote_code=True,
+            lora_r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            gradient_checkpointing=bool(cfg.get("gradient_checkpointing", True)),
+            bf16=bool(cfg.get("bf16", True)),
+            grad_accum_steps=grad_accum_steps,
+            merge_lora=True,
+            freeze_backbone=bool(cfg.get("freeze_backbone", False)),
+            primary_weights={str(k): float(v) for k, v in primary.items()},
+        )
+    except Exception:
+        _write_error("train_multihead_scorer", extra={"out_dir": str(out_dir)})
+        raise
 
-    eval_great_other = eval_multihead_scorer(
-        model_path_or_id=str(out_dir),
-        samples_path=go_root / "test.jsonl",
-        positive_sources=("great_author",),
-        negative_sources=("other_author",),
-        teacher_label_key="label",
-        teacher_categories_key="teacher_categories_0_1",
-        rubric_categories=rubric_categories,
-        doc_type="prose",
-        normalize_text=True,
-        max_length=max_length,
-        batch_size=int(cfg.get("eval_batch_size") or 2),
-        device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
-    )
-    eval_teacher = eval_multihead_scorer(
-        model_path_or_id=str(out_dir),
-        samples_path=mixed_splits / "test_teacher.jsonl",
-        positive_sources=("great_author",),
-        negative_sources=("other_author",),
-        teacher_label_key="label",
-        teacher_categories_key="teacher_categories_0_1",
-        rubric_categories=rubric_categories,
-        doc_type="prose",
-        normalize_text=True,
-        max_length=max_length,
-        batch_size=int(cfg.get("eval_batch_size") or 2),
-        device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
-    )
+    _checkpoint("eval_multihead_scorer")
+    try:
+        eval_great_other = eval_multihead_scorer(
+            model_path_or_id=str(out_dir),
+            samples_path=go_root / "test.jsonl",
+            positive_sources=("great_author",),
+            negative_sources=("other_author",),
+            teacher_label_key="label",
+            teacher_categories_key="teacher_categories_0_1",
+            rubric_categories=rubric_categories,
+            doc_type="prose",
+            normalize_text=True,
+            max_length=max_length,
+            batch_size=int(cfg.get("eval_batch_size") or 2),
+            device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
+        )
+        eval_teacher = eval_multihead_scorer(
+            model_path_or_id=str(out_dir),
+            samples_path=mixed_splits / "test_teacher.jsonl",
+            positive_sources=("great_author",),
+            negative_sources=("other_author",),
+            teacher_label_key="label",
+            teacher_categories_key="teacher_categories_0_1",
+            rubric_categories=rubric_categories,
+            doc_type="prose",
+            normalize_text=True,
+            max_length=max_length,
+            batch_size=int(cfg.get("eval_batch_size") or 2),
+            device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
+        )
+    except Exception:
+        _write_error("eval_multihead_scorer", extra={"out_dir": str(out_dir)})
+        raise
 
     data_vol.commit()
     hf_cache_vol.commit()
+    _checkpoint("done")
     return json.dumps(
         {
             "out_dir": str(out_dir),

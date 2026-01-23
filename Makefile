@@ -1,4 +1,4 @@
-.PHONY: setup setup-modal modal-token check test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other sample-windows-se-great sample-windows-se-other build-mixed-windows-corpus build-rss-corpus build-great-baseline label-mixed-windows eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-qwen3-great-other modal-train-scorer-qwen3-mixed-supervision modal-train-scorer-qwen3-multihead
+.PHONY: setup setup-modal modal-token check test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other sample-windows-se-great sample-windows-se-other build-mixed-windows-corpus build-rss-corpus build-great-baseline label-mixed-windows eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke snapshot-urls modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-qwen3-great-other modal-train-scorer-qwen3-mixed-supervision modal-train-scorer-qwen3-multihead
 .PHONY: modal-score-urls
 
 VENV ?= .venv
@@ -7,10 +7,12 @@ UV ?= uv
 MODAL ?= $(PYTHON) -m modal
 MODAL_RUN_FLAGS ?=
 URL_SCORE_ARGS ?=
+URL_SNAPSHOT_OUT ?= data/benchmarks/urls/url_snapshot_v1.jsonl
 MODEL ?= gpt2
 BENCH_DIR ?= data/benchmarks/studio_benchmark_v3
 BENCH_DIR_V4 ?= data/benchmarks/studio_benchmark_v4
 STD_EBOOKS_DIR ?= data/corpora/standardebooks_corpus_v1
+STD_EBOOKS_VOL_DIR ?= /vol/corpora/standardebooks_corpus_v1
 STD_EBOOKS_MAX_PAGES ?= 30
 STD_EBOOKS_START_PAGE ?= 1
 STD_EBOOKS_MAX_BOOKS ?= 240
@@ -42,6 +44,7 @@ WINDOWS_MAX_CHARS ?= 3800
 WINDOWS_MIN_CHARS ?= 900
 WINDOWS_PER_DOC ?= 8
 RSS_DIR ?= data/corpora/rss_corpus_v1
+RSS_VOL_DIR ?= /vol/corpora/rss_corpus_v1
 RSS_FEEDS_JSON ?= configs/rss_feeds_v1.json
 RSS_MAX_CHARS ?= 3800
 RSS_MIN_CHARS ?= 900
@@ -102,6 +105,9 @@ run-ui: setup
 
 run-api: setup
 	$(PYTHON) -m tools.studio_api --host 127.0.0.1 --port 8000
+
+snapshot-urls: setup
+	$(PYTHON) -m tools.studio.snapshot_urls --urls "$(URLS)" --out "$(URL_SNAPSHOT_OUT)"
 
 build-baseline: setup
 	$(PYTHON) -c "from tools.studio.baselines import build_baseline; build_baseline('$(MODEL)')"
@@ -244,13 +250,13 @@ modal-distill-scorer-v4: setup-modal
 	$(MODAL) run deploy/modal/studio_distill_scorer_v4.py --out-dir /vol/models/scorer_v4_distilled
 
 modal-build-standardebooks-corpus: setup-modal
-	$(MODAL) run deploy/modal/studio_build_standardebooks_corpus.py --out-dir /vol/corpora/standardebooks_corpus_v1 --start-page $(STD_EBOOKS_START_PAGE) --max-pages $(STD_EBOOKS_MAX_PAGES) --max-books $(STD_EBOOKS_MAX_BOOKS) --excerpts-per-book $(STD_EBOOKS_EXCERPTS_PER_BOOK) --max-chars $(STD_EBOOKS_MAX_CHARS) --min-chars $(STD_EBOOKS_MIN_CHARS) --sleep-s $(STD_EBOOKS_SLEEP_S)
+	$(MODAL) run deploy/modal/studio_build_standardebooks_corpus.py --out-dir $(STD_EBOOKS_VOL_DIR) --start-page $(STD_EBOOKS_START_PAGE) --max-pages $(STD_EBOOKS_MAX_PAGES) --max-books $(STD_EBOOKS_MAX_BOOKS) --excerpts-per-book $(STD_EBOOKS_EXCERPTS_PER_BOOK) --max-chars $(STD_EBOOKS_MAX_CHARS) --min-chars $(STD_EBOOKS_MIN_CHARS) --sleep-s $(STD_EBOOKS_SLEEP_S)
 
 modal-distill-scorer-standardebooks: setup-modal
-	$(MODAL) run deploy/modal/studio_distill_scorer_standardebooks.py --out-dir /vol/models/scorer_standardebooks_distilled --corpus-dir /vol/corpora/standardebooks_corpus_v1 --max-pages $(STD_EBOOKS_MAX_PAGES) --max-books $(STD_EBOOKS_MAX_BOOKS) --excerpts-per-book $(STD_EBOOKS_EXCERPTS_PER_BOOK) --max-chars $(STD_EBOOKS_MAX_CHARS) --min-chars $(STD_EBOOKS_MIN_CHARS) --sleep-s $(STD_EBOOKS_SLEEP_S)
+	$(MODAL) run deploy/modal/studio_distill_scorer_standardebooks.py --out-dir /vol/models/scorer_standardebooks_distilled --corpus-dir $(STD_EBOOKS_VOL_DIR) --max-pages $(STD_EBOOKS_MAX_PAGES) --max-books $(STD_EBOOKS_MAX_BOOKS) --excerpts-per-book $(STD_EBOOKS_EXCERPTS_PER_BOOK) --max-chars $(STD_EBOOKS_MAX_CHARS) --min-chars $(STD_EBOOKS_MIN_CHARS) --sleep-s $(STD_EBOOKS_SLEEP_S)
 
 modal-build-rss-corpus: setup-modal
-	$(MODAL) run deploy/modal/studio_build_rss_corpus.py --out-dir /vol/corpora/rss_corpus_v1 --feeds-json $(RSS_FEEDS_JSON) --max-items-per-feed $(RSS_MAX_ITEMS_PER_FEED) --excerpts-per-item $(RSS_EXCERPTS_PER_ITEM) --max-chars $(RSS_MAX_CHARS) --min-chars $(RSS_MIN_CHARS) --sleep-s $(RSS_SLEEP_S)
+	$(MODAL) run deploy/modal/studio_build_rss_corpus.py --out-dir $(RSS_VOL_DIR) --feeds-json $(RSS_FEEDS_JSON) --max-items-per-feed $(RSS_MAX_ITEMS_PER_FEED) --excerpts-per-item $(RSS_EXCERPTS_PER_ITEM) --max-chars $(RSS_MAX_CHARS) --min-chars $(RSS_MIN_CHARS) --sleep-s $(RSS_SLEEP_S)
 
 modal-distill-scorer-mixed: setup-modal
 	$(MODAL) run deploy/modal/studio_distill_scorer_mixed.py --out-dir /vol/models/scorer_mixed_distilled --standardebooks-dir /vol/corpora/standardebooks_corpus_v1 --rss-dir /vol/corpora/rss_corpus_v1 --mixed-corpus-dir /vol/corpora/mixed_corpus_v1

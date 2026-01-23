@@ -649,6 +649,142 @@ def analyze_text(
             cooldown.append(float(H_arr[idx] - np.mean(H_arr[idx + 1 : idx + 4])))
     cooldown_drop_3 = float(np.mean(cooldown)) if cooldown else None
 
+    # Spike "event" features: cluster adjacent spike tokens into peak events (more stable than raw threshold hits).
+    spike_events: List[int] = []
+    spike_event_surprisal: List[float] = []
+    spike_cluster_lens: List[int] = []
+    if spike_pos.size > 0:
+        clusters: List[Tuple[int, int]] = []
+        start = int(spike_pos[0])
+        last = int(spike_pos[0])
+        for p in spike_pos[1:]:
+            pi = int(p)
+            if pi <= last + 1:
+                last = pi
+                continue
+            clusters.append((start, last))
+            start = pi
+            last = pi
+        clusters.append((start, last))
+
+        for s0, s1 in clusters:
+            seg = surprisal[int(s0) : int(s1) + 1]
+            if seg.size <= 0:
+                continue
+            rel = int(np.argmax(seg))
+            peak_i = int(s0) + rel
+            spike_events.append(peak_i)
+            spike_event_surprisal.append(float(surprisal[peak_i]))
+            spike_cluster_lens.append(int(s1 - s0 + 1))
+
+    def _safe_quantile(vals: List[float], q: float) -> Optional[float]:
+        if not vals:
+            return None
+        arr = np.array(vals, dtype=np.float32)
+        try:
+            return float(np.quantile(arr, float(q)))
+        except Exception:
+            return float(np.percentile(arr, 100.0 * float(q)))
+
+    # Inter-spike-event intervals ("heartbeat" regularity).
+    spike_event_ipi: List[int] = []
+    spike_event_ipi_mean = None
+    spike_event_ipi_cv = None
+    spike_event_ipi_p50 = None
+    spike_event_ipi_p90 = None
+    if len(spike_events) >= 2:
+        spike_events_sorted = np.array(sorted(spike_events), dtype=np.int32)
+        diffs = np.diff(spike_events_sorted)
+        spike_event_ipi = [int(x) for x in diffs.tolist()]
+        m = float(np.mean(diffs))
+        spike_event_ipi_mean = float(m)
+        spike_event_ipi_p50 = float(np.median(diffs))
+        spike_event_ipi_p90 = float(np.percentile(diffs, 90))
+        spike_event_ipi_cv = float(np.std(diffs) / (m + 1e-12)) if diffs.size > 1 else None
+
+    # Cooldown length: tokens after each event until surprisal drops below median.
+    spike_event_cooldowns: List[int] = []
+    if spike_events:
+        med_s = float(np.median(surprisal))
+        for i in sorted(spike_events):
+            j = int(i) + 1
+            steps = 0
+            while j < len(surprisal) and float(surprisal[j]) > med_s:
+                steps += 1
+                j += 1
+                if steps > 512:
+                    break
+            spike_event_cooldowns.append(int(steps))
+
+    # Turn-aligned spikes: are spike events concentrated in sentences containing contrast/causal/conditional turns?
+    turn_spike_frac = None
+    turn_spike_lift = None
+    turn_sentence_frac = None
+    spike_events_per_sentence_cv = None
+    spike_events_per_paragraph_cv = None
+    char_starts_arr = np.array(char_starts, dtype=np.int32)
+    try:
+        # Heuristic turn marker vocabulary (high precision, not exhaustive).
+        turn_re = re.compile(
+            r"\b(but|however|though|yet|nevertheless|still|instead|therefore|so|because|since|if|unless|while|whereas)\b",
+            flags=re.I,
+        )
+        sents = sent_spans
+        n_sents = len(sents)
+        if n_sents > 0:
+            sent_has_turn = []
+            sent_event_counts: List[int] = [0] * n_sents
+            for s0, s1 in sents:
+                seg = (text_used[int(s0) : int(s1)] or "").strip()
+                sent_has_turn.append(bool(turn_re.search(seg)))
+            if spike_events:
+                for i in spike_events:
+                    cs = int(char_starts[i]) if 0 <= int(i) < len(char_starts) else -1
+                    if cs < 0:
+                        continue
+                    for j, (s0, s1) in enumerate(sents):
+                        if int(s0) <= cs < int(s1):
+                            sent_event_counts[j] += 1
+                            break
+            total_events = int(sum(sent_event_counts))
+            if total_events > 0:
+                in_turn = int(sum(c for c, ht in zip(sent_event_counts, sent_has_turn) if ht))
+                turn_spike_frac = float(in_turn) / float(total_events)
+            turn_sents = int(sum(1 for ht in sent_has_turn if ht))
+            turn_sentence_frac = float(turn_sents) / float(n_sents) if n_sents > 0 else None
+            if turn_spike_frac is not None and turn_sentence_frac and turn_sentence_frac > 1e-9:
+                turn_spike_lift = float(turn_spike_frac / float(turn_sentence_frac))
+
+            # Multi-scale rhythm: burstiness of events per sentence.
+            if len(sent_event_counts) >= 2:
+                mu = float(np.mean(np.array(sent_event_counts, dtype=np.float32)))
+                sd = float(np.std(np.array(sent_event_counts, dtype=np.float32)))
+                spike_events_per_sentence_cv = float(sd / (mu + 1e-12))
+
+        # Burstiness of events per paragraph (prose only; paragraphs for poem are too degenerate).
+        para_sp = paragraph_units(text_used, "prose")
+        if para_sp and spike_events:
+            para_counts: List[int] = []
+            for p0, p1 in para_sp:
+                mask = (char_starts_arr >= int(p0)) & (char_starts_arr < int(p1))
+                if not np.any(mask):
+                    para_counts.append(0)
+                    continue
+                # Count events whose token index lands in this paragraph.
+                idxs = np.where(mask)[0]
+                if idxs.size <= 0:
+                    para_counts.append(0)
+                    continue
+                lo = int(idxs.min())
+                hi = int(idxs.max())
+                para_counts.append(int(sum(1 for ev in spike_events if lo <= int(ev) <= hi)))
+            if len(para_counts) >= 2:
+                mu = float(np.mean(np.array(para_counts, dtype=np.float32)))
+                sd = float(np.std(np.array(para_counts, dtype=np.float32)))
+                spike_events_per_paragraph_cv = float(sd / (mu + 1e-12))
+    except Exception:
+        pass
+
     content_fraction = float(np.mean(is_content_arr)) if is_content_list else None
     punct_rate = float(np.mean(is_punct_arr)) if is_punct_list else None
     newline_rate = float(np.mean(np.array(is_newline_list, dtype=np.float32))) if is_newline_list else None
@@ -692,6 +828,24 @@ def analyze_text(
         "ipi_cv": ipi_cv,
         "ipi_p50": ipi_p50,
         "cooldown_entropy_drop_3": cooldown_drop_3,
+        # Cadence v2: spike-event heartbeat features
+        "spike_event_rate_per_100": float((len(spike_events) / max(1, int(len(surprisal)))) * 100.0),
+        "spike_event_surprisal_p50": _safe_quantile(spike_event_surprisal, 0.50),
+        "spike_event_surprisal_p90": _safe_quantile(spike_event_surprisal, 0.90),
+        "spike_event_surprisal_max": float(max(spike_event_surprisal)) if spike_event_surprisal else None,
+        "spike_cluster_len_mean": float(np.mean(np.array(spike_cluster_lens, dtype=np.float32))) if spike_cluster_lens else None,
+        "spike_cluster_len_p90": float(np.percentile(np.array(spike_cluster_lens, dtype=np.float32), 90)) if spike_cluster_lens else None,
+        "spike_event_ipi_mean": spike_event_ipi_mean,
+        "spike_event_ipi_cv": spike_event_ipi_cv,
+        "spike_event_ipi_p50": spike_event_ipi_p50,
+        "spike_event_ipi_p90": spike_event_ipi_p90,
+        "spike_event_cooldown_to_median_mean": float(np.mean(np.array(spike_event_cooldowns, dtype=np.float32))) if spike_event_cooldowns else None,
+        "spike_event_cooldown_to_median_p90": float(np.percentile(np.array(spike_event_cooldowns, dtype=np.float32), 90)) if spike_event_cooldowns else None,
+        "turn_sentence_fraction": turn_sentence_frac,
+        "turn_aligned_spike_event_fraction": turn_spike_frac,
+        "turn_aligned_spike_event_lift": turn_spike_lift,
+        "spike_events_per_sentence_cv": spike_events_per_sentence_cv,
+        "spike_events_per_paragraph_cv": spike_events_per_paragraph_cv,
     }
     doc_metrics.update(surface_metrics)
 

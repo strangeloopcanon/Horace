@@ -1,0 +1,13 @@
+# Fixed URL benchmark set (v1)
+# So what: used for reproducible regression checks via snapshotting (no live-page drift).
+https://www.astralcodexten.com/p/the-dilbert-afterlife
+https://www.strangeloopcanon.com/p/life-in-india-is-a-series-of-bilateral
+https://hollisrobbinsanecdotal.substack.com/p/llm-poetry-and-the-greatness-question
+https://www.strangeloopcanon.com/p/soul
+https://www.strangeloopcanon.com/p/whither-utopia
+https://www.noahpinion.blog/p/zero-sum-economics-keeps-failing
+https://www.theguardian.com/business/2026/jan/15/the-crisis-whisperer-how-adam-tooze-makes-sense-of-our-bewildering-age
+https://aiascendant.com/p/2000-years-of-ai-doom
+https://slatestarcodex.com/2014/07/30/meditations-on-moloch/
+https://globalnews.ca/news/11623027/read-full-transcript-donald-trump-speech-davos/
+https://www.ianwelsh.net/carneys-speech-transcript-comments-time-for-the-truth-for-the-middle-powers-to-align/
