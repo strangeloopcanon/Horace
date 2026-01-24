@@ -17,6 +17,7 @@ from tools.analyze import (
     permutation_entropy,
     hurst_rs,
 )
+from tools.studio.marker_metrics import marker_metrics
 from tools.studio.text_normalize import normalize_for_studio
 
 
@@ -401,6 +402,7 @@ def analyze_text(
     line_spans = _line_spans(text_used)
     sent_spans = _sentence_spans(text_used)
     surface_metrics = _surface_metrics(text_used, sent_spans=sent_spans)
+    marker_meta = marker_metrics(text_used, sent_spans=sent_spans)
 
     # Sliding-window settings (kept similar to tools/analyze.py)
     max_ctx = min(int(context), int(getattr(model, "max_context")() or context), 2048)
@@ -848,6 +850,7 @@ def analyze_text(
         "spike_events_per_paragraph_cv": spike_events_per_paragraph_cv,
     }
     doc_metrics.update(surface_metrics)
+    doc_metrics.update(marker_meta)
 
     # Cohesion delta (shuffled units) – expensive, but useful; run once if possible.
     if compute_cohesion:

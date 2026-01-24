@@ -6,6 +6,13 @@ from typing import List
 
 
 _PUNCT_RE = re.compile(r"[\"'“”‘’`]+|[.,;:!?]+")
+_URL_RE = re.compile(r"https?://\S+", flags=re.I)
+_BRACKET_CITE_RE = re.compile(r"\[\s*\d{1,4}\s*\]")
+_NUM_RE = re.compile(r"\b\d+(?:[.,]\d+)?(?:%|[A-Za-z]+)?\b")
+_TRANSITION_RE = re.compile(
+    r"\b(but|however|though|yet|nevertheless|still|instead|therefore|thus|hence)\b,?",
+    flags=re.I,
+)
 
 
 def _split_paragraphs(text: str) -> List[str]:
@@ -131,6 +138,28 @@ def corrupt_flatten_paragraphs(text: str) -> str:
     return t.strip()
 
 
+def corrupt_strip_transitions(text: str) -> str:
+    """Remove/neutralize obvious discourse turn markers to flatten the argument spine."""
+    t = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    t = _TRANSITION_RE.sub("", t)
+    t = re.sub(r"\s{2,}", " ", t)
+    t = re.sub(r"\s+([,.;:!?])", r"\1", t)
+    t = re.sub(r"\n{4,}", "\n\n\n", t)
+    return t.strip()
+
+
+def corrupt_strip_specifics(text: str) -> str:
+    """Remove lightweight specificity anchors (URLs, bracketed cites, numbers)."""
+    t = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    t = _URL_RE.sub("", t)
+    t = _BRACKET_CITE_RE.sub("", t)
+    t = _NUM_RE.sub("some", t)
+    t = re.sub(r"\s{2,}", " ", t)
+    t = re.sub(r"\s+([,.;:!?])", r"\1", t)
+    t = re.sub(r"\n{4,}", "\n\n\n", t)
+    return t.strip()
+
+
 def corrupt_text(text: str, *, rng: random.Random, kind: str) -> str:
     k = (kind or "").strip().lower()
     if k in ("shuffle", "shuffle_sentences", "shuffle_sents"):
@@ -145,4 +174,8 @@ def corrupt_text(text: str, *, rng: random.Random, kind: str) -> str:
         return corrupt_drop_punctuation(text)
     if k in ("flatten", "flatten_paras", "flatten_paragraphs"):
         return corrupt_flatten_paragraphs(text)
+    if k in ("strip_transitions", "strip_transition_markers", "strip_turn_markers"):
+        return corrupt_strip_transitions(text)
+    if k in ("strip_specifics", "strip_numbers_urls", "strip_evidence"):
+        return corrupt_strip_specifics(text)
     raise ValueError(f"Unknown corruption kind: {kind}")

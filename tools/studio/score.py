@@ -41,6 +41,9 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
             "nucleus_w_mean": {"weight": 0.30, "mode": "match_baseline"},
             "word_ttr": {"weight": 0.20, "mode": "match_baseline"},
             "word_top5_frac": {"weight": 0.20, "mode": "match_baseline"},
+            # Argument spine proxy (deterministic): are discourse turns present?
+            "marker_contrastive_sentence_fraction": {"weight": 0.10, "mode": "match_baseline"},
+            "marker_causal_sentence_fraction": {"weight": 0.10, "mode": "match_baseline"},
         },
     },
     "cadence": {
@@ -62,6 +65,9 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
             "spike_event_cooldown_to_median_mean": {"weight": 0.06, "mode": "match_baseline"},
             "turn_aligned_spike_event_lift": {"weight": 0.04, "mode": "match_baseline"},
             "spike_events_per_sentence_cv": {"weight": 0.03, "mode": "match_baseline"},
+            # Punctuation rhythm (deterministic; complements token cadence).
+            "marker_commas_per_sentence_mean": {"weight": 0.03, "mode": "match_baseline"},
+            "marker_dashes_per_1000_words": {"weight": 0.02, "mode": "match_baseline"},
         },
     },
     "cohesion": {
@@ -78,6 +84,10 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
         "metrics": {
             "spike_next_content_rate": {"weight": 0.6, "mode": "higher_is_better"},
             "spike_prev_punct_rate": {"weight": 0.4, "mode": "lower_is_better"},
+            # Evidence + specificity distribution (deterministic): grounds claims.
+            "marker_evidential_sentence_fraction": {"weight": 0.15, "mode": "match_baseline"},
+            "marker_numbers_per_1000_words": {"weight": 0.15, "mode": "match_baseline"},
+            "marker_proper_nouns_per_1000_words": {"weight": 0.15, "mode": "match_baseline"},
         },
     },
     "distinctiveness": {
@@ -87,6 +97,8 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
             "word_hapax_ratio": {"weight": 0.30, "mode": "match_baseline"},
             "punct_variety_per_1000_chars": {"weight": 0.20, "mode": "match_baseline"},
             "word_len_mean": {"weight": 0.15, "mode": "match_baseline"},
+            # Concrete imagery proxy (deterministic): sensory anchoring.
+            "marker_sensory_word_fraction": {"weight": 0.15, "mode": "match_baseline"},
         },
     },
 }

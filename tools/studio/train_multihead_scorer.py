@@ -459,11 +459,6 @@ def train_multihead_scorer(
 
     dev = _best_device(device)
     model.to(dev)
-    if bool(gradient_checkpointing) and hasattr(model, "gradient_checkpointing_enable"):
-        try:
-            model.gradient_checkpointing_enable()
-        except Exception:
-            pass
 
     is_lora = int(lora_r) > 0
     if is_lora:
@@ -496,6 +491,14 @@ def train_multihead_scorer(
         for p in head.parameters():
             p.requires_grad = True
         model.config.horace_freeze_backbone = True
+
+    # Gradient checkpointing is only useful when backpropagating through the backbone.
+    # If we're training only a classifier head, enabling it can create noisy warnings and overhead.
+    if bool(gradient_checkpointing) and (not bool(freeze_backbone)) and hasattr(model, "gradient_checkpointing_enable"):
+        try:
+            model.gradient_checkpointing_enable()
+        except Exception:
+            pass
 
     collate = lambda b: _collate(tok, b, max_length=int(max_length))
     train_loader = DataLoader(train_ds, batch_size=int(batch_size), shuffle=True, collate_fn=collate)

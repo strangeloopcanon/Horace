@@ -328,7 +328,7 @@ def train_remote(cfg_json: str) -> str:
     # Baselines affect rubric percentiles; tie to the teacher corpus dir so bigger/new corpora
     # don't silently reuse an older tiny baseline.
     baseline_path = Path(
-        f"/vol/baselines/{safe_model_id(teacher_model)}_{teacher_corpus_root.name}_{teacher_max_input_tokens}_docs.json"
+        f"/vol/baselines/{safe_model_id(teacher_model)}_{teacher_corpus_root.name}_{label_version}_{teacher_max_input_tokens}_docs.json"
     )
     try:
         _checkpoint("build_baseline", extra={"baseline_path": str(baseline_path)})
@@ -440,7 +440,8 @@ def train_remote(cfg_json: str) -> str:
     head_names = ("greatness", "rubric_overall") + tuple(f"rubric_{c}" for c in rubric_categories)
     head_weights = cfg.get("head_weights")
     if not isinstance(head_weights, list) or len(head_weights) != len(head_names):
-        head_weights = [1.0] * len(head_names)
+        # Default: emphasize teacher supervision heads to counter the mixed dataset mask imbalance.
+        head_weights = [1.0, 4.0] + [2.0] * (len(head_names) - 2)
 
     primary = cfg.get("primary_weights")
     if not isinstance(primary, dict) or not primary:
@@ -569,12 +570,12 @@ def main(  # pragma: no cover
     standardebooks_max_pages: int = 30,
     standardebooks_excerpts_per_book: int = 2,
     standardebooks_sleep_s: float = 0.6,
-    corruption_kinds: str = "flatten,drop_punct,repeat_sentences",
+    corruption_kinds: str = "flatten,drop_punct,repeat_sentences,strip_transitions,strip_specifics",
     corruptions_per_sample: int = 1,
     gibberish_train: int = 80,
     teacher_upsample: int = 8,
     label_max_samples: int = 0,
-    label_version: str = "rubricv2",
+    label_version: str = "rubricv3",
     mixed_supervision_dir: str = "/vol/corpora/mixed_supervision_v2",
     teacher_corpus_dir: str = "/vol/corpora/mixed_teacher_v1",
     standardebooks_dir: str = "/vol/corpora/standardebooks_corpus_v1",
@@ -586,7 +587,7 @@ def main(  # pragma: no cover
     batch_size: int = 1,
     lr: float = 8e-5,
     weight_decay: float = 0.01,
-    epochs: int = 1,
+    epochs: int = 2,
     lora_r: int = 0,
     lora_alpha: int = 32,
     lora_dropout: float = 0.05,
