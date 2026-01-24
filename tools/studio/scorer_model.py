@@ -11,6 +11,7 @@ import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from tools.studio.text_normalize import normalize_for_studio
+from tools.studio.score import rubric_category_weights
 
 
 _CACHE_LOCK = threading.Lock()
@@ -191,7 +192,42 @@ def score_with_scorer(
 
     mean_probs = probs.mean(axis=0).astype(float).tolist() if probs.size else [0.0] * n_heads
     mean_probs = [0.0 if not math.isfinite(p) else max(0.0, min(1.0, float(p))) for p in mean_probs]
+
+    per_window_probs_by_label: Dict[str, np.ndarray] = {}
+    if probs.size:
+        for i, lab in enumerate(head_labels):
+            per_window_probs_by_label[str(lab)] = probs[:, i].astype(np.float64)
+
     head_probs_by_label = {lab: float(p) for lab, p in zip(head_labels, mean_probs)}
+
+    # Derived: rubric_overall from rubric_* category heads.
+    # This keeps inference stable even if the model only predicts rubric categories.
+    try:
+        cat_w = rubric_category_weights()
+        pairs: List[Tuple[str, float]] = []
+        for cat, w in cat_w.items():
+            lab = f"rubric_{cat}"
+            if lab in per_window_probs_by_label:
+                wf = float(w)
+                if math.isfinite(wf) and wf > 0:
+                    pairs.append((lab, wf))
+        if not pairs:
+            for lab in per_window_probs_by_label:
+                if lab.startswith("rubric_") and lab not in ("rubric_overall", "rubric_overall_from_categories"):
+                    pairs.append((lab, 1.0))
+        if pairs:
+            total_w = float(sum(w for _, w in pairs))
+            if total_w > 0:
+                acc = np.zeros((int(probs.shape[0]),), dtype=np.float64)
+                for lab, w in pairs:
+                    acc += float(w) * per_window_probs_by_label[lab].astype(np.float64)
+                derived = acc / float(total_w)
+                derived = np.clip(derived, 0.0, 1.0)
+                derived_key = "rubric_overall" if "rubric_overall" not in head_probs_by_label else "rubric_overall_from_categories"
+                per_window_probs_by_label[str(derived_key)] = derived.astype(np.float64)
+                head_probs_by_label[str(derived_key)] = float(np.mean(derived).item()) if derived.size else 0.0
+    except Exception:
+        pass
 
     primary_from_heads: Dict[str, Any] = {}
     primary_prob = float(mean_probs[0]) if mean_probs else 0.0
@@ -226,7 +262,11 @@ def score_with_scorer(
     window_probs: List[float] = []
     if probs.size:
         if n_heads <= 1 or not primary_from_heads:
-            window_probs = [float(x) for x in probs[:, 0].astype(float).tolist()]
+            key = head_labels[0] if head_labels else "head_0"
+            wv = per_window_probs_by_label.get(str(key))
+            if wv is None:
+                wv = probs[:, 0].astype(np.float64)
+            window_probs = [float(x) for x in wv.astype(float).tolist()]
         else:
             weights = primary_from_heads.get("weights") or {}
             if isinstance(weights, dict):
@@ -234,16 +274,13 @@ def score_with_scorer(
                 if total_w > 0:
                     acc = np.zeros((probs.shape[0],), dtype=np.float64)
                     for lab, w in weights.items():
-                        if lab not in head_probs_by_label:
-                            continue
-                        try:
-                            idx = head_labels.index(str(lab))
-                        except ValueError:
-                            continue
                         wf = float(w)
                         if not math.isfinite(wf) or wf <= 0:
                             continue
-                        acc += wf * probs[:, idx].astype(np.float64)
+                        wv = per_window_probs_by_label.get(str(lab))
+                        if wv is None:
+                            continue
+                        acc += wf * wv.astype(np.float64)
                     window_probs = (acc / float(total_w)).astype(float).tolist()
                 else:
                     window_probs = [float(x) for x in probs[:, 0].astype(float).tolist()]

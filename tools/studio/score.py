@@ -104,6 +104,16 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
 }
 
 
+def rubric_category_weights() -> Dict[str, float]:
+    """Return the current rubric category weights.
+
+    This is used by the trained scorer to derive an overall rubric score from
+    the per-category heads (even if the model doesn't output an explicit
+    `rubric_overall` head).
+    """
+    return {str(name): float(spec.get("weight", 1.0)) for name, spec in _RUBRIC.items()}
+
+
 def score_text(doc_metrics: Dict[str, Any], baseline: Baseline, *, doc_type: str) -> ScoreReport:
     """Score a single analyzed text against baseline distributions.
 

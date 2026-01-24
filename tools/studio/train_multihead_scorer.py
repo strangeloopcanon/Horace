@@ -16,6 +16,7 @@ from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from tools.studio.text_normalize import normalize_for_studio
+from tools.studio.score import rubric_category_weights
 from tools.studio.train_scorer import (
     _auc_roc,
     _best_device,
@@ -81,7 +82,7 @@ class _JsonlMultiTargetDataset(Dataset):
         self.teacher_categories_key = str(teacher_categories_key)
         self.rubric_categories = tuple(str(c) for c in rubric_categories)
 
-        self.head_names = ("greatness", "rubric_overall") + tuple(f"rubric_{c}" for c in self.rubric_categories)
+        self.head_names = ("greatness",) + tuple(f"rubric_{c}" for c in self.rubric_categories)
         self.n_heads = int(len(self.head_names))
 
         pos_set = {str(x) for x in positive_sources if str(x).strip()}
@@ -102,9 +103,6 @@ class _JsonlMultiTargetDataset(Dataset):
                 m[0] = 1.0
 
             teacher_y = _safe_float(r.get(self.teacher_label_key))
-            if teacher_y is not None:
-                y[1] = float(max(0.0, min(1.0, teacher_y)))
-                m[1] = 1.0
 
             cats = r.get(self.teacher_categories_key)
             if isinstance(cats, dict):
@@ -112,14 +110,19 @@ class _JsonlMultiTargetDataset(Dataset):
                     v = _safe_float(cats.get(cat))
                     if v is None:
                         continue
-                    y[2 + i] = float(max(0.0, min(1.0, v)))
-                    m[2 + i] = 1.0
+                    y[1 + i] = float(max(0.0, min(1.0, v)))
+                    m[1 + i] = 1.0
 
             if float(np.sum(m)) <= 0.0:
                 continue
 
             t, _ = normalize_for_studio(text, doc_type=self.doc_type, enabled=self.normalize_text)
-            meta = {"sample_id": r.get("sample_id"), "source": r.get("source"), "group_id": r.get("group_id")}
+            meta = {
+                "sample_id": r.get("sample_id"),
+                "source": r.get("source"),
+                "group_id": r.get("group_id"),
+                "teacher_overall": float(max(0.0, min(1.0, teacher_y))) if teacher_y is not None else None,
+            }
             self._items.append((t, y, m, meta))
 
     def __len__(self) -> int:
@@ -195,6 +198,7 @@ def _eval_multitask(
     all_logits: List[np.ndarray] = []
     all_targets: List[np.ndarray] = []
     all_masks: List[np.ndarray] = []
+    teacher_overall: List[Optional[float]] = []
 
     bce = torch.nn.BCEWithLogitsLoss(reduction="none")
     w = torch.tensor(head_weights.reshape(1, -1), dtype=torch.float32, device=device)
@@ -202,7 +206,11 @@ def _eval_multitask(
         for batch in loader:
             targets = batch.pop("targets").to(device)
             mask = batch.pop("mask").to(device)
-            batch.pop("meta", None)
+            meta = batch.pop("meta", None)
+            if isinstance(meta, list):
+                for r in meta:
+                    v = r.get("teacher_overall") if isinstance(r, dict) else None
+                    teacher_overall.append(_safe_float(v))
             batch = {k: v.to(device) for k, v in batch.items()}
             out = model(**batch)
             logits = out.logits
@@ -241,20 +249,39 @@ def _eval_multitask(
                     "mean_neg": float(np.mean(p[y < 0.5])) if int(np.sum(y < 0.5)) > 0 else None,
                 }
 
-    if logits.shape[1] >= 2:
-        m1 = masks[:, 1] > 0.5
-        if int(np.sum(m1)) > 0:
-            y = targets[m1, 1].astype(np.float64)
-            p = probs[m1, 1].astype(np.float64)
-            out["rubric_overall"] = {
-                "n": int(y.size),
-                "mse": float(np.mean((p - y) ** 2)),
-                "mae": float(np.mean(np.abs(p - y))),
-                "pearson": _pearsonr(p, y),
-            }
+    # Derived rubric overall (from the rubric_* category heads), compared to the teacher's
+    # overall label if present in the dataset rows.
+    if logits.shape[1] >= 2 and teacher_overall and len(teacher_overall) == int(logits.shape[0]):
+        yy = np.asarray([(np.nan if v is None else float(v)) for v in teacher_overall], dtype=np.float64)
+        mm = np.isfinite(yy)
+        if int(np.sum(mm)) > 0:
+            cat_w = rubric_category_weights()
+            idxs: List[int] = []
+            ws: List[float] = []
+            for j in range(1, logits.shape[1]):
+                lab = str(head_names[j])
+                if not lab.startswith("rubric_"):
+                    continue
+                cat = lab[len("rubric_") :]
+                wf = float(cat_w.get(cat, 1.0))
+                if not math.isfinite(wf) or wf <= 0:
+                    continue
+                idxs.append(int(j))
+                ws.append(float(wf))
+            if idxs and float(sum(ws)) > 0:
+                wv = (np.asarray(ws, dtype=np.float64) / float(sum(ws))).reshape(1, -1)
+                pp = (probs[:, idxs].astype(np.float64) * wv).sum(axis=1)
+                y = yy[mm].astype(np.float64)
+                p = pp[mm].astype(np.float64)
+                out["rubric_overall_from_categories"] = {
+                    "n": int(y.size),
+                    "mse": float(np.mean((p - y) ** 2)),
+                    "mae": float(np.mean(np.abs(p - y))),
+                    "pearson": _pearsonr(p, y),
+                }
 
     cats: Dict[str, Any] = {}
-    for j in range(2, logits.shape[1]):
+    for j in range(1, logits.shape[1]):
         m = masks[:, j] > 0.5
         if int(np.sum(m)) <= 0:
             continue
@@ -685,7 +712,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         raise SystemExit("--pos is required")
 
     cats = tuple(str(x) for x in (args.rubric_category or []) if str(x).strip()) or _DEFAULT_RUBRIC_CATEGORIES
-    head_names = ("greatness", "rubric_overall") + tuple(f"rubric_{c}" for c in cats)
+    head_names = ("greatness",) + tuple(f"rubric_{c}" for c in cats)
 
     w = [float(x) for x in (args.head_weight or [])] if (args.head_weight or []) else []
     if not w:

@@ -1,7 +1,7 @@
 """
 Modal job: train a single Qwen3 scorer with multi-head outputs:
 - head0: greatness (great_author vs other_author)
-- head1+: fast rubric approximation (overall + category breakdown)
+- head1+: fast rubric approximation (category breakdown; rubric_overall is derived from categories at inference)
 
 So what:
 - We want one score + breakdown, but the rubric teacher and great/other anchor are different signals.
@@ -437,11 +437,11 @@ def train_remote(cfg_json: str) -> str:
 
     rubric_categories = tuple(str(cfg.get("rubric_categories") or "focus,cadence,cohesion,alignment,distinctiveness").split(","))
     rubric_categories = tuple(c.strip() for c in rubric_categories if c.strip())
-    head_names = ("greatness", "rubric_overall") + tuple(f"rubric_{c}" for c in rubric_categories)
+    head_names = ("greatness",) + tuple(f"rubric_{c}" for c in rubric_categories)
     head_weights = cfg.get("head_weights")
     if not isinstance(head_weights, list) or len(head_weights) != len(head_names):
         # Default: emphasize teacher supervision heads to counter the mixed dataset mask imbalance.
-        head_weights = [1.0, 4.0] + [2.0] * (len(head_names) - 2)
+        head_weights = [1.0] + [2.0] * (len(head_names) - 1)
 
     primary = cfg.get("primary_weights")
     if not isinstance(primary, dict) or not primary:
