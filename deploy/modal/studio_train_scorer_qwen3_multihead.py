@@ -7,6 +7,7 @@ So what:
 - We want one score + breakdown, but the rubric teacher and great/other anchor are different signals.
 - A single sigmoid target mixes them and can drift.
 - Multi-head keeps the anchor clean while learning a fast rubric proxy for interpretability.
+- The default primary score blends greatness + rubric_overall (can be overridden via --primary-weights).
 
 Run:
   make setup-modal
@@ -442,8 +443,8 @@ def train_remote(cfg_json: str) -> str:
         head_weights = [1.0] * len(head_names)
 
     primary = cfg.get("primary_weights")
-    if not isinstance(primary, dict):
-        primary = {"greatness": 1.0}
+    if not isinstance(primary, dict) or not primary:
+        primary = {"greatness": 0.8, "rubric_overall": 0.2}
 
     _checkpoint(
         "train_multihead_scorer",
