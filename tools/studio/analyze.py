@@ -17,7 +17,7 @@ from tools.analyze import (
     permutation_entropy,
     hurst_rs,
 )
-from tools.studio.marker_metrics import marker_metrics
+from tools.studio.marker_metrics import marker_metrics, marker_sentence_features
 from tools.studio.text_normalize import normalize_for_studio
 
 
@@ -403,6 +403,7 @@ def analyze_text(
     sent_spans = _sentence_spans(text_used)
     surface_metrics = _surface_metrics(text_used, sent_spans=sent_spans)
     marker_meta = marker_metrics(text_used, sent_spans=sent_spans)
+    sentence_items = marker_sentence_features(text_used, sent_spans=sent_spans, max_sentences=64)
 
     # Sliding-window settings (kept similar to tools/analyze.py)
     max_ctx = min(int(context), int(getattr(model, "max_context")() or context), 2048)
@@ -903,6 +904,27 @@ def analyze_text(
 
     # Sentence-level burstiness (broad cadence)
     char_starts_arr = np.array(char_starts, dtype=np.int32)
+    spike_event_char_starts: List[int] = []
+    if spike_events:
+        for i in spike_events:
+            if 0 <= int(i) < len(char_starts):
+                spike_event_char_starts.append(int(char_starts[int(i)]))
+
+    if sentence_items:
+        for it in sentence_items:
+            try:
+                s0 = int(it.get("start_char") or 0)
+                s1 = int(it.get("end_char") or 0)
+            except Exception:
+                continue
+            if s1 <= s0:
+                continue
+            mask = (char_starts_arr >= int(s0)) & (char_starts_arr < int(s1))
+            tc = int(mask.sum())
+            it["token_count"] = int(tc)
+            it["mean_surprisal"] = float(np.mean(surprisal[mask])) if tc > 0 else None
+            if spike_event_char_starts:
+                it["spike_event_count"] = int(sum(1 for cs in spike_event_char_starts if int(s0) <= int(cs) < int(s1)))
 
     def _segment_series(spans: List[Tuple[int, int]]):
         means: List[float] = []
@@ -969,6 +991,7 @@ def analyze_text(
             "token_counts": sent_counts[:64],
             "burst_cv": burst_cv_sent,
             "len_cv": len_cv_sent,
+            "items": sentence_items,
         },
         "paragraphs": {
             "count": int(len(para_spans)),

@@ -135,6 +135,77 @@ _HEDGE_RE = re.compile(rf"\b({'|'.join(map(re.escape, _HEDGES))})\b", flags=re.I
 _PASSIVE_RE = re.compile(r"\b(am|is|are|was|were|be|been|being)\b\s+\b\w+(?:ed|en)\b", flags=re.I)
 
 
+def _proper_noun_count(seg: str) -> int:
+    # Proper noun proxy: capitalized words not in sentence-initial position, plus acronyms.
+    proper = 0
+    first_word = True
+    for m in re.finditer(r"\b[A-Za-z][A-Za-z']+\b", seg):
+        w = m.group(0)
+        low = w.lower()
+        if first_word:
+            first_word = False
+            continue
+        if low in {"i"}:
+            continue
+        if w.isupper() and len(w) >= 2:
+            proper += 1
+            continue
+        if w[0].isupper() and w[1:].islower() and len(w) >= 3:
+            proper += 1
+            continue
+    return int(proper)
+
+
+def marker_sentence_features(
+    text: str,
+    *,
+    sent_spans: List[Tuple[int, int]],
+    max_sentences: int = 64,
+    max_sentence_chars: int = 280,
+) -> List[Dict[str, object]]:
+    """Return lightweight per-sentence marker tags for interpretability.
+
+    The scorer model outputs document-level scores. For sentence-level breakdowns we expose
+    deterministic, high-precision markers (turns, evidence, hedges, passive voice, etc.).
+    """
+    t = text or ""
+    out: List[Dict[str, object]] = []
+    for idx, (s0, s1) in enumerate(sent_spans):
+        if len(out) >= int(max_sentences):
+            break
+        if not (0 <= int(s0) <= int(s1) <= len(t)):
+            continue
+        seg = t[int(s0) : int(s1)]
+        seg = seg.strip()
+        if not seg:
+            continue
+        if max_sentence_chars and len(seg) > int(max_sentence_chars):
+            seg = seg[: int(max_sentence_chars)].rstrip() + "…"
+
+        markers = {
+            "contrastive": bool(_CONTRASTIVE_RE.search(seg)),
+            "causal": bool(_CAUSAL_RE.search(seg)),
+            "conditional": bool(_CONDITIONAL_RE.search(seg)),
+            "temporal": bool(_TEMPORAL_RE.search(seg)),
+            "evidential": bool(_EVIDENTIAL_RE.search(seg)),
+            "hedge": bool(_HEDGE_RE.search(seg)),
+            "quote": any(q in seg for q in ("\"", "“", "”", "‘", "’")),
+            "passive": bool(_PASSIVE_RE.search(seg)),
+        }
+        out.append(
+            {
+                "index": int(idx),
+                "start_char": int(s0),
+                "end_char": int(s1),
+                "text": seg,
+                "numbers": int(len(_NUM_RE.findall(seg))),
+                "proper_nouns": int(_proper_noun_count(seg)),
+                "markers": markers,
+            }
+        )
+    return out
+
+
 def _cv(counts: List[int]) -> Optional[float]:
     if len(counts) < 2:
         return None
@@ -210,23 +281,7 @@ def marker_metrics(
         total_numbers += int(nums)
         numbers_per_sent.append(int(nums))
 
-        # Proper noun proxy: capitalized words not in sentence-initial position, plus acronyms.
-        proper = 0
-        first_word = True
-        for m in re.finditer(r"\b[A-Za-z][A-Za-z']+\b", seg):
-            w = m.group(0)
-            low = w.lower()
-            if first_word:
-                first_word = False
-                continue
-            if low in {"i"}:
-                continue
-            if w.isupper() and len(w) >= 2:
-                proper += 1
-                continue
-            if w[0].isupper() and w[1:].islower() and len(w) >= 3:
-                proper += 1
-                continue
+        proper = _proper_noun_count(seg)
         total_proper += int(proper)
         proper_per_sent.append(int(proper))
 
