@@ -221,12 +221,28 @@ make modal-train-scorer-qwen3-mixed-supervision
 
 So what: instead of mixing “greatness” and rubric teacher into one scalar target, train a single model with multiple outputs:
 - `greatness`: great_author vs other_author (primary fast score)
-- `rubric_overall` + `rubric_*` categories: fast approximation of the rubric breakdown
+- `rubric_*` categories: fast approximation of the rubric breakdown (**`rubric_overall` is derived from the categories at inference**)
 
 Run:
 ```bash
 make modal-train-scorer-qwen3-multihead
 ```
+
+<details>
+<summary>Recent multi-head runs (selected)</summary>
+
+All runs below use rubric-v3 teacher labels (computed with `gpt2`) and evaluate on:
+- great/other held-out split AUC (binary anchor)
+- teacher held-out split Pearson correlations (rubric categories; overall is either direct or derived)
+
+| version | model path | great/other AUC | teacher overall pearson | focus | cadence | cohesion | alignment | distinctiveness |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| v6 | `/vol/models/scorer_qwen3_multihead_v6_rubricv3` | 0.911 | 0.152 | -0.114 | 0.002 | -0.112 | 0.266 | 0.387 |
+| v7b | `/vol/models/scorer_qwen3_multihead_v7b_rubricv3_bigteacher` | 0.911 | 0.039 | 0.128 | 0.050 | 0.160 | 0.338 | 0.450 |
+| v8 | `/vol/models/scorer_qwen3_multihead_v8_rubricv3_bigteacher_catderived` | 0.911 | 0.096* | 0.122 | 0.033 | 0.094 | 0.187 | 0.422 |
+
+\* v8’s “overall” is `rubric_overall_from_categories` (weighted average of the category heads), not a separately trained head.
+</details>
 
 ### Modal “train” for the scorer (now: calibrator)
 
