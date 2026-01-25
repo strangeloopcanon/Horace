@@ -87,6 +87,29 @@ def _sentence_spans(text: str) -> List[Tuple[int, int]]:
     return spans
 
 
+def _paragraph_spans(text: str) -> List[Tuple[int, int]]:
+    spans: List[Tuple[int, int]] = []
+    parts = re.split(r"(\n\s*\n+)", text)
+    cursor = 0
+    idx = 0
+    while idx < len(parts):
+        seg = parts[idx]
+        s = cursor
+        e = cursor + len(seg)
+        if seg.strip():
+            spans.append((s, e))
+        cursor = e
+        if idx + 1 < len(parts):
+            sep = parts[idx + 1]
+            cursor += len(sep)
+            idx += 2
+        else:
+            break
+    if not spans:
+        spans = _sentence_spans(text)
+    return spans
+
+
 def _head_labels_from_model(model, n_heads: int) -> List[str]:
     try:
         id2label = getattr(model.config, "id2label", None)
@@ -157,6 +180,216 @@ def _primary_from_heads(model, head_probs_by_label: Dict[str, float], head_label
             primary_from_heads = {}
     primary_prob = 0.0 if not math.isfinite(primary_prob) else max(0.0, min(1.0, float(primary_prob)))
     return primary_prob, primary_from_heads
+
+
+def _effective_max_length(tok, max_length: int) -> int:
+    try:
+        special = int(tok.num_special_tokens_to_add(pair=False))
+    except Exception:
+        special = 0
+    return max(1, int(max_length) - int(special))
+
+
+def _token_span_for_char_span(offsets: Sequence[Tuple[int, int]], s0: int, s1: int) -> Optional[Tuple[int, int]]:
+    i0 = None
+    i1 = None
+    for i, (a, b) in enumerate(offsets):
+        if b <= s0:
+            continue
+        if a >= s1:
+            break
+        if i0 is None:
+            i0 = i
+        i1 = i
+    if i0 is None or i1 is None:
+        return None
+    return int(i0), int(i1)
+
+
+def _span_excerpt(text: str, s0: int, s1: int, *, max_chars: int = 320) -> Tuple[str, bool]:
+    seg = text[int(s0) : int(s1)].strip()
+    if max_chars and len(seg) > int(max_chars):
+        return seg[: int(max_chars)].rstrip() + "…", True
+    return seg, False
+
+
+def _span_items_from_char_spans(
+    text: str,
+    *,
+    offsets: Sequence[Tuple[int, int]],
+    spans: Sequence[Tuple[int, int]],
+    kind: str,
+    max_items: int,
+    max_chars: int,
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    for idx, (s0, s1) in enumerate(spans):
+        if max_items and len(items) >= int(max_items):
+            break
+        span = _token_span_for_char_span(offsets, int(s0), int(s1))
+        if span is None:
+            continue
+        i0, i1 = span
+        excerpt, truncated = _span_excerpt(text, int(s0), int(s1), max_chars=int(max_chars))
+        items.append(
+            {
+                "index": int(idx),
+                "kind": str(kind),
+                "char_start": int(s0),
+                "char_end": int(s1),
+                "span_token_start": int(i0),
+                "span_token_end": int(i1),
+                "text": excerpt,
+                "text_truncated": bool(truncated),
+            }
+        )
+    return items
+
+
+def _span_items_from_token_spans(
+    text: str,
+    *,
+    offsets: Sequence[Tuple[int, int]],
+    spans: Sequence[Tuple[int, int]],
+    kind: str,
+    max_items: int,
+    max_chars: int,
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    text_len = len(text)
+    for idx, (i0, i1) in enumerate(spans):
+        if max_items and len(items) >= int(max_items):
+            break
+        if i0 < 0 or i1 < i0:
+            continue
+        if i0 >= len(offsets):
+            continue
+        i1 = min(int(i1), len(offsets) - 1)
+        cs = int(offsets[i0][0]) if i0 < len(offsets) else 0
+        ce = int(offsets[i1][1]) if i1 < len(offsets) else text_len
+        excerpt, truncated = _span_excerpt(text, cs, ce, max_chars=int(max_chars))
+        items.append(
+            {
+                "index": int(idx),
+                "kind": str(kind),
+                "char_start": int(cs),
+                "char_end": int(ce),
+                "span_token_start": int(i0),
+                "span_token_end": int(i1),
+                "text": excerpt,
+                "text_truncated": bool(truncated),
+            }
+        )
+    return items
+
+
+def _score_span_items(
+    *,
+    model,
+    tok,
+    dev: str,
+    text: str,
+    input_ids: Sequence[int],
+    offsets: Sequence[Tuple[int, int]],
+    span_items: Sequence[Dict[str, Any]],
+    effective_max: int,
+    window_tokens: int,
+    batch_size: int,
+    center_on_span: bool,
+    head_labels: Optional[List[str]] = None,
+) -> Tuple[List[Dict[str, Any]], List[str], Dict[str, Any]]:
+    if not span_items:
+        return [], head_labels or [], {}
+
+    total_tokens = int(len(input_ids))
+    win_tokens = max(8, min(int(effective_max), int(window_tokens)))
+    win_tokens = min(win_tokens, total_tokens) if total_tokens else win_tokens
+
+    encodings: List[Dict[str, Any]] = []
+    metas: List[Dict[str, Any]] = []
+
+    for item in span_items:
+        i0 = int(item.get("span_token_start") or 0)
+        i1 = int(item.get("span_token_end") or 0)
+        span_len = int(i1 - i0 + 1)
+        if span_len <= 0:
+            continue
+        win_len = min(int(effective_max), max(span_len, win_tokens))
+        if center_on_span:
+            win_start = int(max(0, min(i0 - (win_len - span_len) // 2, total_tokens - win_len)))
+        else:
+            win_start = int(max(0, min(i0, total_tokens - win_len)))
+        win_end = int(win_start + win_len)
+
+        window_ids = list(input_ids[win_start:win_end])
+        prepared = tok.prepare_for_model(window_ids, truncation=False, padding=False)
+        encodings.append(prepared)
+
+        window_char_start = int(offsets[win_start][0]) if win_start < len(offsets) else 0
+        window_char_end = int(offsets[win_end - 1][1]) if win_end - 1 < len(offsets) else len(text)
+
+        meta = dict(item)
+        meta.update(
+            {
+                "window_token_start": int(win_start),
+                "window_token_end": int(win_end),
+                "window_char_start": int(window_char_start),
+                "window_char_end": int(window_char_end),
+                "segment_truncated": bool(span_len > int(effective_max)),
+            }
+        )
+        if meta.get("kind") == "sentence":
+            meta["sentence_truncated"] = bool(meta["segment_truncated"])
+        if meta.get("kind") == "paragraph":
+            meta["paragraph_truncated"] = bool(meta["segment_truncated"])
+        metas.append(meta)
+
+    if not encodings:
+        return [], head_labels or [], {}
+
+    results: List[Dict[str, Any]] = []
+    labels_out: List[str] = head_labels or []
+    primary_from_heads: Dict[str, Any] = {}
+
+    for start in range(0, len(encodings), int(max(1, batch_size))):
+        batch_enc = encodings[start : start + int(max(1, batch_size))]
+        batch_meta = metas[start : start + int(max(1, batch_size))]
+
+        padded = tok.pad(batch_enc, padding=True, return_tensors="pt")
+        padded = {k: v.to(dev) for k, v in padded.items() if isinstance(v, torch.Tensor)}
+        with torch.no_grad():
+            out = model(**padded)
+            logits = out.logits
+            if logits.ndim == 1:
+                logits = logits.unsqueeze(-1)
+            probs = torch.sigmoid(logits).detach().cpu().numpy()
+
+        if probs.ndim == 1:
+            probs = probs.reshape(-1, 1)
+
+        n_heads = int(probs.shape[1]) if probs.size else 1
+        if not labels_out:
+            labels_out = _head_labels_from_model(model, n_heads)
+
+        for row_idx, row in enumerate(probs.tolist()):
+            head_probs_by_label = {lab: float(p) for lab, p in zip(labels_out, row)}
+            per_window_probs_by_label = {
+                lab: np.asarray([float(p)], dtype=np.float64) for lab, p in zip(labels_out, row)
+            }
+            _derive_rubric_overall(per_window_probs_by_label, head_probs_by_label)
+            primary_prob, primary_from_heads = _primary_from_heads(model, head_probs_by_label, labels_out)
+
+            meta = dict(batch_meta[row_idx])
+            meta.update(
+                {
+                    "score_0_100": float(100.0 * primary_prob),
+                    "prob_0_1": float(primary_prob),
+                    "head_probs_by_label": dict(head_probs_by_label),
+                }
+            )
+            results.append(meta)
+
+    return results, labels_out, dict(primary_from_heads)
 
 
 def load_scorer(model_path_or_id: str, *, device: Optional[str] = None) -> Tuple[Any, Any, str]:
@@ -369,6 +602,52 @@ def score_sentence_windows(
     device: Optional[str] = None,
 ) -> Dict[str, Any]:
     """So what: provide sentence-level diagnostic scores by scoring per-sentence windows."""
+    out = score_window_levels(
+        text,
+        model_path_or_id=model_path_or_id,
+        doc_type=doc_type,
+        normalize_text=normalize_text,
+        max_length=max_length,
+        window_tokens=window_tokens,
+        max_sentences=max_sentences,
+        batch_size=batch_size,
+        include_paragraphs=False,
+        include_pages=False,
+        device=device,
+    )
+    return {
+        "model_path_or_id": out.get("model_path_or_id"),
+        "doc_type": out.get("doc_type"),
+        "normalized": out.get("normalized"),
+        "max_length": out.get("max_length"),
+        "n_sentences": int(len(out.get("sentences") or [])),
+        "head_labels": list(out.get("head_labels") or []),
+        "primary_from_heads": dict(out.get("primary_from_heads") or {}),
+        "text_normalization": out.get("text_normalization"),
+        "sentences": list(out.get("sentences") or []),
+    }
+
+
+def score_window_levels(
+    text: str,
+    *,
+    model_path_or_id: str,
+    doc_type: str = "prose",
+    normalize_text: bool = True,
+    max_length: int = 384,
+    window_tokens: Optional[int] = None,
+    page_window_tokens: Optional[int] = None,
+    page_stride_tokens: Optional[int] = None,
+    max_sentences: int = 96,
+    max_paragraphs: int = 32,
+    max_pages: int = 16,
+    batch_size: int = 8,
+    include_sentences: bool = True,
+    include_paragraphs: bool = True,
+    include_pages: bool = True,
+    device: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Score sentence/paragraph/page windows for diagnostic breakdowns."""
     tok, model, dev = load_scorer(model_path_or_id, device=device)
     dt = str(doc_type)
     t, norm_meta = normalize_for_studio(text, doc_type=dt, enabled=bool(normalize_text))
@@ -379,7 +658,12 @@ def score_sentence_windows(
             "doc_type": dt,
             "normalized": bool(normalize_text),
             "max_length": int(max_length),
+            "head_labels": [],
+            "primary_from_heads": {},
+            "text_normalization": norm_meta,
             "sentences": [],
+            "paragraphs": [],
+            "pages": [],
         }
 
     enc = tok(
@@ -396,128 +680,123 @@ def score_sentence_windows(
             "doc_type": dt,
             "normalized": bool(normalize_text),
             "max_length": int(max_length),
+            "head_labels": [],
+            "primary_from_heads": {},
+            "text_normalization": norm_meta,
             "sentences": [],
+            "paragraphs": [],
+            "pages": [],
         }
 
-    sent_spans = _sentence_spans(t)
-    if max_sentences and len(sent_spans) > int(max_sentences):
-        sent_spans = sent_spans[: int(max_sentences)]
+    effective_max = _effective_max_length(tok, int(max_length))
+    seg_window_tokens = int(window_tokens) if window_tokens is not None else int(max_length)
+    seg_window_tokens = max(8, min(int(effective_max), int(seg_window_tokens)))
 
-    try:
-        special = int(tok.num_special_tokens_to_add(pair=False))
-    except Exception:
-        special = 0
-    effective_max = max(1, int(max_length) - int(special))
+    page_window = int(page_window_tokens) if page_window_tokens is not None else int(max_length)
+    page_window = max(8, min(int(effective_max), int(page_window)))
+    page_stride = int(page_stride_tokens) if page_stride_tokens is not None else int(page_window)
+    page_stride = max(1, int(page_stride))
 
-    win_tokens = int(window_tokens) if window_tokens is not None else int(max_length)
-    win_tokens = max(8, min(int(effective_max), int(win_tokens)))
-    win_tokens = min(win_tokens, total_tokens)
-
-    def _token_span_for_sentence(s0: int, s1: int) -> Optional[Tuple[int, int]]:
-        i0 = None
-        i1 = None
-        for i, (a, b) in enumerate(offsets):
-            if b <= s0:
-                continue
-            if a >= s1:
-                break
-            if i0 is None:
-                i0 = i
-            i1 = i
-        if i0 is None or i1 is None:
-            return None
-        return int(i0), int(i1)
-
-    encodings: List[Dict[str, Any]] = []
-    metas: List[Dict[str, Any]] = []
-
-    for idx, (s0, s1) in enumerate(sent_spans):
-        span = _token_span_for_sentence(int(s0), int(s1))
-        if span is None:
-            continue
-        i0, i1 = span
-        span_len = int(i1 - i0 + 1)
-        win_len = min(int(effective_max), max(span_len, win_tokens))
-        win_start = int(max(0, min(i0 - (win_len - span_len) // 2, total_tokens - win_len)))
-        win_end = int(win_start + win_len)
-
-        window_ids = input_ids[win_start:win_end]
-        prepared = tok.prepare_for_model(window_ids, truncation=False, padding=False)
-        encodings.append(prepared)
-
-        window_char_start = int(offsets[win_start][0]) if win_start < len(offsets) else 0
-        window_char_end = int(offsets[win_end - 1][1]) if win_end - 1 < len(offsets) else len(t)
-        metas.append(
-            {
-                "index": int(idx),
-                "char_start": int(s0),
-                "char_end": int(s1),
-                "text": t[int(s0) : int(s1)].strip(),
-                "window_token_start": int(win_start),
-                "window_token_end": int(win_end),
-                "window_char_start": int(window_char_start),
-                "window_char_end": int(window_char_end),
-                "sentence_truncated": bool(span_len > int(effective_max)),
-            }
-        )
-
-    if not encodings:
-        return {
-            "model_path_or_id": str(model_path_or_id),
-            "doc_type": dt,
-            "normalized": bool(normalize_text),
-            "max_length": int(max_length),
-            "sentences": [],
-        }
-
-    results: List[Dict[str, Any]] = []
     head_labels: List[str] = []
     primary_from_heads: Dict[str, Any] = {}
 
-    for start in range(0, len(encodings), int(max(1, batch_size))):
-        batch_enc = encodings[start : start + int(max(1, batch_size))]
-        batch_meta = metas[start : start + int(max(1, batch_size))]
+    sentences: List[Dict[str, Any]] = []
+    if include_sentences:
+        sent_spans = _sentence_spans(t)
+        span_items = _span_items_from_char_spans(
+            t,
+            offsets=offsets,
+            spans=sent_spans,
+            kind="sentence",
+            max_items=int(max_sentences),
+            max_chars=280,
+        )
+        sentences, head_labels, primary_from_heads = _score_span_items(
+            model=model,
+            tok=tok,
+            dev=dev,
+            text=t,
+            input_ids=input_ids,
+            offsets=offsets,
+            span_items=span_items,
+            effective_max=int(effective_max),
+            window_tokens=int(seg_window_tokens),
+            batch_size=int(batch_size),
+            center_on_span=True,
+            head_labels=head_labels,
+        )
 
-        padded = tok.pad(batch_enc, padding=True, return_tensors="pt")
-        padded = {k: v.to(dev) for k, v in padded.items() if isinstance(v, torch.Tensor)}
-        with torch.no_grad():
-            out = model(**padded)
-            logits = out.logits
-            if logits.ndim == 1:
-                logits = logits.unsqueeze(-1)
-            probs = torch.sigmoid(logits).detach().cpu().numpy()
+    paragraphs: List[Dict[str, Any]] = []
+    if include_paragraphs:
+        para_spans = _paragraph_spans(t)
+        span_items = _span_items_from_char_spans(
+            t,
+            offsets=offsets,
+            spans=para_spans,
+            kind="paragraph",
+            max_items=int(max_paragraphs),
+            max_chars=320,
+        )
+        paragraphs, head_labels, primary_from_heads = _score_span_items(
+            model=model,
+            tok=tok,
+            dev=dev,
+            text=t,
+            input_ids=input_ids,
+            offsets=offsets,
+            span_items=span_items,
+            effective_max=int(effective_max),
+            window_tokens=int(seg_window_tokens),
+            batch_size=int(batch_size),
+            center_on_span=True,
+            head_labels=head_labels,
+        )
 
-        if probs.ndim == 1:
-            probs = probs.reshape(-1, 1)
-
-        n_heads = int(probs.shape[1]) if probs.size else 1
-        if not head_labels:
-            head_labels = _head_labels_from_model(model, n_heads)
-
-        for row_idx, row in enumerate(probs.tolist()):
-            head_probs_by_label = {lab: float(p) for lab, p in zip(head_labels, row)}
-            per_window_probs_by_label = {lab: np.asarray([float(p)], dtype=np.float64) for lab, p in zip(head_labels, row)}
-            _derive_rubric_overall(per_window_probs_by_label, head_probs_by_label)
-            primary_prob, primary_from_heads = _primary_from_heads(model, head_probs_by_label, head_labels)
-
-            meta = dict(batch_meta[row_idx])
-            meta.update(
-                {
-                    "score_0_100": float(100.0 * primary_prob),
-                    "prob_0_1": float(primary_prob),
-                    "head_probs_by_label": dict(head_probs_by_label),
-                }
-            )
-            results.append(meta)
+    pages: List[Dict[str, Any]] = []
+    if include_pages:
+        page_spans: List[Tuple[int, int]] = []
+        start = 0
+        while start < total_tokens:
+            end = min(total_tokens, start + int(page_window))
+            page_spans.append((int(start), int(end - 1)))
+            start += int(page_stride)
+            if max_pages and len(page_spans) >= int(max_pages):
+                break
+        span_items = _span_items_from_token_spans(
+            t,
+            offsets=offsets,
+            spans=page_spans,
+            kind="page",
+            max_items=int(max_pages),
+            max_chars=360,
+        )
+        pages, head_labels, primary_from_heads = _score_span_items(
+            model=model,
+            tok=tok,
+            dev=dev,
+            text=t,
+            input_ids=input_ids,
+            offsets=offsets,
+            span_items=span_items,
+            effective_max=int(effective_max),
+            window_tokens=int(page_window),
+            batch_size=int(batch_size),
+            center_on_span=False,
+            head_labels=head_labels,
+        )
 
     return {
         "model_path_or_id": str(model_path_or_id),
         "doc_type": dt,
         "normalized": bool(normalize_text),
         "max_length": int(max_length),
-        "n_sentences": int(len(results)),
         "head_labels": list(head_labels),
         "primary_from_heads": dict(primary_from_heads),
         "text_normalization": norm_meta,
-        "sentences": results,
+        "sentences": sentences,
+        "paragraphs": paragraphs,
+        "pages": pages,
+        "window_tokens": int(seg_window_tokens),
+        "page_window_tokens": int(page_window),
+        "page_stride_tokens": int(page_stride),
     }

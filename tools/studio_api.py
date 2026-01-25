@@ -62,6 +62,13 @@ class AnalyzeReq(BaseModel):
     scorer_model_path: str = ""
     scorer_max_length: int = 384
     fast_only: bool = False
+    window_scores: bool = True
+    window_max_sentences: int = 96
+    window_max_paragraphs: int = 32
+    window_max_pages: int = 16
+    window_tokens: int = 0
+    page_window_tokens: int = 0
+    page_stride_tokens: int = 0
     scoring_model_id: str = "gpt2"
     baseline_model: str = "gpt2_gutenberg_512"  # model id or baseline json path
     calibrator_path: str = ""  # optional JSON calibrator trained from eval reports
@@ -112,9 +119,11 @@ def index():  # pragma: no cover
 def analyze(req: AnalyzeReq) -> Dict[str, Any]:
     trained_score = None
     trained_err = None
+    windowed_scores = None
+    windowed_err = None
     if (req.scorer_model_path or "").strip():
         try:
-            from tools.studio.scorer_model import score_with_scorer
+            from tools.studio.scorer_model import score_window_levels, score_with_scorer
 
             ts = score_with_scorer(
                 req.text,
@@ -137,6 +146,25 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
                 "head_probs_by_label": dict(ts.head_probs_by_label),
                 "primary_from_heads": dict(ts.primary_from_heads),
             }
+            if bool(req.window_scores):
+                try:
+                    windowed_scores = score_window_levels(
+                        req.text,
+                        model_path_or_id=str(req.scorer_model_path),
+                        doc_type=req.doc_type,
+                        normalize_text=bool(req.normalize_text),
+                        max_length=int(req.scorer_max_length),
+                        window_tokens=int(req.window_tokens) or None,
+                        page_window_tokens=int(req.page_window_tokens) or None,
+                        page_stride_tokens=int(req.page_stride_tokens) or None,
+                        max_sentences=int(req.window_max_sentences),
+                        max_paragraphs=int(req.window_max_paragraphs),
+                        max_pages=int(req.window_max_pages),
+                        batch_size=8,
+                    )
+                    trained_score["windowed_scores"] = windowed_scores
+                except Exception as e:
+                    windowed_err = f"{type(e).__name__}: {e}"
         except Exception as e:
             trained_err = f"{type(e).__name__}: {e}"
 
@@ -149,6 +177,8 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
         }
         if trained_err is not None:
             out["trained_score_error"] = trained_err
+        if windowed_err is not None:
+            out["windowed_scores_error"] = windowed_err
         return out
 
     analysis = analyze_text(
@@ -184,6 +214,8 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
         out["trained_score"] = trained_score
     if trained_err is not None:
         out["trained_score_error"] = trained_err
+    if windowed_err is not None:
+        out["windowed_scores_error"] = windowed_err
     if (req.calibrator_path or "").strip():
         try:
             from tools.studio.calibrator import featurize_from_report_row, load_logistic_calibrator
