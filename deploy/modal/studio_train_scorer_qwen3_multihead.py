@@ -145,6 +145,7 @@ def train_remote(cfg_json: str) -> str:
     from tools.studio.build_rss_corpus import main as build_rss_main
     from tools.studio.build_standardebooks_corpus import main as build_se_main
     from tools.studio.label_scorer_dataset import label_jsonl
+    from tools.studio.marker_metrics import MARKER_HEADS_DEFAULT
     from tools.studio.text_corrupt import corrupt_text
     from tools.studio.train_multihead_scorer import eval_multihead_scorer, train_multihead_scorer
 
@@ -437,11 +438,25 @@ def train_remote(cfg_json: str) -> str:
 
     rubric_categories = tuple(str(cfg.get("rubric_categories") or "focus,cadence,cohesion,alignment,distinctiveness").split(","))
     rubric_categories = tuple(c.strip() for c in rubric_categories if c.strip())
-    head_names = ("greatness",) + tuple(f"rubric_{c}" for c in rubric_categories)
+    marker_heads_cfg = cfg.get("marker_heads")
+    marker_heads: List[str] = []
+    if isinstance(marker_heads_cfg, str):
+        raw = marker_heads_cfg.strip()
+        if raw and raw.lower() not in ("none", "off", "false", "0"):
+            marker_heads = [s.strip() for s in raw.split(",") if s.strip()]
+    elif isinstance(marker_heads_cfg, list):
+        marker_heads = [str(s).strip() for s in marker_heads_cfg if str(s).strip()]
+    if not marker_heads:
+        marker_heads = [str(h) for h in MARKER_HEADS_DEFAULT]
+
+    marker_head_mode = str(cfg.get("marker_head_mode") or "match_baseline")
+    marker_weight = float(cfg.get("marker_weight") or 0.5)
+
+    head_names = ("greatness",) + tuple(f"rubric_{c}" for c in rubric_categories) + tuple(marker_heads)
     head_weights = cfg.get("head_weights")
     if not isinstance(head_weights, list) or len(head_weights) != len(head_names):
         # Default: emphasize teacher supervision heads to counter the mixed dataset mask imbalance.
-        head_weights = [1.0] + [2.0] * (len(head_names) - 1)
+        head_weights = [1.0] + [2.0] * len(rubric_categories) + [marker_weight] * len(marker_heads)
 
     primary = cfg.get("primary_weights")
     if not isinstance(primary, dict) or not primary:
@@ -465,6 +480,9 @@ def train_remote(cfg_json: str) -> str:
             teacher_label_key="label",
             teacher_categories_key="teacher_categories_0_1",
             rubric_categories=rubric_categories,
+            marker_heads=marker_heads,
+            marker_baseline=str(baseline_path),
+            marker_head_mode=marker_head_mode,
             head_weights=tuple(float(x) for x in head_weights),
             max_length=max_length,
             batch_size=batch_size,
@@ -498,6 +516,9 @@ def train_remote(cfg_json: str) -> str:
             teacher_label_key="label",
             teacher_categories_key="teacher_categories_0_1",
             rubric_categories=rubric_categories,
+            marker_heads=marker_heads,
+            marker_baseline=str(baseline_path),
+            marker_head_mode=marker_head_mode,
             doc_type="prose",
             normalize_text=True,
             max_length=max_length,
@@ -512,6 +533,9 @@ def train_remote(cfg_json: str) -> str:
             teacher_label_key="label",
             teacher_categories_key="teacher_categories_0_1",
             rubric_categories=rubric_categories,
+            marker_heads=marker_heads,
+            marker_baseline=str(baseline_path),
+            marker_head_mode=marker_head_mode,
             doc_type="prose",
             normalize_text=True,
             max_length=max_length,
@@ -533,6 +557,9 @@ def train_remote(cfg_json: str) -> str:
             "teacher_corpus_dir": str(teacher_corpus_root),
             "teacher_split_counts": teacher_counts,
             "baseline_path": str(baseline_path),
+            "marker_heads": list(marker_heads),
+            "marker_head_mode": str(marker_head_mode),
+            "marker_weight": float(marker_weight),
             "labels_dir": str(labels_root),
             "mixed_supervision_dir": str(mixed_root),
             "mixed_counts": {
@@ -581,6 +608,9 @@ def main(  # pragma: no cover
     standardebooks_dir: str = "/vol/corpora/standardebooks_corpus_v1",
     rss_dir: str = "/vol/corpora/rss_corpus_v1",
     rubric_categories: str = "focus,cadence,cohesion,alignment,distinctiveness",
+    marker_heads: str = "",
+    marker_head_mode: str = "match_baseline",
+    marker_weight: float = 0.5,
     head_weights: str = "",
     primary_weights: str = "",
     max_length: int = 512,
@@ -636,6 +666,9 @@ def main(  # pragma: no cover
         "standardebooks_dir": str(standardebooks_dir),
         "rss_dir": str(rss_dir),
         "rubric_categories": str(rubric_categories),
+        "marker_heads": str(marker_heads),
+        "marker_head_mode": str(marker_head_mode),
+        "marker_weight": float(marker_weight),
         "head_weights": hw,
         "primary_weights": pw,
         "max_length": int(max_length),

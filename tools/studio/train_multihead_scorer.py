@@ -16,7 +16,10 @@ from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from tools.studio.text_normalize import normalize_for_studio
-from tools.studio.score import rubric_category_weights
+from tools.studio.score import metric_score_from_baseline, rubric_category_weights
+from tools.studio.baselines import Baseline, load_baseline_cached
+from tools.studio.marker_metrics import MARKER_HEADS_DEFAULT, marker_metrics
+from tools.studio.analyze import _sentence_spans
 from tools.studio.train_scorer import (
     _auc_roc,
     _best_device,
@@ -30,6 +33,13 @@ from tools.studio.train_scorer import (
 
 
 _DEFAULT_RUBRIC_CATEGORIES: Tuple[str, ...] = ("focus", "cadence", "cohesion", "alignment", "distinctiveness")
+
+
+def _load_baseline(ident: str) -> Baseline:
+    path = Path(str(ident))
+    if path.exists():
+        return load_baseline_cached(str(ident), path=path)
+    return load_baseline_cached(str(ident))
 
 
 def _iter_jsonl(path: Path) -> Iterable[dict]:
@@ -75,14 +85,23 @@ class _JsonlMultiTargetDataset(Dataset):
         teacher_label_key: str,
         teacher_categories_key: str,
         rubric_categories: Sequence[str],
+        marker_heads: Sequence[str],
+        marker_baseline: Optional[Baseline],
+        marker_head_mode: str,
     ):
         self.doc_type = str(doc_type)
         self.normalize_text = bool(normalize_text)
         self.teacher_label_key = str(teacher_label_key)
         self.teacher_categories_key = str(teacher_categories_key)
         self.rubric_categories = tuple(str(c) for c in rubric_categories)
+        self.marker_heads = tuple(str(h) for h in marker_heads if str(h).strip())
+        self.marker_head_mode = str(marker_head_mode or "match_baseline")
+        self.marker_baseline = marker_baseline
 
-        self.head_names = ("greatness",) + tuple(f"rubric_{c}" for c in self.rubric_categories)
+        if self.marker_heads and self.marker_baseline is None:
+            raise ValueError("marker_heads provided but marker_baseline is None")
+
+        self.head_names = ("greatness",) + tuple(f"rubric_{c}" for c in self.rubric_categories) + tuple(self.marker_heads)
         self.n_heads = int(len(self.head_names))
 
         pos_set = {str(x) for x in positive_sources if str(x).strip()}
@@ -113,10 +132,28 @@ class _JsonlMultiTargetDataset(Dataset):
                     y[1 + i] = float(max(0.0, min(1.0, v)))
                     m[1 + i] = 1.0
 
+            t, _ = normalize_for_studio(text, doc_type=self.doc_type, enabled=self.normalize_text)
+
+            if self.marker_heads:
+                sent_spans = _sentence_spans(t)
+                marker_vals = marker_metrics(t, sent_spans=sent_spans)
+                for j, key in enumerate(self.marker_heads):
+                    v = marker_vals.get(key)
+                    score = metric_score_from_baseline(
+                        key,
+                        v,
+                        self.marker_baseline,
+                        doc_type=self.doc_type,
+                        mode=self.marker_head_mode,
+                    )
+                    if score is None:
+                        continue
+                    idx = 1 + len(self.rubric_categories) + int(j)
+                    y[idx] = float(max(0.0, min(1.0, score)))
+                    m[idx] = 1.0
+
             if float(np.sum(m)) <= 0.0:
                 continue
-
-            t, _ = normalize_for_studio(text, doc_type=self.doc_type, enabled=self.normalize_text)
             meta = {
                 "sample_id": r.get("sample_id"),
                 "source": r.get("source"),
@@ -280,21 +317,33 @@ def _eval_multitask(
                     "pearson": _pearsonr(p, y),
                 }
 
-    cats: Dict[str, Any] = {}
+    rubric_cats: Dict[str, Any] = {}
+    marker_cats: Dict[str, Any] = {}
+    other_cats: Dict[str, Any] = {}
     for j in range(1, logits.shape[1]):
         m = masks[:, j] > 0.5
         if int(np.sum(m)) <= 0:
             continue
         y = targets[m, j].astype(np.float64)
         p = probs[m, j].astype(np.float64)
-        cats[str(head_names[j])] = {
+        label = str(head_names[j])
+        bucket = rubric_cats
+        if label.startswith("marker_"):
+            bucket = marker_cats
+        elif not label.startswith("rubric_"):
+            bucket = other_cats
+        bucket[label] = {
             "n": int(y.size),
             "mse": float(np.mean((p - y) ** 2)),
             "mae": float(np.mean(np.abs(p - y))),
             "pearson": _pearsonr(p, y),
         }
-    if cats:
-        out["rubric_categories"] = cats
+    if rubric_cats:
+        out["rubric_categories"] = rubric_cats
+    if marker_cats:
+        out["marker_heads"] = marker_cats
+    if other_cats:
+        out["other_heads"] = other_cats
 
     return out
 
@@ -308,6 +357,9 @@ def eval_multihead_scorer(
     teacher_label_key: str,
     teacher_categories_key: str,
     rubric_categories: Sequence[str],
+    marker_heads: Sequence[str],
+    marker_baseline: Optional[str],
+    marker_head_mode: str,
     doc_type: str,
     normalize_text: bool,
     max_length: int,
@@ -315,6 +367,12 @@ def eval_multihead_scorer(
     device: Optional[str] = None,
 ) -> Dict[str, Any]:
     rows = list(_iter_jsonl(samples_path))
+    marker_heads = tuple(str(h) for h in marker_heads if str(h).strip())
+    marker_baseline_obj: Optional[Baseline] = None
+    if marker_heads:
+        if not str(marker_baseline or "").strip():
+            raise ValueError("marker_heads requested but marker_baseline is empty")
+        marker_baseline_obj = _load_baseline(str(marker_baseline))
     ds = _JsonlMultiTargetDataset(
         rows,
         doc_type=str(doc_type),
@@ -324,6 +382,9 @@ def eval_multihead_scorer(
         teacher_label_key=str(teacher_label_key),
         teacher_categories_key=str(teacher_categories_key),
         rubric_categories=tuple(rubric_categories),
+        marker_heads=tuple(marker_heads),
+        marker_baseline=marker_baseline_obj,
+        marker_head_mode=str(marker_head_mode),
     )
     if len(ds) <= 0:
         return {"n": 0, "loss_mean": None}
@@ -378,6 +439,9 @@ def train_multihead_scorer(
     teacher_label_key: str,
     teacher_categories_key: str,
     rubric_categories: Sequence[str],
+    marker_heads: Sequence[str],
+    marker_baseline: Optional[str],
+    marker_head_mode: str,
     head_weights: Sequence[float],
     max_length: int,
     batch_size: int,
@@ -408,6 +472,13 @@ def train_multihead_scorer(
     train_rows = list(_iter_jsonl(Path(train_path)))
     val_rows = list(_iter_jsonl(Path(val_path))) if val_path is not None else []
 
+    marker_heads = tuple(str(h) for h in marker_heads if str(h).strip())
+    marker_baseline_obj: Optional[Baseline] = None
+    if marker_heads:
+        if not str(marker_baseline or "").strip():
+            raise ValueError("marker_heads requested but marker_baseline is empty")
+        marker_baseline_obj = _load_baseline(str(marker_baseline))
+
     train_ds = _JsonlMultiTargetDataset(
         train_rows,
         doc_type=str(doc_type),
@@ -417,6 +488,9 @@ def train_multihead_scorer(
         teacher_label_key=str(teacher_label_key),
         teacher_categories_key=str(teacher_categories_key),
         rubric_categories=tuple(rubric_categories),
+        marker_heads=marker_heads,
+        marker_baseline=marker_baseline_obj,
+        marker_head_mode=str(marker_head_mode),
     )
     val_ds = (
         _JsonlMultiTargetDataset(
@@ -428,6 +502,9 @@ def train_multihead_scorer(
             teacher_label_key=str(teacher_label_key),
             teacher_categories_key=str(teacher_categories_key),
             rubric_categories=tuple(rubric_categories),
+            marker_heads=marker_heads,
+            marker_baseline=marker_baseline_obj,
+            marker_head_mode=str(marker_head_mode),
         )
         if val_rows
         else None
@@ -680,6 +757,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--teacher-label-key", default="label", help="Float rubric overall label key in [0,1]")
     ap.add_argument("--teacher-categories-key", default="teacher_categories_0_1", help="Dict of rubric category labels in [0,1]")
     ap.add_argument("--rubric-category", action="append", default=[], help="Rubric category name (repeatable)")
+    ap.add_argument("--marker-head", action="append", default=[], help="Marker metric head name (repeatable)")
+    ap.add_argument("--marker-baseline", default="", help="Baseline id/path for marker head percentiles")
+    ap.add_argument("--marker-head-mode", default="match_baseline", help="Marker head scoring mode")
 
     ap.add_argument("--pos", action="append", default=[], help="Positive source label(s) (repeatable)")
     ap.add_argument("--neg", action="append", default=[], help="Negative source label(s) (repeatable); empty => all non-pos")
@@ -712,7 +792,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         raise SystemExit("--pos is required")
 
     cats = tuple(str(x) for x in (args.rubric_category or []) if str(x).strip()) or _DEFAULT_RUBRIC_CATEGORIES
-    head_names = ("greatness",) + tuple(f"rubric_{c}" for c in cats)
+    marker_heads = tuple(str(x) for x in (args.marker_head or []) if str(x).strip())
+    marker_baseline = str(args.marker_baseline or "").strip()
+    if marker_baseline and not marker_heads:
+        marker_heads = MARKER_HEADS_DEFAULT
+    head_names = ("greatness",) + tuple(f"rubric_{c}" for c in cats) + tuple(marker_heads)
 
     w = [float(x) for x in (args.head_weight or [])] if (args.head_weight or []) else []
     if not w:
@@ -742,6 +826,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         teacher_label_key=str(args.teacher_label_key),
         teacher_categories_key=str(args.teacher_categories_key),
         rubric_categories=cats,
+        marker_heads=marker_heads,
+        marker_baseline=marker_baseline or None,
+        marker_head_mode=str(args.marker_head_mode),
         head_weights=tuple(float(x) for x in w),
         max_length=int(args.max_length),
         batch_size=int(args.batch_size),

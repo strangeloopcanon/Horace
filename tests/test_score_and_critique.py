@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tools.studio.baselines import build_baseline_from_rows, load_baseline
 from tools.studio.critique import suggest_edits
-from tools.studio.score import score_text
+from tools.studio.score import metric_score_from_baseline, score_text
 
 
 def _rows_for_rubric(doc_type: str) -> list[dict]:
@@ -84,3 +84,21 @@ class TestScoreAndCritique(unittest.TestCase):
             self.assertIn("suggestions", critique)
             self.assertIsInstance(critique["suggestions"], list)
 
+    def test_metric_score_from_baseline(self) -> None:
+        rows = []
+        for i in range(11):
+            rows.append({"doc_type": "prose", "marker_contrastive_sentence_fraction": float(i) / 10.0})
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "baseline.json"
+            build_baseline_from_rows("gpt2", rows, out_path=out)
+            baseline = load_baseline("gpt2", path=out)
+
+            score = metric_score_from_baseline(
+                "marker_contrastive_sentence_fraction",
+                0.5,
+                baseline,
+                doc_type="prose",
+                mode="match_baseline",
+            )
+            self.assertIsNotNone(score)
+            self.assertGreaterEqual(float(score or 0.0), 0.8)

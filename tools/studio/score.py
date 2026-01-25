@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -112,6 +113,30 @@ def rubric_category_weights() -> Dict[str, float]:
     `rubric_overall` head).
     """
     return {str(name): float(spec.get("weight", 1.0)) for name, spec in _RUBRIC.items()}
+
+
+def metric_score_from_baseline(
+    metric_key: str,
+    value: Any,
+    baseline: Baseline,
+    *,
+    doc_type: str,
+    mode: str = "match_baseline",
+) -> Optional[float]:
+    """Score a single metric value against a baseline distribution.
+
+    Returns a 0-1 score or None if the metric is missing from the baseline.
+    """
+    if not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(float(value)):
+        return None
+    base_slice = get_slice(baseline, doc_type)
+    summ = base_slice.metrics.get(str(metric_key))
+    if not summ:
+        return None
+    pctl = percentile(summ.values, float(value))
+    return _metric_score(pctl, str(mode or "match_baseline"))
 
 
 def score_text(doc_metrics: Dict[str, Any], baseline: Baseline, *, doc_type: str) -> ScoreReport:

@@ -134,6 +134,22 @@ _EVIDENTIAL_RE = re.compile(rf"\b({'|'.join(map(re.escape, _EVIDENTIAL))})\b", f
 _HEDGE_RE = re.compile(rf"\b({'|'.join(map(re.escape, _HEDGES))})\b", flags=re.I)
 _PASSIVE_RE = re.compile(r"\b(am|is|are|was|were|be|been|being)\b\s+\b\w+(?:ed|en)\b", flags=re.I)
 
+# Default marker heads for auxiliary supervision (kept small + meaningful).
+MARKER_HEADS_DEFAULT = (
+    "marker_contrastive_sentence_fraction",
+    "marker_causal_sentence_fraction",
+    "marker_conditional_sentence_fraction",
+    "marker_temporal_sentence_fraction",
+    "marker_evidential_sentence_fraction",
+    "marker_hedge_sentence_fraction",
+    "marker_passive_sentence_fraction",
+    "marker_numbers_per_1000_words",
+    "marker_proper_nouns_per_1000_words",
+    "marker_sensory_word_fraction",
+    "marker_commas_per_sentence_mean",
+    "marker_dashes_per_1000_words",
+)
+
 
 def _proper_noun_count(seg: str) -> int:
     # Proper noun proxy: capitalized words not in sentence-initial position, plus acronyms.
