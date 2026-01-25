@@ -267,6 +267,15 @@ make modal-train-calibrator-web
 heads aren’t adding separable signal for the core objective on this split *yet*.
 </details>
 
+<details>
+<summary>Marker-only probe (do markers carry signal?)</summary>
+
+On `mixed_windows_v1` (great_author vs other_author), a **marker-only** logistic probe
+trained on the deterministic marker metrics achieves **AUC ≈ 0.81** on the held-out
+test split. This suggests marker heads are likely meaningful auxiliary targets (they
+carry real signal for the core objective).
+</details>
+
 ### Modal training for the single scorer model (v4)
 
 Build the within-domain benchmark + train a single text→score model on Modal (GPU):
