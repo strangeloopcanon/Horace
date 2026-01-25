@@ -258,6 +258,15 @@ Or:
 make modal-train-calibrator-web
 ```
 
+<details>
+<summary>Latest head-calibrator sanity check (multi-head scorer)</summary>
+
+`/vol/models/scorer_qwen3_multihead_v7b_rubricv3_bigteacher` trained a head-calibrator on
+`mixed_windows_v1` (great_author vs other_author). Test AUC was **0.9068** vs the raw
+`greatness` head baseline AUC **0.9111** — no improvement yet. This suggests the extra
+heads aren’t adding separable signal for the core objective on this split *yet*.
+</details>
+
 ### Modal training for the single scorer model (v4)
 
 Build the within-domain benchmark + train a single text→score model on Modal (GPU):
