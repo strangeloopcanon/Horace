@@ -34,8 +34,11 @@ from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.critique import suggest_edits
 from tools.studio.llm_critic import llm_critique
+from tools.studio.meaning_lock import MeaningLockConfig
 from tools.studio.rewrite import rewrite_and_rerank
 from tools.studio.score import score_text
+from tools.studio.span_patcher import patch_span as patch_one_span
+from tools.studio.span_patcher import suggest_dead_zones
 from tools.studio.site import STUDIO_HTML
 
 
@@ -94,6 +97,46 @@ class RewriteReq(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.92
     seed: Optional[int] = 7
+
+
+class PatchSuggestReq(BaseModel):
+    text: str = Field(min_length=1, max_length=50_000)
+    doc_type: str = "prose"
+    scoring_model_id: str = "gpt2"
+    backend: str = "auto"
+    max_input_tokens: int = 512
+    normalize_text: bool = True
+    window_sentences: int = 4
+    max_zones: int = 6
+
+
+class PatchSpanReq(BaseModel):
+    text: str = Field(min_length=1, max_length=50_000)
+    doc_type: str = "prose"
+    start_char: int = 0
+    end_char: int = 0
+    rewrite_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    scoring_model_id: str = "gpt2"
+    baseline_model: str = "gpt2_gutenberg_512"  # model id or baseline json path
+    calibrator_path: str = ""  # optional JSON calibrator trained from eval reports
+    scorer_model_path: str = ""  # optional trained scorer (fast primary score)
+    scorer_max_length: int = 384
+    score_top_n: int = 3
+    backend: str = "auto"
+    max_input_tokens: int = 384
+    normalize_text: bool = True
+    n_candidates: int = 6
+    max_new_tokens: int = 260
+    temperature: float = 0.8
+    top_p: float = 0.92
+    seed: Optional[int] = 7
+    meaning_lock_embedder_model_id: str = "distilbert-base-uncased"
+    meaning_lock_embedder_max_length: int = 256
+    meaning_lock_min_cosine_sim: float = 0.86
+    meaning_lock_max_length_ratio: float = 1.45
+    meaning_lock_max_edit_ratio: float = 0.55
+    meaning_lock_allow_new_numbers: bool = False
+    meaning_lock_allow_new_proper_nouns: bool = False
 
 
 @app.get("/healthz")
@@ -252,6 +295,55 @@ def rewrite(req: RewriteReq) -> Dict[str, Any]:
         top_p=float(req.top_p),
         seed=int(req.seed) if req.seed is not None else None,
         compute_cohesion=bool(req.compute_cohesion),
+    )
+
+
+@app.post("/patch/suggest")
+def patch_suggest(req: PatchSuggestReq) -> Dict[str, Any]:
+    return suggest_dead_zones(
+        req.text,
+        doc_type=req.doc_type,
+        scoring_model_id=req.scoring_model_id,
+        backend=req.backend,
+        max_input_tokens=int(req.max_input_tokens),
+        normalize_text=bool(req.normalize_text),
+        window_sentences=int(req.window_sentences),
+        max_zones=int(req.max_zones),
+    )
+
+
+@app.post("/patch/span")
+def patch_span(req: PatchSpanReq) -> Dict[str, Any]:
+    cfg = MeaningLockConfig(
+        embedder_model_id=str(req.meaning_lock_embedder_model_id),
+        embedder_max_length=int(req.meaning_lock_embedder_max_length),
+        min_cosine_sim=float(req.meaning_lock_min_cosine_sim),
+        max_length_ratio=float(req.meaning_lock_max_length_ratio),
+        max_edit_ratio=float(req.meaning_lock_max_edit_ratio),
+        allow_new_numbers=bool(req.meaning_lock_allow_new_numbers),
+        allow_new_proper_nouns=bool(req.meaning_lock_allow_new_proper_nouns),
+    )
+    return patch_one_span(
+        req.text,
+        start_char=int(req.start_char),
+        end_char=int(req.end_char),
+        doc_type=req.doc_type,
+        rewrite_model_id=req.rewrite_model_id,
+        scoring_model_id=req.scoring_model_id,
+        baseline_model_id=req.baseline_model,
+        calibrator_path=req.calibrator_path,
+        scorer_model_path=req.scorer_model_path,
+        scorer_max_length=int(req.scorer_max_length),
+        score_top_n=int(req.score_top_n),
+        backend=req.backend,
+        max_input_tokens=int(req.max_input_tokens),
+        normalize_text=bool(req.normalize_text),
+        n_candidates=int(req.n_candidates),
+        max_new_tokens=int(req.max_new_tokens),
+        temperature=float(req.temperature),
+        top_p=float(req.top_p),
+        seed=int(req.seed) if req.seed is not None else None,
+        meaning_lock=cfg,
     )
 
 

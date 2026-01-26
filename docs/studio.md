@@ -30,6 +30,7 @@ What you get:
 - **Analyze** tab: score + sub-scores, metric percentiles, suggestions, spike excerpts, cadence plot.
 - Optional: **Trained scorer (fast)**: a single HF model that can score text without token-level analysis (enable “Fast mode” + provide a model path).
 - **Rewrite + Rerank** tab: generates N candidates and reranks them by Horace score (slow).
+- **Patch (dead zones)** tab: finds low-texture spans and proposes **meaning-preserving** span patches (MeaningLock + diffs). This is the recommended “make it better” workflow: patch locally, don’t rewrite the whole doc.
 - Optional: **LLM Critique** accordion for a non-deterministic editor voice (grounded in measured metrics/spikes).
 - **Formatting normalization (default on for prose)**: fixes hard-wrapped plaintext (single newlines), common in Gutenberg/RFC copies; preserves newlines when the input looks like code, lists, or verse.
 
@@ -71,6 +72,22 @@ Fast scoring only (single trained model; skips token analysis):
 curl -s http://127.0.0.1:8000/analyze \
   -H 'Content-Type: application/json' \
   -d '{"text":"At dawn, the city leans into light.","scorer_model_path":"models/scorer_v4_distill_smoke","fast_only":true}'
+```
+
+Span patching (dead zones → MeaningLock → diffs):
+
+Suggest dead zones:
+```bash
+curl -s http://127.0.0.1:8000/patch/suggest \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"At dawn, the city leans into light.","doc_type":"prose","scoring_model_id":"gpt2","normalize_text":true}'
+```
+
+Patch one span (use a zone’s `start_char`/`end_char`):
+```bash
+curl -s http://127.0.0.1:8000/patch/span \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"At dawn, the city leans into light.","doc_type":"prose","start_char":0,"end_char":28,"rewrite_model_id":"Qwen/Qwen2.5-0.5B-Instruct","meaning_lock_min_cosine_sim":0.86}'
 ```
 
 Optional: apply a learned calibrator (trained from eval reports):

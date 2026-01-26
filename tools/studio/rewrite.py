@@ -146,6 +146,115 @@ def generate_rewrites(
     return uniq
 
 
+def generate_span_rewrites(
+    text: str,
+    *,
+    start_char: int,
+    end_char: int,
+    doc_type: str,
+    rewrite_model_id: str,
+    n: int = 6,
+    max_new_tokens: int = 260,
+    temperature: float = 0.8,
+    top_p: float = 0.92,
+    seed: Optional[int] = 7,
+    context_before_chars: int = 520,
+    context_after_chars: int = 320,
+) -> List[str]:
+    """Generate rewrites for a specific span only (returns replacement strings).
+
+    So what: this supports "span patching" workflows where we only change the parts we can
+    verify (meaning-lock), rather than rewriting the whole document.
+    """
+    t = text or ""
+    s = max(0, min(int(start_char), len(t)))
+    e = max(s, min(int(end_char), len(t)))
+    span = t[s:e].strip()
+    if not span:
+        return []
+
+    before = t[max(0, s - int(context_before_chars)) : s].strip()
+    after = t[e : min(len(t), e + int(context_after_chars))].strip()
+
+    tok, model, dev = _get_hf(rewrite_model_id)
+    style = "poem" if doc_type == "poem" else "prose"
+    sys_prompt = (
+        "You are a careful editor.\n"
+        "Return ONLY the rewritten SPAN text (no preface, no explanation, no quotes, no tags)."
+    )
+    user_prompt = (
+        f"You will rewrite ONLY the SPAN in a {style} document.\n"
+        "Rules:\n"
+        "- Preserve meaning, viewpoint, and tense.\n"
+        "- Keep named entities and numbers unchanged.\n"
+        "- Do NOT add new facts.\n"
+        "- Keep edits minimal (small local changes; avoid rewriting everything).\n"
+        "- Reduce monotony: vary cadence and sentence shape; prefer concrete verbs/nouns.\n\n"
+        "CONTEXT BEFORE:\n"
+        + (before if before else "(none)")
+        + "\n\nSPAN:\n"
+        + span
+        + "\n\nCONTEXT AFTER:\n"
+        + (after if after else "(none)")
+        + "\n\nREWRITE SPAN:\n"
+    )
+
+    use_chat = bool(getattr(tok, "chat_template", None))
+    if use_chat:
+        try:
+            messages = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            input_ids = tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(dev)
+            inputs = {"input_ids": input_ids}
+        except Exception:
+            use_chat = False
+    if not use_chat:
+        prompt = sys_prompt + "\n\n" + user_prompt
+        inputs = tok(prompt, return_tensors="pt").to(dev)
+
+    outputs: List[str] = []
+    try:
+        import torch
+
+        if seed is not None:
+            torch.manual_seed(int(seed))
+            np.random.seed(int(seed))
+
+        for i in range(max(1, int(n))):
+            if seed is not None:
+                torch.manual_seed(int(seed) + i + 1)
+                np.random.seed(int(seed) + i + 1)
+            gen = model.generate(
+                **inputs,
+                do_sample=True,
+                max_new_tokens=int(max_new_tokens),
+                temperature=float(temperature),
+                top_p=float(top_p),
+                pad_token_id=tok.pad_token_id,
+                eos_token_id=tok.eos_token_id,
+            )
+            raw = tok.decode(gen[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True)
+            out = _extract_rewrite(raw)
+            # Strip accidental wrappers
+            out = re.sub(r"^<span>\\s*|\\s*</span>$", "", out, flags=re.I)
+            out = out.strip()
+            if out:
+                outputs.append(out)
+    except Exception:
+        pass
+
+    uniq: List[str] = []
+    seen: set[str] = set()
+    for o in outputs:
+        key = re.sub(r"\\s+", " ", o.strip().lower())
+        if key and key not in seen:
+            seen.add(key)
+            uniq.append(o)
+    return uniq
+
+
 def generate_dulled_rewrites(
     text: str,
     *,

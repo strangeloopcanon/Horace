@@ -41,6 +41,8 @@ from tools.studio.score import score_text
 from tools.studio.critique import suggest_edits
 from tools.studio.llm_critic import llm_critique
 from tools.studio.rewrite import rewrite_and_rerank
+from tools.studio.span_patcher import patch_span as patch_one_span
+from tools.studio.span_patcher import suggest_dead_zones
 
 
 def _ensure_baseline(model_id: str):
@@ -358,6 +360,163 @@ def run_rewrite(
     return "\n".join(md), res
 
 
+def _md_dead_zones(zones: list[dict]) -> str:
+    if not zones:
+        return "_No obvious dead zones found (or text too short)._"
+    lines = []
+    lines.append("**Dead zones (low texture candidates)**")
+    for z in zones:
+        zid = z.get("zone_id")
+        sev = z.get("severity")
+        s = z.get("start_char")
+        e = z.get("end_char")
+        reasons = ", ".join(z.get("reasons") or [])
+        excerpt = (z.get("excerpt") or "").replace("\n", " ").strip()
+        lines.append(f"- `{zid}` sev={sev:.2f} chars={s}-{e} ({reasons}) — {excerpt}")
+    return "\n".join(lines)
+
+
+def run_patch_suggest(
+    text: str,
+    doc_type: str,
+    scoring_model: str,
+    max_input_tokens: int,
+    normalize_text: bool,
+    window_sentences: int,
+    max_zones: int,
+):
+    if not text or not text.strip():
+        return text, "_No text provided._", {}, gr.Dropdown.update(choices=[], value=None), []
+    out = suggest_dead_zones(
+        text,
+        doc_type=str(doc_type),
+        scoring_model_id=str(scoring_model).strip() or "gpt2",
+        max_input_tokens=int(max_input_tokens),
+        normalize_text=bool(normalize_text),
+        window_sentences=int(window_sentences),
+        max_zones=int(max_zones),
+    )
+    zones = out.get("dead_zones") or []
+    md = _md_dead_zones(zones)
+    choices = [
+        f"{z.get('zone_id')}: sev={float(z.get('severity') or 0.0):.2f} ({', '.join(z.get('reasons') or [])})"
+        for z in zones
+    ]
+    dd = gr.Dropdown.update(choices=choices, value=(choices[0] if choices else None))
+    return out.get("text") or text, md, out, dd, zones
+
+
+def run_patch_span(
+    text: str,
+    doc_type: str,
+    selected_zone: str,
+    zones_state: list[dict],
+    rewrite_model_id: str,
+    scoring_model: str,
+    baseline_model: str,
+    calibrator_path: str,
+    scorer_model_path: str,
+    scorer_max_length: int,
+    max_input_tokens: int,
+    n_candidates: int,
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    seed: Optional[int],
+    min_cosine_sim: float,
+    max_length_ratio: float,
+    max_edit_ratio: float,
+    allow_new_numbers: bool,
+    allow_new_proper_nouns: bool,
+):
+    if not text or not text.strip():
+        return "_No text provided._", "", {}
+    if not selected_zone:
+        return "_Select a dead zone first (or re-run suggest)._", "", {}
+    try:
+        zid = int(str(selected_zone).split(":", 1)[0].strip())
+    except Exception:
+        return "_Could not parse selected zone id._", "", {}
+    zone = None
+    for z in zones_state or []:
+        if int(z.get("zone_id") or -1) == zid:
+            zone = z
+            break
+    if zone is None:
+        return "_Selected zone not found; re-run suggest._", "", {}
+
+    from tools.studio.meaning_lock import MeaningLockConfig
+
+    cfg = MeaningLockConfig(
+        min_cosine_sim=float(min_cosine_sim),
+        max_length_ratio=float(max_length_ratio),
+        max_edit_ratio=float(max_edit_ratio),
+        allow_new_numbers=bool(allow_new_numbers),
+        allow_new_proper_nouns=bool(allow_new_proper_nouns),
+    )
+    out = patch_one_span(
+        text,
+        start_char=int(zone.get("start_char") or 0),
+        end_char=int(zone.get("end_char") or 0),
+        doc_type=str(doc_type),
+        rewrite_model_id=str(rewrite_model_id).strip() or "Qwen/Qwen2.5-0.5B-Instruct",
+        scoring_model_id=str(scoring_model).strip() or "gpt2",
+        baseline_model_id=str(baseline_model).strip() or "gpt2_gutenberg_512",
+        calibrator_path=str(calibrator_path or ""),
+        scorer_model_path=str(scorer_model_path or ""),
+        scorer_max_length=int(scorer_max_length),
+        score_top_n=3,
+        max_input_tokens=int(max_input_tokens),
+        normalize_text=False,  # already normalized in this tab
+        n_candidates=int(n_candidates),
+        max_new_tokens=int(max_new_tokens),
+        temperature=float(temperature),
+        top_p=float(top_p),
+        seed=int(seed) if seed is not None else None,
+        meaning_lock=cfg,
+    )
+
+    cands = out.get("candidates") or []
+    if not cands:
+        msg = "_No candidates passed MeaningLock; try relaxing thresholds or increasing candidates._"
+        if out.get("error"):
+            msg += f"\n\nError: `{out.get('error')}`"
+        return msg, "", out
+
+    lines = []
+    pb = out.get("primary_before")
+    pb_err = out.get("primary_before_error")
+    if isinstance(pb, dict) and isinstance(pb.get("overall_0_100"), (int, float)):
+        src = pb.get("source") or "unknown"
+        lines.append(f"**Primary score before**: `{float(pb['overall_0_100']):.1f}/100` ({src})")
+    elif pb_err:
+        lines.append(f"_Primary score failed: {pb_err}_")
+    lines.append("")
+    lines.append("**Patch candidates (sorted by Δtexture; 0–100 score is a secondary readout)**")
+    best_text = ""
+    for i, c in enumerate(cands[:5], 1):
+        gain = float(c.get("texture_gain") or 0.0)
+        pdelta = c.get("primary_delta_0_100")
+        pafter = (c.get("primary_after") or {}).get("overall_0_100") if isinstance(c.get("primary_after"), dict) else None
+        sim = (c.get("meaning_lock") or {}).get("cosine_sim")
+        er = (c.get("meaning_lock") or {}).get("edit_ratio")
+        sim_s = "N/A" if not isinstance(sim, (int, float)) else f"{float(sim):.3f}"
+        er_s = "N/A" if not isinstance(er, (int, float)) else f"{float(er):.2f}"
+        score_s = ""
+        if isinstance(pafter, (int, float)):
+            score_s = f"  score={float(pafter):.1f}"
+        if isinstance(pdelta, (int, float)):
+            score_s += f" (Δ {float(pdelta):+.1f})"
+        lines.append(f"{i}. Δtexture={gain:+.3f}{score_s}  sim={sim_s}  edit={er_s}")
+        lines.append("```diff")
+        lines.append(c.get("span_diff") or "")
+        lines.append("```")
+        if i == 1:
+            best_text = c.get("patched_text") or ""
+
+    return "\n".join(lines), best_text, out
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Horace Studio") as demo:
         gr.Markdown(
@@ -470,6 +629,80 @@ def build_ui() -> gr.Blocks:
                     seed,
                 ],
                 outputs=[rewrite_md, rewrite_json],
+            )
+
+        with gr.Tab("Patch (dead zones)"):
+            gr.Markdown(
+                "Find low-texture spans and patch them with MeaningLock (semantic similarity + no-new-facts heuristics). "
+                "This is intentionally *local* optimization; the 0–100 score is shown as a secondary readout."
+            )
+            zones_state = gr.State([])
+            with gr.Row():
+                patch_rewrite_model = gr.Textbox(
+                    value="Qwen/Qwen2.5-0.5B-Instruct",
+                    label="Rewrite model (span patching; instruct works best)",
+                )
+                patch_candidates = gr.Slider(2, 12, value=6, step=1, label="Candidates")
+                patch_max_new_tokens = gr.Slider(64, 520, value=260, step=16, label="Max new tokens (span)")
+            with gr.Row():
+                patch_temperature = gr.Slider(0.1, 1.5, value=0.8, step=0.05, label="Temperature")
+                patch_top_p = gr.Slider(0.05, 0.99, value=0.92, step=0.01, label="Top-p")
+                patch_seed = gr.Number(value=7, precision=0, label="Seed")
+            with gr.Row():
+                window_sentences = gr.Slider(3, 8, value=4, step=1, label="Dead-zone window (sentences)")
+                max_zones = gr.Slider(1, 10, value=6, step=1, label="Max zones")
+                suggest_btn = gr.Button("Suggest dead zones")
+
+            zones_md = gr.Markdown()
+            zones_json = gr.JSON(label="Raw JSON (zones + analysis)")
+            zone_dd = gr.Dropdown(choices=[], value=None, label="Pick a zone")
+
+            with gr.Accordion("MeaningLock (constraints)", open=False):
+                with gr.Row():
+                    min_cosine_sim = gr.Slider(0.70, 0.99, value=0.86, step=0.01, label="Min semantic similarity (cosine)")
+                    max_length_ratio = gr.Slider(1.05, 2.50, value=1.45, step=0.05, label="Max length ratio")
+                    max_edit_ratio = gr.Slider(0.10, 0.95, value=0.55, step=0.05, label="Max edit ratio (1-sim)")
+                with gr.Row():
+                    allow_new_numbers = gr.Checkbox(value=False, label="Allow number changes")
+                    allow_new_proper = gr.Checkbox(value=False, label="Allow proper-noun changes")
+
+            patch_btn = gr.Button("Patch selected zone (slow)")
+            patch_md = gr.Markdown()
+            patched_text = gr.Textbox(lines=14, label="Best patched text (candidate #1)")
+            patch_json = gr.JSON(label="Raw JSON (candidates)")
+
+            suggest_btn.click(
+                fn=run_patch_suggest,
+                inputs=[text, doc_type, scoring_model, max_input_tokens, normalize_text, window_sentences, max_zones],
+                outputs=[text, zones_md, zones_json, zone_dd, zones_state],
+            )
+
+            patch_btn.click(
+                fn=run_patch_span,
+                inputs=[
+                    text,
+                    doc_type,
+                    zone_dd,
+                    zones_state,
+                    patch_rewrite_model,
+                    scoring_model,
+                    baseline_model,
+                    calibrator_path,
+                    scorer_model_path,
+                    scorer_max_length,
+                    max_input_tokens,
+                    patch_candidates,
+                    patch_max_new_tokens,
+                    patch_temperature,
+                    patch_top_p,
+                    patch_seed,
+                    min_cosine_sim,
+                    max_length_ratio,
+                    max_edit_ratio,
+                    allow_new_numbers,
+                    allow_new_proper,
+                ],
+                outputs=[patch_md, patched_text, patch_json],
             )
 
     return demo
