@@ -22,6 +22,7 @@ import os
 import random
 import time
 import traceback
+import threading
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -156,8 +157,12 @@ def train_remote(cfg_json: str) -> str:
     started_unix = int(time.time())
     out_dir_name = Path(str(cfg.get("out_dir") or "unknown")).name or "unknown"
     run_dir = Path("/vol/reports/train_runs") / f"{out_dir_name}_{started_unix}"
+    stage_state: Dict[str, Any] = {"stage": "start"}
+    hb_stop = threading.Event()
 
     def _checkpoint(stage: str, *, extra: Optional[Dict[str, Any]] = None) -> None:
+        stage_state["stage"] = str(stage)
+        stage_state["extra"] = dict(extra) if isinstance(extra, dict) else None
         payload: Dict[str, Any] = {
             "stage": str(stage),
             "started_unix": int(started_unix),
@@ -171,6 +176,25 @@ def train_remote(cfg_json: str) -> str:
             data_vol.commit()
         except Exception:
             pass
+
+    def _heartbeat_loop() -> None:
+        # Update the status file periodically so we can distinguish "running" from "stuck".
+        while not hb_stop.is_set():
+            payload: Dict[str, Any] = {
+                "stage": str(stage_state.get("stage") or "unknown"),
+                "started_unix": int(started_unix),
+                "now_unix": int(time.time()),
+                "out_dir": str(cfg.get("out_dir") or ""),
+            }
+            extra = stage_state.get("extra")
+            if isinstance(extra, dict) and extra:
+                payload["extra"] = extra
+            _write_json(run_dir / "status.json", payload)
+            try:
+                data_vol.commit()
+            except Exception:
+                pass
+            hb_stop.wait(300)
 
     def _write_error(stage: str, *, extra: Optional[Dict[str, Any]] = None) -> None:
         payload: Dict[str, Any] = {
@@ -191,6 +215,16 @@ def train_remote(cfg_json: str) -> str:
             hf_cache_vol.commit()
         except Exception:
             pass
+
+    # Persist the cfg for later debugging even if the job fails mid-way.
+    _write_json(run_dir / "cfg.json", cfg)
+    try:
+        data_vol.commit()
+    except Exception:
+        pass
+
+    hb_thread = threading.Thread(target=_heartbeat_loop, daemon=True)
+    hb_thread.start()
 
     _checkpoint("start", extra={"cfg": cfg})
 
@@ -462,11 +496,11 @@ def train_remote(cfg_json: str) -> str:
     if not isinstance(primary, dict) or not primary:
         primary = {"greatness": 0.8, "rubric_overall": 0.2}
 
-    _checkpoint(
-        "train_multihead_scorer",
-        extra={"out_dir": str(out_dir), "mixed_train": int(len(mixed_train)), "mixed_val": int(len(mixed_val))},
-    )
     try:
+        _checkpoint(
+            "train_multihead_scorer",
+            extra={"out_dir": str(out_dir), "mixed_train": int(len(mixed_train)), "mixed_val": int(len(mixed_val))},
+        )
         train_summary = train_multihead_scorer(
             train_path=mixed_splits / "train.jsonl",
             val_path=mixed_splits / "val.jsonl",
@@ -506,8 +540,8 @@ def train_remote(cfg_json: str) -> str:
         _write_error("train_multihead_scorer", extra={"out_dir": str(out_dir)})
         raise
 
-    _checkpoint("eval_multihead_scorer")
     try:
+        _checkpoint("eval_multihead_scorer")
         eval_great_other = eval_multihead_scorer(
             model_path_or_id=str(out_dir),
             samples_path=go_root / "test.jsonl",
@@ -545,41 +579,52 @@ def train_remote(cfg_json: str) -> str:
     except Exception:
         _write_error("eval_multihead_scorer", extra={"out_dir": str(out_dir)})
         raise
+    finally:
+        hb_stop.set()
 
-    data_vol.commit()
-    hf_cache_vol.commit()
+    try:
+        data_vol.commit()
+    except Exception:
+        pass
+    try:
+        hf_cache_vol.commit()
+    except Exception:
+        pass
+
     _checkpoint("done")
-    return json.dumps(
-        {
-            "out_dir": str(out_dir),
-            "init_model": str(init_model),
-            "great_other_corpus": str(go_root.parent),
-            "teacher_corpus_dir": str(teacher_corpus_root),
-            "teacher_split_counts": teacher_counts,
-            "baseline_path": str(baseline_path),
-            "marker_heads": list(marker_heads),
-            "marker_head_mode": str(marker_head_mode),
-            "marker_weight": float(marker_weight),
-            "labels_dir": str(labels_root),
-            "mixed_supervision_dir": str(mixed_root),
-            "mixed_counts": {
-                "great_other_train": int(len(go_train)),
-                "teacher_train": int(len(teacher_train)),
-                "teacher_upsample": int(teacher_upsample),
-                "mixed_train": int(len(mixed_train)),
-                "great_other_val": int(len(go_val)),
-                "teacher_val": int(len(teacher_val)),
-                "mixed_val": int(len(mixed_val)),
-                "great_other_test": int(len(go_test)),
-                "teacher_test": int(len(teacher_test)),
-            },
-            "train_summary": asdict(train_summary),
-            "eval_great_other_test": eval_great_other,
-            "eval_teacher_test": eval_teacher,
+    result_obj = {
+        "out_dir": str(out_dir),
+        "init_model": str(init_model),
+        "great_other_corpus": str(go_root.parent),
+        "teacher_corpus_dir": str(teacher_corpus_root),
+        "teacher_split_counts": teacher_counts,
+        "baseline_path": str(baseline_path),
+        "marker_heads": list(marker_heads),
+        "marker_head_mode": str(marker_head_mode),
+        "marker_weight": float(marker_weight),
+        "labels_dir": str(labels_root),
+        "mixed_supervision_dir": str(mixed_root),
+        "mixed_counts": {
+            "great_other_train": int(len(go_train)),
+            "teacher_train": int(len(teacher_train)),
+            "teacher_upsample": int(teacher_upsample),
+            "mixed_train": int(len(mixed_train)),
+            "great_other_val": int(len(go_val)),
+            "teacher_val": int(len(teacher_val)),
+            "mixed_val": int(len(mixed_val)),
+            "great_other_test": int(len(go_test)),
+            "teacher_test": int(len(teacher_test)),
         },
-        ensure_ascii=False,
-        indent=2,
-    )
+        "train_summary": asdict(train_summary),
+        "eval_great_other_test": eval_great_other,
+        "eval_teacher_test": eval_teacher,
+    }
+    _write_json(run_dir / "result.json", result_obj)
+    try:
+        data_vol.commit()
+    except Exception:
+        pass
+    return json.dumps(result_obj, ensure_ascii=False, indent=2)
 
 
 @app.local_entrypoint()
