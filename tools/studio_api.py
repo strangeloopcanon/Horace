@@ -365,7 +365,8 @@ def patch_span(req: PatchSpanReq) -> Dict[str, Any]:
 
 
 @app.post("/write-like")
-def write_like(req: WriteLikeReq) -> Dict[str, Any]:
+@app.post("/cadence-match")
+def cadence_match(req: WriteLikeReq) -> Dict[str, Any]:
     """Generate text matching the cadence of reference text."""
     try:
         result = write_like_gen(

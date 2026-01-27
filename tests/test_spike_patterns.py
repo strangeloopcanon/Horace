@@ -70,7 +70,7 @@ class TestExtractSpikePatterns(unittest.TestCase):
             },
             "segments": {"sentences": {"items": [{"start_token": 0, "end_token": 10}]}},
         }
-        with patch("tools.studio.spike_patterns.analyze_text", return_value=fake_analysis):
+        with patch("tools.studio.spike_patterns.analyze_text", return_value=fake_analysis) as mock_analyze:
             patterns = extract_spike_patterns(
                 text,
                 model_id="gpt2",
@@ -78,6 +78,9 @@ class TestExtractSpikePatterns(unittest.TestCase):
                 max_input_tokens=64,
                 surprisal_threshold=1.5,  # Lower threshold for test
             )
+        self.assertTrue(mock_analyze.called)
+        _, kwargs = mock_analyze.call_args
+        self.assertTrue(bool(kwargs.get("include_token_metrics")))
         self.assertIsInstance(patterns, list)
 
     def test_patterns_have_correct_structure(self) -> None:
@@ -98,13 +101,16 @@ class TestExtractSpikePatterns(unittest.TestCase):
             },
             "segments": {"sentences": {"items": [{"start_token": 0, "end_token": 6}]}},
         }
-        with patch("tools.studio.spike_patterns.analyze_text", return_value=fake_analysis):
+        with patch("tools.studio.spike_patterns.analyze_text", return_value=fake_analysis) as mock_analyze:
             patterns = extract_spike_patterns(
                 text,
                 model_id="gpt2",
                 max_input_tokens=64,
                 surprisal_threshold=1.0,
             )
+        self.assertTrue(mock_analyze.called)
+        _, kwargs = mock_analyze.call_args
+        self.assertTrue(bool(kwargs.get("include_token_metrics")))
         if patterns:  # May not find spikes in short text
             p = patterns[0]
             self.assertIsInstance(p, SpikePattern)
@@ -168,12 +174,15 @@ class TestSuggestSpikePositions(unittest.TestCase):
 
         fake_analysis = {"tokens": tokens, "token_metrics": {"surprisal": surprisal}}
 
-        with patch("tools.studio.spike_patterns.analyze_text", return_value=fake_analysis):
+        with patch("tools.studio.spike_patterns.analyze_text", return_value=fake_analysis) as mock_analyze:
             suggestions = suggest_spike_positions(
                 text,
                 model_id="gpt2",
                 max_input_tokens=64,
             )
+        self.assertTrue(mock_analyze.called)
+        _, kwargs = mock_analyze.call_args
+        self.assertTrue(bool(kwargs.get("include_token_metrics")))
         self.assertIsInstance(suggestions, list)
 
 

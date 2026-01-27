@@ -156,6 +156,7 @@ def extract_spike_patterns(
         max_input_tokens=max_input_tokens,
         normalize_text=True,
         compute_cohesion=False,
+        include_token_metrics=True,
     )
 
     token_metrics = analysis.get("token_metrics") or {}
@@ -355,6 +356,7 @@ def suggest_spike_positions(
         max_input_tokens=max_input_tokens,
         normalize_text=True,
         compute_cohesion=False,
+        include_token_metrics=True,
     )
 
     token_metrics = analysis.get("token_metrics") or {}

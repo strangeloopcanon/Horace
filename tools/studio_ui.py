@@ -683,7 +683,7 @@ def run_write_like(
     max_new_tokens: int,
     seed: Optional[int],
 ):
-    """Handler for Write Like tab."""
+    """Handler for Cadence Match tab."""
     if not reference_text or not reference_text.strip():
         return "Please provide reference text.", "", None, {}
 
@@ -967,19 +967,20 @@ def build_ui() -> gr.Blocks:
                 outputs=[text, history_state, history_md],
             )
 
-        with gr.Tab("Write Like"):
+        with gr.Tab("Cadence Match"):
             gr.Markdown(
                 """
-                ### Write Like Mode
-                Generate text that matches the *cadence* of a reference author or passage.
-                Paste a reference sample, provide a prompt, and generate with matching rhythm.
+                ### Cadence Match
+                Generate text that matches the *cadence* (spikes, lulls, cooldowns) of a reference passage.
+
+                This is intentionally **cadence-only**: it tries to match rhythm, not copy vocabulary, facts, or voice.
                 """
             )
             with gr.Row():
                 wl_reference = gr.Textbox(
                     lines=8,
-                    label="Reference Text (style to match)",
-                    placeholder="Paste a paragraph from an author whose style you want to match...",
+                    label="Reference Text (cadence to match)",
+                    placeholder="Paste a paragraph whose rhythm you like...",
                 )
                 wl_prompt = gr.Textbox(
                     lines=4,

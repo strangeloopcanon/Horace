@@ -1,7 +1,8 @@
-"""Write Like: Generate text matching a reference style's cadence.
+"""Cadence Match: Generate text that matches a reference cadence profile.
 
-So what: this is the user-facing feature that enables "write in the style of X"
-by extracting cadence profiles from reference text and using them to guide generation.
+So what: this turns Horace's cadence measurement into a generation control loop:
+extract a cadence profile from a reference passage, then generate with the same
+spike/cooldown rhythm.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from tools.studio.cadence_profile import (
 
 @dataclass
 class WriteLikeResult:
-    """Result of a Write Like generation."""
+    """Result of a cadence-matched generation."""
 
     generated_text: str
     reference_profile: CadenceProfile
@@ -238,10 +239,18 @@ def extract_cadence_for_display(
         max_input_tokens=512,
         normalize_text=True,
         compute_cohesion=False,
+        include_token_metrics=True,
     )
 
     doc_metrics = analysis.get("doc_metrics") or {}
     token_data = analysis.get("token_metrics") or {}
+    series = analysis.get("series") or {}
+    series_surprisal = series.get("surprisal") if isinstance(series, dict) else None
+    token_surprisal = None
+    if isinstance(token_data, dict):
+        token_surprisal = token_data.get("surprisal")
+    if token_surprisal is None and isinstance(series_surprisal, list):
+        token_surprisal = series_surprisal
 
     return {
         "profile": profile.to_dict(),
@@ -252,6 +261,6 @@ def extract_cadence_for_display(
             "content_fraction": doc_metrics.get("content_fraction"),
             "sent_burst_cv": doc_metrics.get("sent_burst_cv"),
         },
-        "token_surprisal": token_data.get("surprisal") if isinstance(token_data, dict) else None,
+        "token_surprisal": token_surprisal,
         "spikes": analysis.get("spikes"),
     }

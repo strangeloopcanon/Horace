@@ -12,6 +12,7 @@ import numpy as np
 from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.calibrator import featurize_from_report_row, load_logistic_calibrator
+from tools.studio.cadence_profile import CadenceProfile
 from tools.studio.meaning_lock import MeaningLockConfig, MeaningLockReport, check_meaning_lock
 from tools.studio.rewrite import generate_cadence_span_rewrites, generate_span_rewrites
 from tools.studio.score import score_text
@@ -494,7 +495,7 @@ def patch_span(
     seed: Optional[int] = 7,
     meaning_lock: Optional[MeaningLockConfig] = None,
     use_cadence_sampler: bool = False,
-    cadence_profile=None,  # Optional CadenceProfile
+    cadence_profile: Optional[CadenceProfile] = None,
 ) -> Dict[str, Any]:
     raw = text or ""
     norm_text, norm_meta = normalize_for_studio(raw, doc_type=str(doc_type), enabled=bool(normalize_text))

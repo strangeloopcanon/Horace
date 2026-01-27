@@ -357,6 +357,7 @@ def analyze_text(
     max_input_tokens: int = 1024,
     compute_cohesion: bool = True,
     max_spikes: int = 12,
+    include_token_metrics: bool = False,
 ) -> Dict[str, Any]:
     """Analyze arbitrary input text and return doc-level metrics + spike highlights.
 
@@ -755,12 +756,21 @@ def analyze_text(
         items: List[Dict[str, Any]] = []
         for s0, s1 in spans:
             mask = (char_starts_arr >= int(s0)) & (char_starts_arr < int(s1))
-            c = int(mask.sum())
-            if c <= 0:
+            idxs = np.where(mask)[0]
+            if idxs.size <= 0:
                 continue
+            c = int(idxs.size)
             token_counts.append(c)
             means.append(float(np.mean(surprisal[mask])))
-            items.append({"start_char": int(s0), "end_char": int(s1), "token_count": int(c)})
+            items.append(
+                {
+                    "start_char": int(s0),
+                    "end_char": int(s1),
+                    "token_count": int(c),
+                    "start_token": int(idxs[0]),
+                    "end_token": int(idxs[-1] + 1),
+                }
+            )
         cv = None
         if len(means) >= 2:
             mu = float(np.mean(means))
@@ -809,6 +819,10 @@ def analyze_text(
         }
     )
 
+    # Convenience aliases for UI/generation code.
+    if isinstance(doc_metrics.get("high_surprise_rate_per_100"), (int, float)):
+        doc_metrics["spike_rate"] = float(doc_metrics["high_surprise_rate_per_100"])
+
     segments = {
         "sentences": {
             "count": int(len(sent_spans)),
@@ -837,7 +851,34 @@ def analyze_text(
     }
 
     series_max = 800
-    return {
+
+    token_metrics_out = None
+    tokens_out = None
+    if bool(include_token_metrics):
+        n_out = min(int(series_max), int(len(token_indices)))
+        token_metrics_out = {
+            "surprisal": [float(x) for x in surprisal[:n_out].tolist()],
+            "entropy": [float(x) for x in H_arr[:n_out].tolist()],
+            "rank": [int(x) for x in rk_arr[:n_out].tolist()],
+            "p_true": [float(x) for x in p_true_arr[:n_out].tolist()],
+            "logp": [float(x) for x in logp_arr[:n_out].tolist()],
+        }
+        tokens_out = [
+            {
+                "token": str(surfaces[i]),
+                "token_str": str(token_strs[i]),
+                "start": int(char_starts[i]),
+                "end": int(char_ends[i]),
+                "token_index": int(token_indices[i]),
+                "is_content": bool(is_content_list[i]),
+                "is_punct": bool(is_punct_list[i]),
+                "is_newline": bool(is_newline_list[i]),
+                "line_pos": str(line_pos_list[i]),
+            }
+            for i in range(n_out)
+        ]
+
+    out: Dict[str, Any] = {
         "doc_metrics": doc_metrics,
         "spikes": [asdict(s) for s in spikes],
         "segments": segments,
@@ -852,3 +893,8 @@ def analyze_text(
         "model_id": model.model_id,
         "text_normalization": norm_meta,
     }
+    if tokens_out is not None:
+        out["tokens"] = tokens_out
+    if token_metrics_out is not None:
+        out["token_metrics"] = token_metrics_out
+    return out

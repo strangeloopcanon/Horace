@@ -31,7 +31,7 @@ What you get:
 - Optional: **Trained scorer (fast)**: a single HF model that can score text without token-level analysis (enable “Fast mode” + provide a model path).
 - **Rewrite + Rerank** tab: generates N candidates and reranks them by Horace score (slow).
 - **Patch (dead zones)** tab: finds flat-cadence spans (repetition / droning density) and proposes **meaning-preserving** span patches (MeaningLock + diffs). Use the **Intensity** knob (clearer ↔ punchier) to steer how candidates are ranked.
-- **Write Like** tab: generate text that matches the cadence of a reference passage.
+- **Cadence Match** tab: generate text that matches the cadence profile of a reference passage (cadence-only, not voice copying).
 - Optional: **LLM Critique** accordion for a non-deterministic editor voice (grounded in measured metrics/spikes).
 - **Formatting normalization (default on for prose)**: fixes hard-wrapped plaintext (single newlines), common in Gutenberg/RFC copies; preserves newlines when the input looks like code, lists, or verse.
 
@@ -105,9 +105,9 @@ curl -s http://127.0.0.1:8000/analyze \
   -d '{"text":"At dawn, the city leans into light.","use_llm_critic":true,"critic_model_id":"Qwen/Qwen2.5-0.5B-Instruct"}'
 ```
 
-Write like (cadence-matched generation):
+Cadence match (reference-guided generation):
 ```bash
-curl -s http://127.0.0.1:8000/write-like \
+curl -s http://127.0.0.1:8000/cadence-match \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"The morning light crept through the window","reference_text":"Paste a reference paragraph here.","doc_type":"prose","model_id":"gpt2","max_new_tokens":200}'
 ```
@@ -152,7 +152,7 @@ Then, in the Studio UI, set **Baseline model id (or baseline JSON path)** to the
 `deploy/modal/horace_studio.py` exposes:
 - `POST /analyze`
 - `POST /rewrite`
-- `POST /write-like`
+- `POST /cadence-match` (alias: `POST /write-like`)
 
 It mounts `tools/` and `data/baselines/` into the container and expects baseline JSONs to be present.
 

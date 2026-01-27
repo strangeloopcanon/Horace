@@ -70,7 +70,7 @@ DEFAULT_POETRY_PROFILE = CadenceProfile(
     cool_temperature=0.72,
 )
 
-# More literary/punchy profile (Hemingway-ish: shorter intervals, sharper spikes)
+# More punchy profile (shorter intervals, sharper spikes)
 PUNCHY_PROFILE = CadenceProfile(
     interval_range=(7, 12),
     cooldown_range=(2, 4),
@@ -83,7 +83,7 @@ PUNCHY_PROFILE = CadenceProfile(
     cool_temperature=0.70,
 )
 
-# Elaborate/flowing profile (Wodehouse-ish: longer runs, gentler variation)
+# More flowing profile (longer runs, gentler variation)
 FLOWING_PROFILE = CadenceProfile(
     interval_range=(14, 22),
     cooldown_range=(4, 7),

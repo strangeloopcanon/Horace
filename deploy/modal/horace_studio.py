@@ -4,7 +4,7 @@ Modal deployment skeleton for Horace Studio.
 This keeps the UX simple:
 - `/analyze` -> metrics + score + suggestions (+ optional `trained_score`; `fast_only=true` skips token analysis)
 - `/rewrite` -> N rewrites, reranked by score
-- `/write-like` -> cadence-matched generation from a reference sample
+- `/cadence-match` (alias: `/write-like`) -> cadence-matched generation from a reference sample
 
 Notes:
 - Modal runs Linux + CUDA; use HF backend (no MLX).
@@ -372,7 +372,8 @@ def fastapi_app():  # pragma: no cover
         )
 
     @web.post("/write-like")
-    async def write_like(req: WriteLikeReq):
+    @web.post("/cadence-match")
+    async def cadence_match(req: WriteLikeReq):
         return write_like_remote.remote(
             req.prompt,
             reference_text=req.reference_text,
