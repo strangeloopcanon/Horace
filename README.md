@@ -2,13 +2,17 @@
 
 Horace measures the **cadence** of writing—the rhythm of surprise, the pattern of spikes and lulls—and uses it to generate text with intentional literary style.
 
+## Score Any Text
+
+Paste any writing and get a **score (0–100)**, detailed breakdown, and specific suggestions:
+
+![Text Scoring with Suggestions](docs/analyze_score.png)
+
+## Match Any Cadence
+
+Generate text that matches the *rhythm* of a reference passage—without copying its content:
+
 ![Cadence Match Output](docs/cadence_match_output.png)
-
-## What It Does
-
-1. **Analyze** — Score any text (0–100) with breakdown by rhythm, texture, and pacing
-2. **Cadence Match** — Generate text matching the *rhythm* of a reference passage
-3. **Patch** — Fix "dead zones" (flat, droning spans) while preserving meaning
 
 ## Quickstart
 
