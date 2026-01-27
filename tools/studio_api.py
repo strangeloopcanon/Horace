@@ -40,6 +40,7 @@ from tools.studio.score import score_text
 from tools.studio.span_patcher import patch_span as patch_one_span
 from tools.studio.span_patcher import suggest_dead_zones
 from tools.studio.site import STUDIO_HTML
+from tools.studio.write_like import write_like as write_like_gen
 
 
 def _ensure_baseline(baseline_model_or_path: str):
@@ -116,6 +117,7 @@ class PatchSpanReq(BaseModel):
     start_char: int = 0
     end_char: int = 0
     rewrite_mode: str = "strict"  # strict | creative
+    intensity: float = 0.5  # 0=clearer, 1=punchier
     rewrite_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
     scoring_model_id: str = "gpt2"
     baseline_model: str = "gpt2_gutenberg_512"  # model id or baseline json path
@@ -138,6 +140,17 @@ class PatchSpanReq(BaseModel):
     meaning_lock_max_edit_ratio: float = 0.55
     meaning_lock_allow_new_numbers: bool = False
     meaning_lock_allow_new_proper_nouns: bool = False
+    meaning_lock_allow_negation_change: bool = False
+
+
+class WriteLikeReq(BaseModel):
+    prompt: str = Field(default="", max_length=10_000)
+    reference_text: str = Field(min_length=1, max_length=50_000)
+    doc_type: str = "prose"
+    model_id: str = "gpt2"
+    backend: str = "auto"
+    max_new_tokens: int = 200
+    seed: Optional[int] = 7
 
 
 @app.get("/healthz")
@@ -323,6 +336,7 @@ def patch_span(req: PatchSpanReq) -> Dict[str, Any]:
         max_edit_ratio=float(req.meaning_lock_max_edit_ratio),
         allow_new_numbers=bool(req.meaning_lock_allow_new_numbers),
         allow_new_proper_nouns=bool(req.meaning_lock_allow_new_proper_nouns),
+        allow_negation_change=bool(req.meaning_lock_allow_negation_change),
     )
     return patch_one_span(
         req.text,
@@ -330,6 +344,7 @@ def patch_span(req: PatchSpanReq) -> Dict[str, Any]:
         end_char=int(req.end_char),
         doc_type=req.doc_type,
         rewrite_mode=str(req.rewrite_mode),
+        intensity=float(req.intensity),
         rewrite_model_id=req.rewrite_model_id,
         scoring_model_id=req.scoring_model_id,
         baseline_model_id=req.baseline_model,
@@ -347,6 +362,24 @@ def patch_span(req: PatchSpanReq) -> Dict[str, Any]:
         seed=int(req.seed) if req.seed is not None else None,
         meaning_lock=cfg,
     )
+
+
+@app.post("/write-like")
+def write_like(req: WriteLikeReq) -> Dict[str, Any]:
+    """Generate text matching the cadence of reference text."""
+    try:
+        result = write_like_gen(
+            prompt=req.prompt or " ",
+            reference_text=req.reference_text,
+            model_id=req.model_id or "gpt2",
+            backend=req.backend or "auto",
+            doc_type=req.doc_type or "prose",
+            max_new_tokens=int(req.max_new_tokens) if req.max_new_tokens else 200,
+            seed=int(req.seed) if req.seed else 7,
+        )
+        return result.to_dict()
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def main() -> None:  # pragma: no cover

@@ -30,7 +30,8 @@ What you get:
 - **Analyze** tab: score + sub-scores, metric percentiles, suggestions, spike excerpts, cadence plot.
 - Optional: **Trained scorer (fast)**: a single HF model that can score text without token-level analysis (enable “Fast mode” + provide a model path).
 - **Rewrite + Rerank** tab: generates N candidates and reranks them by Horace score (slow).
-- **Patch (dead zones)** tab: finds low-texture spans and proposes **meaning-preserving** span patches (MeaningLock + diffs). This is the recommended “make it better” workflow: patch locally, don’t rewrite the whole doc.
+- **Patch (dead zones)** tab: finds flat-cadence spans (repetition / droning density) and proposes **meaning-preserving** span patches (MeaningLock + diffs). Use the **Intensity** knob (clearer ↔ punchier) to steer how candidates are ranked.
+- **Write Like** tab: generate text that matches the cadence of a reference passage.
 - Optional: **LLM Critique** accordion for a non-deterministic editor voice (grounded in measured metrics/spikes).
 - **Formatting normalization (default on for prose)**: fixes hard-wrapped plaintext (single newlines), common in Gutenberg/RFC copies; preserves newlines when the input looks like code, lists, or verse.
 
@@ -87,7 +88,7 @@ Patch one span (use a zone’s `start_char`/`end_char`):
 ```bash
 curl -s http://127.0.0.1:8000/patch/span \
   -H 'Content-Type: application/json' \
-  -d '{"text":"At dawn, the city leans into light.","doc_type":"prose","start_char":0,"end_char":28,"rewrite_model_id":"Qwen/Qwen2.5-0.5B-Instruct","meaning_lock_min_cosine_sim":0.86}'
+  -d '{"text":"At dawn, the city leans into light.","doc_type":"prose","start_char":0,"end_char":28,"intensity":0.55,"rewrite_model_id":"Qwen/Qwen2.5-0.5B-Instruct","meaning_lock_min_cosine_sim":0.86}'
 ```
 
 Optional: apply a learned calibrator (trained from eval reports):
@@ -102,6 +103,13 @@ Non-deterministic critique (optional; downloads a model):
 curl -s http://127.0.0.1:8000/analyze \
   -H 'Content-Type: application/json' \
   -d '{"text":"At dawn, the city leans into light.","use_llm_critic":true,"critic_model_id":"Qwen/Qwen2.5-0.5B-Instruct"}'
+```
+
+Write like (cadence-matched generation):
+```bash
+curl -s http://127.0.0.1:8000/write-like \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"The morning light crept through the window","reference_text":"Paste a reference paragraph here.","doc_type":"prose","model_id":"gpt2","max_new_tokens":200}'
 ```
 
 ## Baselines (reference “top literature” bands)
@@ -144,6 +152,7 @@ Then, in the Studio UI, set **Baseline model id (or baseline JSON path)** to the
 `deploy/modal/horace_studio.py` exposes:
 - `POST /analyze`
 - `POST /rewrite`
+- `POST /write-like`
 
 It mounts `tools/` and `data/baselines/` into the container and expects baseline JSONs to be present.
 

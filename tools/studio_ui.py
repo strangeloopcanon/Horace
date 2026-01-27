@@ -15,6 +15,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -43,6 +44,7 @@ from tools.studio.llm_critic import llm_critique
 from tools.studio.rewrite import rewrite_and_rerank
 from tools.studio.span_patcher import patch_span as patch_one_span
 from tools.studio.span_patcher import suggest_dead_zones
+from tools.studio.write_like import write_like, extract_cadence_for_display
 
 
 def _ensure_baseline(model_id: str):
@@ -413,7 +415,21 @@ def apply_best_patch(current_text: str, best_text: str, history: list[str]):
         return current_text, history or [], _md_history(history or [])
     hist = list(history or [])
     hist.append(current_text or "")
-    return best_text, hist, _md_history(hist)
+    md = _md_history(hist)
+    a = (current_text or "").splitlines(keepends=True)
+    b = (best_text or "").splitlines(keepends=True)
+    dd = difflib.unified_diff(a, b, fromfile="doc_before", tofile="doc_after", lineterm="")
+    out_dd = list(dd)
+    if len(out_dd) > 140:
+        out_dd = out_dd[:140] + ["… (diff truncated)"]
+    diff_txt = "\n".join(out_dd).strip()
+    if diff_txt:
+        md += (
+            "\n\n<details><summary>Last apply diff</summary>\n\n```diff\n"
+            + diff_txt
+            + "\n```\n</details>"
+        )
+    return best_text, hist, md
 
 
 def undo_last_patch(current_text: str, history: list[str]):
@@ -421,7 +437,21 @@ def undo_last_patch(current_text: str, history: list[str]):
     if not hist:
         return current_text, hist, _md_history(hist)
     prev = hist.pop()
-    return prev, hist, _md_history(hist)
+    md = _md_history(hist)
+    a = (current_text or "").splitlines(keepends=True)
+    b = (prev or "").splitlines(keepends=True)
+    dd = difflib.unified_diff(a, b, fromfile="doc_before", tofile="doc_after", lineterm="")
+    out_dd = list(dd)
+    if len(out_dd) > 140:
+        out_dd = out_dd[:140] + ["… (diff truncated)"]
+    diff_txt = "\n".join(out_dd).strip()
+    if diff_txt:
+        md += (
+            "\n\n<details><summary>Last undo diff</summary>\n\n```diff\n"
+            + diff_txt
+            + "\n```\n</details>"
+        )
+    return prev, hist, md
 
 
 def run_patch_suggest(
@@ -460,6 +490,7 @@ def run_patch_span(
     selected_zone: str,
     zones_state: list[dict],
     rewrite_mode: str,
+    intensity: float,
     rewrite_model_id: str,
     scoring_model: str,
     baseline_model: str,
@@ -477,6 +508,7 @@ def run_patch_span(
     max_edit_ratio: float,
     allow_new_numbers: bool,
     allow_new_proper_nouns: bool,
+    allow_negation_change: bool,
 ):
     if not text or not text.strip():
         return "_No text provided._", "", {}
@@ -502,6 +534,7 @@ def run_patch_span(
         max_edit_ratio=float(max_edit_ratio),
         allow_new_numbers=bool(allow_new_numbers),
         allow_new_proper_nouns=bool(allow_new_proper_nouns),
+        allow_negation_change=bool(allow_negation_change),
     )
     out = patch_one_span(
         text,
@@ -509,6 +542,7 @@ def run_patch_span(
         end_char=int(zone.get("end_char") or 0),
         doc_type=str(doc_type),
         rewrite_mode=str(rewrite_mode or "strict"),
+        intensity=float(intensity),
         rewrite_model_id=str(rewrite_model_id).strip() or "Qwen/Qwen2.5-0.5B-Instruct",
         scoring_model_id=str(scoring_model).strip() or "gpt2",
         baseline_model_id=str(baseline_model).strip() or "gpt2_gutenberg_512",
@@ -542,14 +576,21 @@ def run_patch_span(
     elif pb_err:
         lines.append(f"_Primary score failed: {pb_err}_")
     lines.append("")
-    lines.append("**Patch candidates (sorted by Δtexture; 0–100 score is a secondary readout)**")
+    ctrl = out.get("control") or {}
+    inten = ctrl.get("intensity_0_1")
+    inten_s = "N/A" if not isinstance(inten, (int, float)) else f"{float(inten):.2f}"
+    lines.append(f"**Patch candidates** (sorted by `rank_score`; intensity={inten_s}; 0–100 score is secondary)")
     best_text = ""
+    best_doc_diff = ""
     for i, c in enumerate(cands[:5], 1):
         gain = float(c.get("texture_gain") or 0.0)
+        rank = c.get("rank_score")
+        dr = c.get("droning_delta")
         pdelta = c.get("primary_delta_0_100")
         pafter = (c.get("primary_after") or {}).get("overall_0_100") if isinstance(c.get("primary_after"), dict) else None
         sim = (c.get("meaning_lock") or {}).get("cosine_sim")
         er = (c.get("meaning_lock") or {}).get("edit_ratio")
+        ml = c.get("meaning_lock") or {}
         sim_s = "N/A" if not isinstance(sim, (int, float)) else f"{float(sim):.3f}"
         er_s = "N/A" if not isinstance(er, (int, float)) else f"{float(er):.2f}"
         score_s = ""
@@ -557,14 +598,156 @@ def run_patch_span(
             score_s = f"  score={float(pafter):.1f}"
         if isinstance(pdelta, (int, float)):
             score_s += f" (Δ {float(pdelta):+.1f})"
-        lines.append(f"{i}. Δtexture={gain:+.3f}{score_s}  sim={sim_s}  edit={er_s}")
+        rank_s = "N/A" if not isinstance(rank, (int, float)) else f"{float(rank):+.3f}"
+        dr_s = "N/A" if not isinstance(dr, (int, float)) else f"{float(dr):+.3f}"
+        lines.append(f"{i}. rank={rank_s}  Δtexture={gain:+.3f}  Δdroning={dr_s}{score_s}  sim={sim_s}  edit={er_s}")
+        facts = []
+        for key, label in [
+            ("numbers_added", "+nums"),
+            ("numbers_removed", "-nums"),
+            ("proper_nouns_added", "+PN"),
+            ("proper_nouns_removed", "-PN"),
+            ("negations_added", "+neg"),
+            ("negations_removed", "-neg"),
+        ]:
+            vals = ml.get(key) if isinstance(ml, dict) else None
+            if isinstance(vals, list) and vals:
+                facts.append(f"{label}={vals}")
+        if facts:
+            lines.append(f"   - fact diff: `{'; '.join(facts)}`")
         lines.append("```diff")
         lines.append(c.get("span_diff") or "")
         lines.append("```")
         if i == 1:
             best_text = c.get("patched_text") or ""
+            if best_text.strip():
+                a = (text or "").splitlines(keepends=True)
+                b = best_text.splitlines(keepends=True)
+                dd = difflib.unified_diff(a, b, fromfile="doc_before", tofile="doc_after", lineterm="")
+                out_dd = list(dd)
+                if len(out_dd) > 140:
+                    out_dd = out_dd[:140] + ["… (diff truncated)"]
+                best_doc_diff = "\n".join(out_dd).strip()
+
+    if best_doc_diff:
+        lines.append("")
+        lines.append("<details><summary>Document diff (best candidate)</summary>")
+        lines.append("")
+        lines.append("```diff")
+        lines.append(best_doc_diff)
+        lines.append("```")
+        lines.append("</details>")
 
     return "\n".join(lines), best_text, out
+
+
+def _plot_cadence_comparison(
+    ref_surprisal: Optional[list],
+    gen_surprisal: Optional[list],
+) -> Optional[Image.Image]:
+    """Plot reference vs generated cadence side by side."""
+    if not ref_surprisal and not gen_surprisal:
+        return None
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 2.8))
+
+    if ref_surprisal:
+        axes[0].plot(ref_surprisal, lw=0.8, color="#4CAF50")
+        axes[0].set_title("Reference Cadence")
+        axes[0].set_xlabel("Token")
+        axes[0].set_ylabel("Surprisal")
+    else:
+        axes[0].text(0.5, 0.5, "No data", ha="center", va="center")
+
+    if gen_surprisal:
+        axes[1].plot(gen_surprisal, lw=0.8, color="#2196F3")
+        axes[1].set_title("Generated Cadence")
+        axes[1].set_xlabel("Token")
+        axes[1].set_ylabel("Surprisal")
+    else:
+        axes[1].text(0.5, 0.5, "No data", ha="center", va="center")
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=160)
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf)
+
+
+def run_write_like(
+    prompt: str,
+    reference_text: str,
+    doc_type: str,
+    model_id: str,
+    max_new_tokens: int,
+    seed: Optional[int],
+):
+    """Handler for Write Like tab."""
+    if not reference_text or not reference_text.strip():
+        return "Please provide reference text.", "", None, {}
+
+    if not prompt or not prompt.strip():
+        prompt = " "
+
+    try:
+        result = write_like(
+            prompt=prompt,
+            reference_text=reference_text,
+            model_id=model_id or "gpt2",
+            doc_type=doc_type or "prose",
+            max_new_tokens=int(max_new_tokens) if max_new_tokens else 200,
+            seed=int(seed) if seed else 7,
+        )
+
+        # Build markdown report
+        lines = []
+        lines.append("### Generated Text")
+        lines.append("")
+        lines.append(result.generated_text)
+        lines.append("")
+        lines.append("---")
+        lines.append("### Cadence Match")
+        match = result.cadence_match
+        similarity = match.get("similarity_0_1", 0.0)
+        lines.append(f"**Similarity:** {similarity:.1%}")
+        lines.append("")
+        lines.append("| Metric | Generated | Reference |")
+        lines.append("|--------|-----------|-----------|")
+        details = match.get("details") or {}
+        for k, v in details.items():
+            if isinstance(v, dict):
+                gen_v = v.get("generated", "—")
+                ref_v = v.get("reference", "—")
+                if isinstance(gen_v, float):
+                    gen_v = f"{gen_v:.2f}"
+                if isinstance(ref_v, float):
+                    ref_v = f"{ref_v:.2f}"
+                lines.append(f"| {k} | {gen_v} | {ref_v} |")
+
+        md = "\n".join(lines)
+
+        # Get surprisal for plots
+        ref_display = extract_cadence_for_display(
+            reference_text,
+            model_id=model_id or "gpt2",
+            doc_type=doc_type or "prose",
+        )
+        gen_display = extract_cadence_for_display(
+            result.generated_text,
+            model_id=model_id or "gpt2",
+            doc_type=doc_type or "prose",
+        )
+
+        ref_surp = ref_display.get("token_surprisal") or []
+        gen_surp = gen_display.get("token_surprisal") or []
+
+        plot = _plot_cadence_comparison(ref_surp, gen_surp)
+
+        return md, result.generated_text, plot, result.to_dict()
+
+    except Exception as e:
+        return f"Error: {type(e).__name__}: {e}", "", None, {"error": f"{type(e).__name__}: {e}"}
 
 
 def build_ui() -> gr.Blocks:
@@ -684,12 +867,13 @@ def build_ui() -> gr.Blocks:
         with gr.Tab("Patch (dead zones)"):
             gr.Markdown(
                 "Find low-texture spans and patch them with MeaningLock (semantic similarity + no-new-facts heuristics). "
-                "Optimize locally (Δtexture); keep the 0–100 score as a secondary readout."
+                "Optimize locally with an intensity knob (clearer↔punchier); keep the 0–100 score as a secondary readout."
             )
             zones_state = gr.State([])
             history_state = gr.State([])
             with gr.Row():
                 patch_mode = gr.Dropdown(choices=["strict", "creative"], value="strict", label="Patch mode")
+                patch_intensity = gr.Slider(0.0, 1.0, value=0.55, step=0.05, label="Intensity (clearer ↔ punchier)")
                 patch_rewrite_model = gr.Textbox(
                     value="Qwen/Qwen2.5-0.5B-Instruct",
                     label="Rewrite model (span patching; instruct works best)",
@@ -717,6 +901,7 @@ def build_ui() -> gr.Blocks:
                 with gr.Row():
                     allow_new_numbers = gr.Checkbox(value=False, label="Allow number changes")
                     allow_new_proper = gr.Checkbox(value=False, label="Allow proper-noun changes")
+                    allow_negation_change = gr.Checkbox(value=False, label="Allow negation changes")
 
             patch_btn = gr.Button("Patch selected zone (slow)")
             with gr.Row():
@@ -747,6 +932,7 @@ def build_ui() -> gr.Blocks:
                     zone_dd,
                     zones_state,
                     patch_mode,
+                    patch_intensity,
                     patch_rewrite_model,
                     scoring_model,
                     baseline_model,
@@ -764,6 +950,7 @@ def build_ui() -> gr.Blocks:
                     max_edit_ratio,
                     allow_new_numbers,
                     allow_new_proper,
+                    allow_negation_change,
                 ],
                 outputs=[patch_md, patched_text, patch_json],
             )
@@ -778,6 +965,49 @@ def build_ui() -> gr.Blocks:
                 fn=undo_last_patch,
                 inputs=[text, history_state],
                 outputs=[text, history_state, history_md],
+            )
+
+        with gr.Tab("Write Like"):
+            gr.Markdown(
+                """
+                ### Write Like Mode
+                Generate text that matches the *cadence* of a reference author or passage.
+                Paste a reference sample, provide a prompt, and generate with matching rhythm.
+                """
+            )
+            with gr.Row():
+                wl_reference = gr.Textbox(
+                    lines=8,
+                    label="Reference Text (style to match)",
+                    placeholder="Paste a paragraph from an author whose style you want to match...",
+                )
+                wl_prompt = gr.Textbox(
+                    lines=4,
+                    label="Your Prompt (starting text)",
+                    placeholder="Begin your text here...",
+                    value="The morning light crept through the window",
+                )
+            with gr.Row():
+                wl_model = gr.Textbox(value="gpt2", label="Generation model")
+                wl_max_tokens = gr.Slider(50, 500, value=200, step=10, label="Max tokens")
+                wl_seed = gr.Number(value=7, precision=0, label="Seed")
+            wl_btn = gr.Button("Generate", variant="primary")
+            wl_md = gr.Markdown()
+            wl_output = gr.Textbox(lines=6, label="Generated Text", interactive=False)
+            wl_plot = gr.Image(label="Cadence Comparison", type="pil")
+            wl_json = gr.JSON(label="Raw Output")
+
+            wl_btn.click(
+                fn=run_write_like,
+                inputs=[
+                    wl_prompt,
+                    wl_reference,
+                    doc_type,
+                    wl_model,
+                    wl_max_tokens,
+                    wl_seed,
+                ],
+                outputs=[wl_md, wl_output, wl_plot, wl_json],
             )
 
     return demo

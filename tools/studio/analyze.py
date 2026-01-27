@@ -752,6 +752,7 @@ def analyze_text(
     def _segment_series(spans: List[Tuple[int, int]]):
         means: List[float] = []
         token_counts: List[int] = []
+        items: List[Dict[str, Any]] = []
         for s0, s1 in spans:
             mask = (char_starts_arr >= int(s0)) & (char_starts_arr < int(s1))
             c = int(mask.sum())
@@ -759,6 +760,7 @@ def analyze_text(
                 continue
             token_counts.append(c)
             means.append(float(np.mean(surprisal[mask])))
+            items.append({"start_char": int(s0), "end_char": int(s1), "token_count": int(c)})
         cv = None
         if len(means) >= 2:
             mu = float(np.mean(means))
@@ -769,12 +771,12 @@ def analyze_text(
             mu = float(np.mean(token_counts))
             sd = float(np.std(token_counts))
             len_cv = float(sd / (abs(mu) + 1e-12))
-        return means, token_counts, cv, len_cv
+        return means, token_counts, cv, len_cv, items
 
-    sent_means, sent_counts, burst_cv_sent, len_cv_sent = _segment_series(sent_spans)
+    sent_means, sent_counts, burst_cv_sent, len_cv_sent, sent_items = _segment_series(sent_spans)
     para_spans = paragraph_units(text_used, "prose")
-    para_means, para_counts, burst_cv_para, len_cv_para = _segment_series(para_spans)
-    line_means, line_counts, burst_cv_line, len_cv_line = _segment_series(line_spans)
+    para_means, para_counts, burst_cv_para, len_cv_para, para_items = _segment_series(para_spans)
+    line_means, line_counts, burst_cv_line, len_cv_line, line_items = _segment_series(line_spans)
 
     def _tokens_mean_p90(counts: List[int]) -> Tuple[Optional[float], Optional[float]]:
         if not counts:
@@ -814,6 +816,7 @@ def analyze_text(
             "token_counts": sent_counts[:64],
             "burst_cv": burst_cv_sent,
             "len_cv": len_cv_sent,
+            "items": sent_items[:64],
         },
         "paragraphs": {
             "count": int(len(para_spans)),
@@ -821,6 +824,7 @@ def analyze_text(
             "token_counts": para_counts[:64],
             "burst_cv": burst_cv_para,
             "len_cv": len_cv_para,
+            "items": para_items[:64],
         },
         "lines": {
             "count": int(len(line_spans)),
@@ -828,6 +832,7 @@ def analyze_text(
             "token_counts": line_counts[:64],
             "burst_cv": burst_cv_line,
             "len_cv": len_cv_line,
+            "items": line_items[:64],
         },
     }
 

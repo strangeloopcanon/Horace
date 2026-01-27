@@ -4,6 +4,7 @@ Modal deployment skeleton for Horace Studio.
 This keeps the UX simple:
 - `/analyze` -> metrics + score + suggestions (+ optional `trained_score`; `fast_only=true` skips token analysis)
 - `/rewrite` -> N rewrites, reranked by score
+- `/write-like` -> cadence-matched generation from a reference sample
 
 Notes:
 - Modal runs Linux + CUDA; use HF backend (no MLX).
@@ -258,6 +259,32 @@ def rewrite_remote(
     return out
 
 
+@app.function(image=image, gpu="any", timeout=900, volumes={"/cache/hf": hf_cache_vol, "/vol": data_vol})
+def write_like_remote(
+    prompt: str,
+    *,
+    reference_text: str,
+    doc_type: str = "prose",
+    model_id: str = "gpt2",
+    max_new_tokens: int = 200,
+    seed: Optional[int] = 7,
+) -> Dict[str, Any]:
+    _bootstrap_repo()
+    from tools.studio.write_like import write_like
+
+    out = write_like(
+        prompt=prompt or " ",
+        reference_text=reference_text,
+        model_id=model_id,
+        backend="hf",
+        doc_type=doc_type,
+        max_new_tokens=max_new_tokens,
+        seed=seed,
+    )
+    hf_cache_vol.commit()
+    return out.to_dict()
+
+
 @app.function(image=image, volumes={"/cache/hf": hf_cache_vol, "/vol": data_vol})
 @modal.asgi_app()
 def fastapi_app():  # pragma: no cover
@@ -300,6 +327,14 @@ def fastapi_app():  # pragma: no cover
         normalize_text: bool = True
         calibrator_path: str = ""
 
+    class WriteLikeReq(BaseModel):
+        prompt: str = Field(default="", max_length=10_000)
+        reference_text: str = Field(min_length=1, max_length=50_000)
+        doc_type: str = "prose"
+        model_id: str = "gpt2"
+        max_new_tokens: int = 200
+        seed: Optional[int] = 7
+
     @web.post("/analyze")
     async def analyze(req: AnalyzeReq):
         baseline = (req.baseline_model_id or req.baseline_model or "gpt2").strip()
@@ -334,6 +369,17 @@ def fastapi_app():  # pragma: no cover
             top_p=req.top_p,
             seed=req.seed,
             normalize_text=bool(req.normalize_text),
+        )
+
+    @web.post("/write-like")
+    async def write_like(req: WriteLikeReq):
+        return write_like_remote.remote(
+            req.prompt,
+            reference_text=req.reference_text,
+            doc_type=req.doc_type,
+            model_id=req.model_id,
+            max_new_tokens=req.max_new_tokens,
+            seed=req.seed,
         )
 
     @web.get("/")

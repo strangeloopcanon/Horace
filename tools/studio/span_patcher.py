@@ -13,11 +13,116 @@ from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.calibrator import featurize_from_report_row, load_logistic_calibrator
 from tools.studio.meaning_lock import MeaningLockConfig, MeaningLockReport, check_meaning_lock
-from tools.studio.rewrite import generate_span_rewrites
+from tools.studio.rewrite import generate_cadence_span_rewrites, generate_span_rewrites
 from tools.studio.score import score_text
 from tools.studio.text_normalize import normalize_for_studio
 
 _WORD_RE = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
+_NOMINALIZATION_RE = re.compile(
+    r"\b[a-z]{4,}(?:tion|sion|ment|ness|ity|ism|ization|isation|ality|ability|ance|ence)\b",
+    flags=re.I,
+)
+_PASSIVE_RE = re.compile(
+    r"\b(?:am|is|are|was|were|be|been|being)\b\s+(?:\w+\s+){0,2}?\w+(?:ed|en)\b",
+    flags=re.I,
+)
+_HEDGE_RE = re.compile(
+    r"\b(?:may|might|could|perhaps|arguably|likely|generally|typically|often|sometimes|somewhat|relatively)\b",
+    flags=re.I,
+)
+_SENT_END_RE = re.compile(r"[.!?]+")
+
+
+def _bureaucracy_stats(text: str) -> Dict[str, float]:
+    t = (text or "").strip()
+    words = [m.group(0) for m in _WORD_RE.finditer(t)]
+    n = len(words)
+    if n <= 0:
+        return {"mean_word_len": 0.0, "long_word_rate": 0.0, "nominal_rate": 0.0, "passive_hits": 0.0, "hedge_rate": 0.0}
+    wl = [len(w) for w in words]
+    mean_wl = float(np.mean(np.array(wl, dtype=np.float32))) if wl else 0.0
+    long_rate = float(sum(1 for w in wl if w >= 8)) / float(n)
+    nom_rate = float(len(_NOMINALIZATION_RE.findall(t))) / float(n)
+    hedge_rate = float(len(_HEDGE_RE.findall(t))) / float(n)
+    passive_hits = float(len(_PASSIVE_RE.findall(t)))
+    return {
+        "mean_word_len": float(mean_wl),
+        "long_word_rate": float(long_rate),
+        "nominal_rate": float(nom_rate),
+        "passive_hits": float(passive_hits),
+        "hedge_rate": float(hedge_rate),
+    }
+
+
+def _sentence_count_est(text: str) -> int:
+    t = (text or "").strip()
+    if not t:
+        return 1
+    n = len(_SENT_END_RE.findall(t))
+    return max(1, int(n))
+
+
+def _droning_score(text: str) -> float:
+    """Heuristic 'droning density' score; higher is worse.
+
+    This is Horace-native: the intent is to penalize bureaucratic density, hedging,
+    and nominalization-heavy phrasing that often reads like "competent vanilla".
+    """
+    stats = _bureaucracy_stats(text)
+    sents = float(_sentence_count_est(text))
+    passive_per_sent = float(stats.get("passive_hits") or 0.0) / max(1.0, sents)
+    mean_wl = float(stats.get("mean_word_len") or 0.0)
+    score = 0.0
+    score += 5.0 * float(stats.get("nominal_rate") or 0.0)
+    score += 4.0 * float(stats.get("hedge_rate") or 0.0)
+    score += 1.5 * float(stats.get("long_word_rate") or 0.0)
+    score += 0.30 * passive_per_sent
+    score += 0.10 * max(0.0, mean_wl - 4.7)
+    return float(score)
+
+
+def _dead_zone_penalty_and_reasons(zone_text: str, *, sent_len_cv: Optional[float]) -> Tuple[bool, float, List[str]]:
+    """Return (keep_candidate, extra_penalty, reasons) for a flat-cadence span.
+
+    "First, do no harm": flat cadence alone is not a problem. We only surface spans
+    that are flat *and* show either repetition or droning density.
+    """
+    wstats = _word_stats(zone_text)
+    bstats = _bureaucracy_stats(zone_text)
+
+    trigram_rep = wstats.get("trigram_repeat")
+    adjacent_rep = wstats.get("adjacent_repeat")
+
+    reasons = ["flat_cadence"]
+    pen = 0.0
+
+    has_rep = False
+    if isinstance(trigram_rep, (int, float)) and float(trigram_rep) >= 0.18:
+        reasons.append("high_trigram_repetition")
+        pen += min(0.35, float(trigram_rep))
+        has_rep = True
+    if isinstance(adjacent_rep, (int, float)) and float(adjacent_rep) >= 0.06:
+        reasons.append("adjacent_word_repetition")
+        pen += min(0.20, float(adjacent_rep))
+        has_rep = True
+
+    is_droning = (
+        float(bstats.get("nominal_rate") or 0.0) >= 0.060
+        or float(bstats.get("hedge_rate") or 0.0) >= 0.028
+        or float(bstats.get("passive_hits") or 0.0) >= 2.0
+        or float(bstats.get("long_word_rate") or 0.0) >= 0.22
+    )
+    if is_droning:
+        reasons.append("droning_density")
+        pen += 0.15
+
+    has_uniform_len = isinstance(sent_len_cv, (int, float)) and float(sent_len_cv) <= 0.08
+    if has_uniform_len:
+        reasons.append("uniform_sentence_length")
+        pen += 0.12
+
+    keep = bool(has_rep or is_droning)
+    return keep, float(pen), reasons
 
 _CALIBRATOR_CACHE: Dict[str, Any] = {}
 
@@ -45,6 +150,12 @@ class PatchCandidate:
     texture_before: float
     texture_after: float
     texture_gain: float
+    droning_before: float
+    droning_after: float
+    droning_delta: float
+    brevity_gain: float
+    clarity_gain: float
+    rank_score: float
     meaning_lock: Dict[str, Any]
     span_diff: str
 
@@ -150,11 +261,18 @@ def suggest_dead_zones(
 
     seg = (analysis.get("segments") or {}).get("sentences") or {}
     means = seg.get("mean_surprisal") or []
+    tok_counts = seg.get("token_counts") or []
     items = seg.get("items") or []
     if not means or not items or len(means) < 6:
         return {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": []}
 
     arr = np.array([float(x) for x in means[: len(items)]], dtype=np.float32)
+    counts_arr = None
+    try:
+        if tok_counts and len(tok_counts) >= len(items):
+            counts_arr = np.array([float(x) for x in tok_counts[: len(items)]], dtype=np.float32)
+    except Exception:
+        counts_arr = None
     global_sd = float(np.std(arr))
     if not math.isfinite(global_sd) or global_sd <= 1e-6:
         return {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": []}
@@ -171,24 +289,23 @@ def suggest_dead_zones(
         if w_sd > threshold:
             continue
 
+        w_len_cv = None
+        if counts_arr is not None and (i + W) <= len(counts_arr):
+            wc = counts_arr[i : i + W]
+            mu = float(np.mean(wc))
+            sd = float(np.std(wc))
+            if math.isfinite(mu) and abs(mu) > 1e-12 and math.isfinite(sd):
+                w_len_cv = float(sd / (abs(mu) + 1e-12))
+
         s0 = int(items[i].get("start_char") or 0)
         s1 = int(items[i + W - 1].get("end_char") or s0)
         zone_text = norm_text[s0:s1]
-
-        wstats = _word_stats(zone_text)
-        trigram_rep = wstats.get("trigram_repeat")
-        adjacent_rep = wstats.get("adjacent_repeat")
-        reasons = ["low_surprisal_variance"]
-        rep_pen = 0.0
-        if isinstance(trigram_rep, (int, float)) and float(trigram_rep) >= 0.18:
-            reasons.append("high_trigram_repetition")
-            rep_pen += min(0.35, float(trigram_rep))
-        if isinstance(adjacent_rep, (int, float)) and float(adjacent_rep) >= 0.06:
-            reasons.append("adjacent_word_repetition")
-            rep_pen += min(0.20, float(adjacent_rep))
+        keep, extra_pen, reasons = _dead_zone_penalty_and_reasons(zone_text, sent_len_cv=w_len_cv)
+        if not keep:
+            continue
 
         sev = float((threshold - w_sd) / max(threshold, 1e-6))
-        sev = float(np.clip(sev + rep_pen, 0.0, 1.25))
+        sev = float(np.clip(sev + float(extra_pen), 0.0, 1.25))
         candidates.append(((i, i + W - 1), sev, reasons))
 
     if not candidates:
@@ -212,17 +329,20 @@ def suggest_dead_zones(
         span_means = arr[ss : se + 1]
         span_sd = float(np.std(span_means))
         wstats = _word_stats(norm_text[start_char:end_char])
-        reasons = ["low_surprisal_variance"]
-        rep_pen = 0.0
-        if isinstance(wstats.get("trigram_repeat"), (int, float)) and float(wstats["trigram_repeat"]) >= 0.18:
-            reasons.append("high_trigram_repetition")
-            rep_pen += min(0.35, float(wstats["trigram_repeat"]))
-        if isinstance(wstats.get("adjacent_repeat"), (int, float)) and float(wstats["adjacent_repeat"]) >= 0.06:
-            reasons.append("adjacent_word_repetition")
-            rep_pen += min(0.20, float(wstats["adjacent_repeat"]))
+        span_len_cv = None
+        if counts_arr is not None and 0 <= ss <= se < len(counts_arr):
+            wc = counts_arr[ss : se + 1]
+            mu = float(np.mean(wc))
+            sd = float(np.std(wc))
+            if math.isfinite(mu) and abs(mu) > 1e-12 and math.isfinite(sd):
+                span_len_cv = float(sd / (abs(mu) + 1e-12))
+        keep, extra_pen, reasons = _dead_zone_penalty_and_reasons(
+            norm_text[start_char:end_char],
+            sent_len_cv=span_len_cv,
+        )
 
         sev = float((threshold - span_sd) / max(threshold, 1e-6))
-        sev = float(np.clip(sev + rep_pen, 0.0, 1.25))
+        sev = float(np.clip(sev + float(extra_pen), 0.0, 1.25))
         excerpt = _span_excerpt(norm_text, start_char, end_char)
         zones.append(
             DeadZone(
@@ -356,6 +476,7 @@ def patch_span(
     end_char: int,
     doc_type: str = "prose",
     rewrite_mode: str = "strict",
+    intensity: float = 0.5,  # 0=clearer, 1=punchier
     rewrite_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct",
     scoring_model_id: str = "gpt2",
     baseline_model_id: str = "gpt2_gutenberg_512",
@@ -372,6 +493,8 @@ def patch_span(
     top_p: float = 0.92,
     seed: Optional[int] = 7,
     meaning_lock: Optional[MeaningLockConfig] = None,
+    use_cadence_sampler: bool = False,
+    cadence_profile=None,  # Optional CadenceProfile
 ) -> Dict[str, Any]:
     raw = text or ""
     norm_text, norm_meta = normalize_for_studio(raw, doc_type=str(doc_type), enabled=bool(normalize_text))
@@ -392,20 +515,38 @@ def patch_span(
         compute_cohesion=False,
     )
     texture_before = _texture_score_from_metrics(before_analysis.get("doc_metrics") or {})
+    droning_before = _droning_score(span)
+    intensity_norm = float(np.clip(float(intensity), 0.0, 1.0))
 
-    rewrites = generate_span_rewrites(
-        norm_text,
-        start_char=s,
-        end_char=e,
-        doc_type=str(doc_type),
-        rewrite_mode=str(rewrite_mode),
-        rewrite_model_id=str(rewrite_model_id),
-        n=int(n_candidates),
-        max_new_tokens=int(max_new_tokens),
-        temperature=float(temperature),
-        top_p=float(top_p),
-        seed=int(seed) if seed is not None else None,
-    )
+    # Choose generation method: cadence sampler or LLM prompting
+    if use_cadence_sampler:
+        rewrites = generate_cadence_span_rewrites(
+            norm_text,
+            start_char=s,
+            end_char=e,
+            doc_type=str(doc_type),
+            target_profile=cadence_profile,
+            model_id=str(scoring_model_id),  # Use scoring model for cadence gen
+            backend=str(backend),
+            n_candidates=int(n_candidates),
+            max_new_tokens=int(max_new_tokens),
+            seed=int(seed) if seed is not None else None,
+        )
+    else:
+        rewrites = generate_span_rewrites(
+            norm_text,
+            start_char=s,
+            end_char=e,
+            doc_type=str(doc_type),
+            rewrite_mode=str(rewrite_mode),
+            intensity=float(intensity_norm),
+            rewrite_model_id=str(rewrite_model_id),
+            n=int(n_candidates),
+            max_new_tokens=int(max_new_tokens),
+            temperature=float(temperature),
+            top_p=float(top_p),
+            seed=int(seed) if seed is not None else None,
+        )
     if not rewrites:
         return {
             "text": norm_text,
@@ -432,6 +573,16 @@ def patch_span(
             compute_cohesion=False,
         )
         texture_after = _texture_score_from_metrics(after_analysis.get("doc_metrics") or {})
+        droning_after = _droning_score(repl)
+        droning_delta = float(droning_after - droning_before)
+        len_ratio = float(len(repl) / max(1, len(span)))
+        brevity_gain = float(1.0 - len_ratio)
+        clarity_gain = float((-droning_delta) + 0.25 * brevity_gain)
+        rank_score = float(
+            (intensity_norm * float(texture_after - texture_before))
+            + ((1.0 - intensity_norm) * float(clarity_gain))
+            - 0.10 * max(0.0, droning_delta)
+        )
         patched = norm_text[:s] + repl + norm_text[e:]
         scored.append(
             PatchCandidate(
@@ -441,13 +592,22 @@ def patch_span(
                 texture_before=float(texture_before),
                 texture_after=float(texture_after),
                 texture_gain=float(texture_after - texture_before),
+                droning_before=float(droning_before),
+                droning_after=float(droning_after),
+                droning_delta=float(droning_delta),
+                brevity_gain=float(brevity_gain),
+                clarity_gain=float(clarity_gain),
+                rank_score=float(rank_score),
                 meaning_lock=ml.to_dict(),
                 span_diff=_unified_span_diff(span, repl),
             )
         )
         cid += 1
 
-    scored.sort(key=lambda c: (float(c.texture_gain), float(c.meaning_lock.get("cosine_sim") or 0.0)), reverse=True)
+    scored.sort(
+        key=lambda c: (float(c.rank_score), float(c.texture_gain), float(c.meaning_lock.get("cosine_sim") or 0.0)),
+        reverse=True,
+    )
 
     candidates_out: List[Dict[str, Any]] = []
 
@@ -505,6 +665,7 @@ def patch_span(
         "text": norm_text,
         "text_normalization": norm_meta,
         "span": {"start_char": s, "end_char": e, "text": span},
+        "control": {"intensity_0_1": float(intensity_norm)},
         "primary_before": primary_before,
         "primary_before_error": primary_before_err,
         "candidates": candidates_out,

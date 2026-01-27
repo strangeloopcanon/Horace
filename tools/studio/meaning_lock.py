@@ -8,6 +8,10 @@ import numpy as np
 
 _NUM_RE = re.compile(r"\b\d+(?:[.,]\d+)?(?:%|[A-Za-z]+)?(?![A-Za-z0-9_])")
 _WORD_RE = re.compile(r"\b[A-Za-z][A-Za-z']+\b")
+_NEG_RE = re.compile(
+    r"\b(?:no|not|never|none|nothing|nowhere|neither|nor|without|cannot|can't|won't|don't|doesn't|didn't|isn't|aren't|wasn't|weren't|haven't|hasn't|hadn't)\b",
+    flags=re.I,
+)
 
 
 def _pick_device() -> str:
@@ -117,6 +121,12 @@ def extract_numbers(text: str) -> List[str]:
     return sorted(nums)
 
 
+def extract_negations(text: str) -> List[str]:
+    t = text or ""
+    neg = {m.group(0).lower() for m in _NEG_RE.finditer(t)}
+    return sorted(neg)
+
+
 def extract_proper_nouns(text: str) -> List[str]:
     t = text or ""
     first_word_spans = _sentence_start_word_spans(t)
@@ -152,6 +162,7 @@ class MeaningLockConfig:
     max_edit_ratio: float = 0.55  # approx char-level change ratio
     allow_new_numbers: bool = False
     allow_new_proper_nouns: bool = False
+    allow_negation_change: bool = False
 
 
 @dataclass(frozen=True)
@@ -162,6 +173,8 @@ class MeaningLockReport:
     edit_ratio: float
     numbers_added: List[str]
     numbers_removed: List[str]
+    negations_added: List[str]
+    negations_removed: List[str]
     proper_nouns_added: List[str]
     proper_nouns_removed: List[str]
     reasons: List[str]
@@ -205,6 +218,8 @@ def check_meaning_lock(
             edit_ratio=1.0,
             numbers_added=[],
             numbers_removed=[],
+            negations_added=[],
+            negations_removed=[],
             proper_nouns_added=[],
             proper_nouns_removed=[],
             reasons=["empty_text"],
@@ -224,6 +239,13 @@ def check_meaning_lock(
     nums_removed = sorted(nums_a - nums_b)
     if (nums_added or nums_removed) and not bool(c.allow_new_numbers):
         reasons.append("numbers_changed")
+
+    neg_a = set(extract_negations(a))
+    neg_b = set(extract_negations(b))
+    neg_added = sorted(neg_b - neg_a)
+    neg_removed = sorted(neg_a - neg_b)
+    if (neg_added or neg_removed) and not bool(c.allow_negation_change):
+        reasons.append("negation_changed")
 
     pn_a = set(extract_proper_nouns(a))
     pn_b = set(extract_proper_nouns(b))
@@ -252,6 +274,8 @@ def check_meaning_lock(
         edit_ratio=edit_ratio,
         numbers_added=nums_added,
         numbers_removed=nums_removed,
+        negations_added=neg_added,
+        negations_removed=neg_removed,
         proper_nouns_added=pn_added,
         proper_nouns_removed=pn_removed,
         reasons=reasons,
