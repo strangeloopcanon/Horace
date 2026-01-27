@@ -1,219 +1,149 @@
-# Horace — Writing Signatures & Cadence Sampler
+# Horace — Measure & Generate Literary Cadence
 
-Horace is a compact toolkit to:
+Horace measures the **cadence** of writing—the rhythm of surprise, the pattern of spikes and lulls—and uses it to generate text with intentional literary style.
 
-- Measure token‑level distributions and cadence signatures from causal LMs (GPT‑2, Qwen, etc.).
-- Generate better prose/poetry with a cadence‑aware sampler that inserts purposeful spikes and cool‑downs.
+![Cadence Match Output](docs/cadence_match_output.png)
 
-It prefers Apple Silicon (MLX) and falls back to Hugging Face + PyTorch.
+## What It Does
 
-## Table of Contents
+1. **Analyze** — Score any text (0–100) with breakdown by rhythm, texture, and pacing
+2. **Cadence Match** — Generate text matching the *rhythm* of a reference passage
+3. **Patch** — Fix "dead zones" (flat, droning spans) while preserving meaning
 
-- Overview
-- Quick Links
-- Horace Studio Quickstart
-- Install
-- Data Layout
-- Analysis Pipeline
-- Cadence Sampler
-- Reports & Final Book
-- Usage Examples
-- Troubleshooting
+## Quickstart
 
-## Overview
-
-- Analysis: Per‑token probabilities, entropy, true‑rank, nucleus width, and top‑k; per‑doc/author cadence metrics (IPI, MASD/ACF/FFT, cooldown entropy drop), distributional stats, cohesion shuffle delta, token‑class context.
-- Cadence Sampler: Token‑aware controller enforcing Base → Spike → Cooldown with per‑phase `top_p` + temperature; defers spikes on punctuation, aims rhyme at line ends, adds repetition controls and a diversity bonus on spikes.
-- Reports: Per‑model and cross‑model dashboards; curated “Final” book with narrative, illustrations, and before/after snippets.
-- Why: Great writing isn’t random or safe — it rides a rhythm of focused choices punctuated by turns; we measure those patterns and then make the model follow them.
-
-## Quick Links
-
-- [Final Report (HTML, self‑contained)](reports/final/report.html)
-- [Final Report (DOCX)](reports/final/report.docx)
-- [Final Report (Markdown)](reports/final/README.md)
-- [Model Report — Qwen/Qwen2.5‑1.5B](reports/Qwen/Qwen2.5-1.5B/README.md)
-- [Model Report — GPT‑2](reports/gpt2/README.md)
-- [Cross‑Model Compare (GPT‑2 vs Qwen)](reports/compare_gpt2_vs_Qwen_Qwen2.5-1.5B/README.md)
-- [All Generated Before/After Examples](reports/generated/README.md)
-- [GRPO Reward Plan (v0)](docs/reward.md)
-- [Horace Studio (paste → score/profile/suggestions/rewrites)](docs/studio.md)
-- [Studio Benchmark (data + held-out eval)](docs/benchmark.md)
-- [Signatures CLI HOWTO](signatures/HOWTO.md)
- 
-## Horace Studio Quickstart
-
-So what: paste any writing and get a **score (0–100)** plus a **breakdown** and **suggestions**.
-
-Local UI:
 ```bash
 make setup
-make run-ui  # http://127.0.0.1:7861
+make run-ui    # http://127.0.0.1:7861
 ```
 
-Local API (for building a frontend):
+![Cadence Match Tab](docs/cadence_match_input.png)
+
+---
+
+## Features
+
+### Horace Studio (Local UI)
+Paste writing → get a **score**, **profile**, **suggestions**, and optional **rewrites**.
+
 ```bash
-make run-api  # http://127.0.0.1:8000
+python tools/studio_ui.py --port 7861
 ```
 
-Modal setup + remote scoring:
+Tabs:
+- **Analyze** — Score + percentile breakdown + LLM critique
+- **Rewrite + Rerank** — Generate candidates, rank by Horace metrics
+- **Patch (dead zones)** — Target flat spans with MeaningLock protection
+- **Cadence Match** — Match the rhythm of reference text (new!)
+
+### Cadence Sampler
+Token-aware generation with **Base → Spike → Cooldown** phases:
+
+```python
+from tools.sampler import CadenceSampler, PoetryConfig
+
+config = PoetryConfig(interval_range=(10, 18), spike_temperature=1.3)
+sampler = CadenceSampler(backend, config)
+text = sampler.generate("The morning light", max_new_tokens=200)
+```
+
+### Analysis Pipeline
+Extract per-token metrics from any causal LM:
+
 ```bash
-make setup-modal
-make modal-token
+python tools/analyze.py run --config configs/gpt2_mlx.json
 ```
 
-More: `docs/studio.md`.
+Captures: surprisal, entropy, rank, nucleus width, cadence metrics (IPI, MASD, ACF).
 
-## Signatures Index
-
-- GPT‑2 (MLX, full): `reports/signatures_gpt2_mlx_full/`
-- Qwen/Qwen2.5‑1.5B (MLX, full): `reports/signatures_qwen_mlx_full/`
-
-## GRPO Rollouts (MLX)
-- Configure: `configs/grpo_default.json` (defaults to `Qwen/Qwen3-1.7B`, MLX backend, simple diverse sampler).
-- Run rollouts + rewards: `python tools/grpo_runner.py --config configs/grpo_default.json`
-- Output: `data/grpo_runs/<run>/rollouts.jsonl` with group rewards, advantages, and component breakdowns.
-
-## GRPO Training (Adapter)
-- The repo includes a lightweight GRPO trainer that optimizes a vocab-sized logit-bias adapter (keeps base model fixed; MLX rollouts).
-- Configure training under `train` in `configs/grpo_default.json`.
-- Start training: `python tools/grpo_train.py --config configs/grpo_default.json`
-- Checkpoints/logs in the configured `out_dir`.
-
-## Full GRPO Training (HF)
-- Train the base model weights (no LoRA/adapters):
-- Set `backend: hf` and adjust `train` hyperparams in `configs/grpo_default.json` (e.g., `lr: 5e-6`, `clip: 0.2`).
-- Start: `python tools/grpo_full_train.py --config configs/grpo_default.json`
-- Checkpoints are saved under the configured `out_dir`.
-- Options: enable `train.amp` (`bf16`/`fp16` on CUDA), set `train.grad_accum` for accumulation, and `train.kl_coef` to add a reference-KL penalty.
-
-Optional grammar accuracy
-- You can enable a soft grammar preference in the reward: set `reward.enable_grammar: true` and add a small positive `grammar` weight via `reward.weights_override`.
-- Install (optional): `pip install language-tool-python` (import name `language_tool_python`). If not installed, the scorer falls back to a light heuristic.
-
-## Data Layout
-
-- Input index: `data/index.json` with `{type, author, title, path}` pointing to `.txt` files.
-- Per‑token capture: chosen token probability, logprob, rank, entropy, effective support `exp(H)`, nucleus width `w_p`, `topk_ids`/`topk_probs`, cumulative mass, tail mass, offsets, and metadata.
-- Aggregations: per‑doc metrics (means/medians/percentiles, cadence & cohesion shuffle delta) and per‑author rollups.
-- Storage: `data/analysis/<model_id>/...` for tokens, docs, authors.
-- Cadence suite: surprisal CV/MASD/ACF, FFT peak period, high‑surprise IPI, run lengths, permutation entropy, Hurst (R/S).
-
-Requirements
-- Python 3.9+ recommended
-- MLX (Apple Silicon): `pip install mlx mlx-lm`
-- Or HF/PyTorch fallback: `pip install -r requirements.txt`
-
-Note: The CLI auto‑prefers MLX; if MLX imports fail, it falls back to HF/PyTorch.
+---
 
 ## Install
 
-- Python 3.9+
-- MLX path (Apple Silicon): `pip install mlx mlx-lm`
-- HF/PyTorch fallback: `pip install -r requirements.txt`
+Requires Python 3.9+.
 
-## Quickstart (GPT‑2 on MLX)
-- Install MLX:
-  - `pip install mlx mlx-lm`
-- Run end‑to‑end with config:
-  - `python tools/analyze.py run --config configs/gpt2_mlx.json`
+```bash
+# Apple Silicon (recommended)
+pip install mlx mlx-lm
 
-This executes: `init` → `tokens` → `docs` → `authors` for model `gpt2`.
+# Or HuggingFace/PyTorch fallback
+pip install -r requirements.txt
+```
 
-## Running with Hugging Face (fallback)
-- `pip install -r requirements.txt`
-- `python tools/analyze.py run --config configs/gpt2_mlx.json`
+---
 
-The command is the same; it will print a message if MLX is unavailable and use HF/PyTorch instead.
+## API
 
-Configs
-- `configs/gpt2_mlx.json`
-  - `{ "model": "gpt2", "k": 10, "p": 0.9, "context": 1024, "stride": 896, "limit": null }`
-- Subset configs by type:
-  - `configs/gpt2_poems.json` → only poems
-  - `configs/gpt2_shortstories.json` → only short stories
-  - `configs/gpt2_novels.json` → only novels
-- `configs/qwen_base.json` (example; adjust model id as needed)
-  - `{ "model": "Qwen/Qwen2.5-1.5B", "k": 10, "p": 0.9, "context": 1024, "stride": 896, "limit": 5 }`
+```bash
+python -m tools.studio_api --port 8000
+```
 
-Change `limit` to a small number for smoke tests before full runs.
+Endpoints:
+- `POST /analyze` — Score text
+- `POST /rewrite` — Generate + rank rewrites  
+- `POST /patch/suggest` — Find dead zones
+- `POST /patch/span` — Patch a span
+- `POST /cadence-match` — Generate matching reference cadence
 
-## CLI Reference
-- `python tools/analyze.py init --model gpt2 --k 10 --p 0.9 --context 1024 --stride 896 [--backend auto|mlx|hf]`
-  - Writes `data/analysis/<model_id>/run_meta.json`.
-- `python tools/analyze.py tokens --model gpt2 [--limit N] [--types poem,shortstory,novel] [--resume] [--force] [--backend auto|mlx|hf]`
-  - Reads `data/index.json`, emits per‑token JSONL.GZ and per‑doc aggregates.
-- `python tools/analyze.py docs --model gpt2 [--types poem,shortstory,novel]`
-  - Dedupes to `docs_clean.jsonl`.
-- `python tools/analyze.py authors --model gpt2 [--types poem,shortstory,novel]`
-  - Aggregates to `authors.jsonl`.
-- `python tools/analyze.py run --config <config.json>`
-  - Executes the full sequence above.
+---
 
-## Reports
-- Generate a Markdown report with visualizations:
-  - `python tools/report.py --model gpt2`
-  - Outputs to `reports/gpt2/README.md` with PNGs alongside.
-  - Requires `matplotlib` (`pip install matplotlib`).
- - Export a PDF with the same figures (one per page):
-   - `python tools/make_pdf.py --model gpt2`
-   - Writes `reports/gpt2/report.pdf`.
+## Reports & Documentation
 
-## Outputs
-- `data/analysis/<model_id>/run_meta.json`: model/tokenizer info and params.
-- `data/analysis/<model_id>/tokens/<doc_id>.jsonl.gz`: per‑token records.
-- `data/analysis/<model_id>/docs.jsonl` → `docs_clean.jsonl`: per‑doc signatures.
-- `data/analysis/<model_id>/authors.jsonl`: per‑author signatures.
+| Link | Description |
+|------|-------------|
+| [Final Report (HTML)](reports/final/report.html) | Self-contained book with figures |
+| [Studio Docs](docs/studio.md) | Detailed Studio documentation |
+| [Benchmark](docs/benchmark.md) | Eval dataset + held-out metrics |
+| [Reward Design](docs/reward.md) | GRPO reward plan |
 
-## Per‑Token Schema (high‑level)
-- token: `token_id`, `token_str`, `char_start`, `char_end`
-- probabilities: `p_true`, `logp_true`, `rank`, `entropy`, `effective_support`, `nucleus_width`
-- alternatives: `topk_ids`, `topk_probs`, `cum_mass_topk`, `tail_mass`
-- metadata: `doc_id`, `doc_type`, `author`, `title`, `model_id`, `token_index`
+---
 
-## Tips & Notes
-- Keep `k` and `p` fixed across models for comparability (defaults: k=10, p=0.9).
-- Context/stride: larger context with 25–50% overlap reduces boundary effects; defaults are tuned for GPT‑2.
-- Cohesion metric: includes `cohesion_delta = shuffled − original` (negative ⇒ stronger cohesion).
-- Determinism: models run in eval mode with temperature=1.0; we store `model_id` and tokenizer identifiers for reproducibility.
- - Resume runs: use `--resume` to skip already‑processed docs; `--force` to recompute.
- - Backend: `--backend mlx` to force MLX; `--backend hf` for HF/PyTorch; `auto` prefers MLX.
+## Key Concepts
 
-## Running Multiple Models
-- Run GPT‑2:
-  - `python tools/analyze.py run --config configs/gpt2_mlx.json`
-- Run Qwen base (HF unless supported by MLX):
-  - `python tools/analyze.py run --config configs/qwen_base.json`
+**Cadence** — The pattern of surprise in text. Great writing has purposeful *spikes* (unexpected words) followed by *cooldowns* (resolution).
 
-After both complete, compare per‑doc or per‑author signatures across `data/analysis/gpt2/` and `data/analysis/<qwen_id>/`.
+**Dead Zones** — Flat spans with low texture, often bureaucratic or repetitive.
 
-## Troubleshooting
-- MLX not found: install with `pip install mlx mlx-lm`. On first run, models download and cache.
-- Slow runs: use `limit` in config for small smoke tests; then remove `limit` for full runs.
-- Memory: for large models on HF/PyTorch, consider smaller context, larger stride, or 8‑bit loading (not yet wired here).
+**MeaningLock** — Semantic guard ensuring rewrites preserve numbers, proper nouns, and core meaning.
 
-## Next Steps
-- Add optional Parquet outputs for faster analytics.
-- Add cadence metrics alongside generated snippets in the final book.
-- Extend MLX backend coverage (e.g., for additional base models) as mlx‑lm support grows.
+**Spike Rate** — High-surprise tokens per 100 tokens. Literary text: ~8%. AI slop: ~2%.
 
-## Cadence Sampler (generation)
-- Compare normal vs fixed‑up using the token‑aware controller (HF backend):
-  - `python -m tools.gen_compare --model Qwen/Qwen2.5-1.5B --preset imagist --manual-fixed --task "Write an imagist poem with clear, concrete images." --prompt "At dawn, the city leans into light:\n" --max-new-tokens 90 --seed 303 --save`
-- One‑off sampler (HF/MLX) with presets: `python -m tools.sampler <model> --backend <hf|mlx> --preset <poetry_default|sonnet|dickinson|freeverse|couplets> --prompt "..." --max-new-tokens 120`
-- Saved outputs go to `data/generated/...` and aggregate at `reports/generated/README.md`.
+---
 
-## Local Web UI
-- Install deps: `make setup`
-- Launch the full UI with authors/presets/charts: `python tools/ui.py --host 127.0.0.1 --port 7860`
-- Use any HF or MLX model id in the Model box (e.g., `Qwen/Qwen3-1.7B-MLX-bf16`).
-- The earlier minimal demo under `examples/gradio_app.py` has been removed.
-- Launch Horace Studio (paste arbitrary text): `python tools/studio_ui.py --host 127.0.0.1 --port 7861`
-- Launch Horace Studio API (for building a custom frontend): `python -m tools.studio_api --host 127.0.0.1 --port 8000`
-  - Open the built-in page at `http://127.0.0.1:8000/`
+## Project Structure
 
-## Make the Final Book
-- Build curated README (Markdown), DOCX, and HTML (one‑page), pulling in figures and latest samples:
-  - `python -m tools.finalize --model Qwen/Qwen2.5-1.5B --out-readme reports/final/README.md --out-docx reports/final/report.docx --out-pdf reports/final/report.pdf`
-  - Note: `tools/finalize.py` generates a PDF but deletes it by default. To keep the PDF, pass `--keep-pdf`.
-  - One‑page HTML at `reports/final/report.html` embeds images for easy sharing.
+```
+tools/
+├── studio_ui.py      # Gradio UI
+├── studio_api.py     # FastAPI endpoints
+├── sampler.py        # CadenceSampler
+├── analyze.py        # Token extraction pipeline
+└── studio/
+    ├── cadence_profile.py   # Profile extraction
+    ├── write_like.py        # Cadence Match generation
+    ├── spike_patterns.py    # Spike analysis
+    ├── span_patcher.py      # Dead zone patching
+    └── meaning_lock.py      # Semantic guard
+```
+
+---
+
+## GRPO Training
+
+Train a cadence-aware model using GRPO:
+
+```bash
+# MLX adapter (fast, base model frozen)
+python tools/grpo_train.py --config configs/grpo_default.json
+
+# Full HF training (slower, trains weights)
+python tools/grpo_full_train.py --config configs/grpo_default.json
+```
+
+---
+
+## Why
+
+> Great writing isn't random or safe—it rides a rhythm of focused choices punctuated by turns.
+
+Horace measures those patterns and makes models follow them.
