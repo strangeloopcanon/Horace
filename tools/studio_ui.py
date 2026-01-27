@@ -45,6 +45,7 @@ from tools.studio.rewrite import rewrite_and_rerank
 from tools.studio.span_patcher import patch_span as patch_one_span
 from tools.studio.span_patcher import suggest_dead_zones
 from tools.studio.write_like import write_like, extract_cadence_for_display
+from tools.studio.windowed_cadence import windowed_cadence_for_text
 
 
 def _ensure_baseline(model_id: str):
@@ -77,6 +78,58 @@ def _plot_surprisal(series: Dict[str, Any]) -> Optional[Image.Image]:
     ax.set_xlabel("Token (first window)")
     ax.set_ylabel("Surprisal")
     ax.set_title("Cadence (surprisal series)")
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=160)
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf)
+
+
+def _plot_cadence_timeline(timeline) -> Optional[Image.Image]:
+    """Plot cadence timeline as a horizontal bar chart showing window quality."""
+    if not timeline or not timeline.windows:
+        return None
+    
+    n = len(timeline.windows)
+    scores = [w.cadence_score for w in timeline.windows]
+    colors = []
+    for i, w in enumerate(timeline.windows):
+        if w.is_worst:
+            colors.append("#ff6b6b")  # Red for worst
+        elif w.is_best:
+            colors.append("#51cf66")  # Green for best
+        else:
+            # Gradient from yellow to green based on score
+            normalized = min(1.0, max(0.0, w.cadence_score / 100))
+            colors.append(plt.cm.RdYlGn(normalized))
+    
+    fig, ax = plt.subplots(figsize=(8.0, 1.8))
+    
+    # Horizontal bar for each window
+    bars = ax.barh(range(n), scores, color=colors, edgecolor="white", height=0.7)
+    
+    # Labels
+    ax.set_yticks(range(n))
+    labels = []
+    for i, w in enumerate(timeline.windows):
+        lbl = f"W{i+1}"
+        if w.is_worst:
+            lbl += " ⚠"
+        elif w.is_best:
+            lbl += " ★"
+        labels.append(lbl)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xlabel("Cadence Score")
+    ax.set_xlim(0, 100)
+    ax.set_title(f"Cadence Timeline (pacing variety: {timeline.pacing_variety:.2f})")
+    ax.invert_yaxis()  # Top to bottom
+    
+    # Add score annotations
+    for i, (bar, score) in enumerate(zip(bars, scores)):
+        ax.text(bar.get_width() + 2, bar.get_y() + bar.get_height()/2, 
+                f"{score:.0f}", va="center", fontsize=8)
+    
     plt.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=160)
@@ -149,7 +202,7 @@ def run_analyze(
     critic_seed: Optional[int],
 ):
     if not text or not text.strip():
-        return "", "", "", "", None, {}
+        return "", "", "", "", None, None, {}
 
     trained_score = None
     trained_err = None
@@ -181,7 +234,7 @@ def run_analyze(
         score_md.append(f"- model: `{trained_score.model_path_or_id}`")
         score_md.append(f"- device: `{trained_score.device}`")
         out_json = {"trained_score": asdict(trained_score)}
-        return "\n".join(score_md), "", "", "", None, out_json
+        return "\n".join(score_md), "", "", "", None, None, out_json
 
     analysis = analyze_text(
         text,
@@ -237,6 +290,7 @@ def run_analyze(
     profile_md = _md_profile(score)
     spikes_md = _md_spikes(analysis.get("spikes") or [])
     plot_img = _plot_surprisal(analysis.get("series") or {})
+    
     out_json = {
         "analysis": analysis,
         "score": {
@@ -252,6 +306,23 @@ def run_analyze(
         out_json["primary_score"] = {"overall_0_100": float(trained_score.score_0_100), "source": "trained_scorer"}
     if trained_err is not None:
         out_json["trained_score_error"] = trained_err
+    
+    # Compute cadence timeline for longer texts
+    timeline_img = None
+    tokens_count = int(analysis["doc_metrics"].get("tokens_count") or 0)
+    if tokens_count >= 100:  # Only compute timeline for longer texts
+        try:
+            timeline = windowed_cadence_for_text(
+                text,
+                model_id=scoring_model.strip() or "gpt2",
+                doc_type=doc_type,
+                max_input_tokens=int(max_input_tokens),
+                normalize_text=bool(normalize_text),
+            )
+            timeline_img = _plot_cadence_timeline(timeline)
+            out_json["timeline"] = timeline.to_dict()
+        except Exception:
+            pass  # Timeline is optional, don't fail on errors
 
     llm_md = ""
     if bool(use_llm_critic):
@@ -290,7 +361,7 @@ def run_analyze(
         suggestions_md += f"- **{s.get('title','')}** — {s.get('why','')}\n  - Try: {s.get('what_to_try','')}\n"
         if s.get("evidence"):
             suggestions_md += f"  - Evidence: {s.get('evidence')}\n"
-    return score_md, profile_md, suggestions_md + "\n\n" + spikes_md, llm_md, plot_img, out_json
+    return score_md, profile_md, suggestions_md + "\n\n" + spikes_md, llm_md, plot_img, timeline_img, out_json
 
 
 def run_rewrite(
@@ -799,6 +870,7 @@ def build_ui() -> gr.Blocks:
                     critic_seed = gr.Number(value=None, precision=0, label="Seed (optional)")
                 llm_md = gr.Markdown()
             plot_img = gr.Image(label="Cadence plot", type="pil")
+            timeline_img = gr.Image(label="Cadence timeline (page pacing)", type="pil")
             out_json = gr.JSON(label="Raw JSON")
 
             run_btn.click(
@@ -822,7 +894,7 @@ def build_ui() -> gr.Blocks:
                     critic_top_p,
                     critic_seed,
                 ],
-                outputs=[score_md, profile_md, suggestions_md, llm_md, plot_img, out_json],
+                outputs=[score_md, profile_md, suggestions_md, llm_md, plot_img, timeline_img, out_json],
             )
 
         with gr.Tab("Rewrite + Rerank"):
