@@ -376,6 +376,54 @@ def _md_dead_zones(zones: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def patch_mode_preset(mode: str):
+    m = (mode or "strict").strip().lower()
+    if m == "creative":
+        return (
+            gr.Slider.update(value=0.95),
+            gr.Slider.update(value=0.95),
+            gr.Slider.update(value=0.82),
+            gr.Slider.update(value=1.80),
+            gr.Slider.update(value=0.75),
+        )
+    return (
+        gr.Slider.update(value=0.8),
+        gr.Slider.update(value=0.92),
+        gr.Slider.update(value=0.86),
+        gr.Slider.update(value=1.45),
+        gr.Slider.update(value=0.55),
+    )
+
+
+def _md_history(history: list[str]) -> str:
+    if not history:
+        return "_No patches applied yet._"
+    lines = []
+    lines.append(f"**Patch history** ({len(history)} undo levels)")
+    for i, txt in enumerate(history[-3:], 1):
+        preview = (txt or "").replace("\n", " ").strip()
+        if len(preview) > 140:
+            preview = preview[:140].rstrip() + "…"
+        lines.append(f"- {max(1, len(history) - 3 + i)}: {len(txt)} chars — {preview}")
+    return "\n".join(lines)
+
+
+def apply_best_patch(current_text: str, best_text: str, history: list[str]):
+    if not best_text or not best_text.strip():
+        return current_text, history or [], _md_history(history or [])
+    hist = list(history or [])
+    hist.append(current_text or "")
+    return best_text, hist, _md_history(hist)
+
+
+def undo_last_patch(current_text: str, history: list[str]):
+    hist = list(history or [])
+    if not hist:
+        return current_text, hist, _md_history(hist)
+    prev = hist.pop()
+    return prev, hist, _md_history(hist)
+
+
 def run_patch_suggest(
     text: str,
     doc_type: str,
@@ -411,6 +459,7 @@ def run_patch_span(
     doc_type: str,
     selected_zone: str,
     zones_state: list[dict],
+    rewrite_mode: str,
     rewrite_model_id: str,
     scoring_model: str,
     baseline_model: str,
@@ -459,6 +508,7 @@ def run_patch_span(
         start_char=int(zone.get("start_char") or 0),
         end_char=int(zone.get("end_char") or 0),
         doc_type=str(doc_type),
+        rewrite_mode=str(rewrite_mode or "strict"),
         rewrite_model_id=str(rewrite_model_id).strip() or "Qwen/Qwen2.5-0.5B-Instruct",
         scoring_model_id=str(scoring_model).strip() or "gpt2",
         baseline_model_id=str(baseline_model).strip() or "gpt2_gutenberg_512",
@@ -528,7 +578,7 @@ def build_ui() -> gr.Blocks:
 
         with gr.Row():
             doc_type = gr.Dropdown(
-                choices=["poem", "prose", "shortstory", "novel"],
+                choices=["poem", "prose", "essay", "shortstory", "novel"],
                 value="prose",
                 label="Type",
             )
@@ -634,10 +684,12 @@ def build_ui() -> gr.Blocks:
         with gr.Tab("Patch (dead zones)"):
             gr.Markdown(
                 "Find low-texture spans and patch them with MeaningLock (semantic similarity + no-new-facts heuristics). "
-                "This is intentionally *local* optimization; the 0–100 score is shown as a secondary readout."
+                "Optimize locally (Δtexture); keep the 0–100 score as a secondary readout."
             )
             zones_state = gr.State([])
+            history_state = gr.State([])
             with gr.Row():
+                patch_mode = gr.Dropdown(choices=["strict", "creative"], value="strict", label="Patch mode")
                 patch_rewrite_model = gr.Textbox(
                     value="Qwen/Qwen2.5-0.5B-Instruct",
                     label="Rewrite model (span patching; instruct works best)",
@@ -667,14 +719,24 @@ def build_ui() -> gr.Blocks:
                     allow_new_proper = gr.Checkbox(value=False, label="Allow proper-noun changes")
 
             patch_btn = gr.Button("Patch selected zone (slow)")
+            with gr.Row():
+                apply_btn = gr.Button("Apply best patch to editor")
+                undo_btn = gr.Button("Undo last apply")
             patch_md = gr.Markdown()
             patched_text = gr.Textbox(lines=14, label="Best patched text (candidate #1)")
             patch_json = gr.JSON(label="Raw JSON (candidates)")
+            history_md = gr.Markdown()
 
             suggest_btn.click(
                 fn=run_patch_suggest,
                 inputs=[text, doc_type, scoring_model, max_input_tokens, normalize_text, window_sentences, max_zones],
                 outputs=[text, zones_md, zones_json, zone_dd, zones_state],
+            )
+
+            patch_mode.change(
+                fn=patch_mode_preset,
+                inputs=[patch_mode],
+                outputs=[patch_temperature, patch_top_p, min_cosine_sim, max_length_ratio, max_edit_ratio],
             )
 
             patch_btn.click(
@@ -684,6 +746,7 @@ def build_ui() -> gr.Blocks:
                     doc_type,
                     zone_dd,
                     zones_state,
+                    patch_mode,
                     patch_rewrite_model,
                     scoring_model,
                     baseline_model,
@@ -703,6 +766,18 @@ def build_ui() -> gr.Blocks:
                     allow_new_proper,
                 ],
                 outputs=[patch_md, patched_text, patch_json],
+            )
+
+            apply_btn.click(
+                fn=apply_best_patch,
+                inputs=[text, patched_text, history_state],
+                outputs=[text, history_state, history_md],
+            )
+
+            undo_btn.click(
+                fn=undo_last_patch,
+                inputs=[text, history_state],
+                outputs=[text, history_state, history_md],
             )
 
     return demo

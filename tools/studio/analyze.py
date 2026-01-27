@@ -324,6 +324,8 @@ def _coerce_doc_type(doc_type: str) -> str:
         return "shortstory"
     if dt in ("novel",):
         return "novel"
+    if dt in ("essay", "article", "blog", "newsletter"):
+        return "prose"
     if dt in ("prose", ""):
         return "prose"
     return dt

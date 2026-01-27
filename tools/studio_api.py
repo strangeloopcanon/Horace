@@ -115,6 +115,7 @@ class PatchSpanReq(BaseModel):
     doc_type: str = "prose"
     start_char: int = 0
     end_char: int = 0
+    rewrite_mode: str = "strict"  # strict | creative
     rewrite_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
     scoring_model_id: str = "gpt2"
     baseline_model: str = "gpt2_gutenberg_512"  # model id or baseline json path
@@ -328,6 +329,7 @@ def patch_span(req: PatchSpanReq) -> Dict[str, Any]:
         start_char=int(req.start_char),
         end_char=int(req.end_char),
         doc_type=req.doc_type,
+        rewrite_mode=str(req.rewrite_mode),
         rewrite_model_id=req.rewrite_model_id,
         scoring_model_id=req.scoring_model_id,
         baseline_model_id=req.baseline_model,

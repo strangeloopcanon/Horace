@@ -152,6 +152,7 @@ def generate_span_rewrites(
     start_char: int,
     end_char: int,
     doc_type: str,
+    rewrite_mode: str = "strict",
     rewrite_model_id: str,
     n: int = 6,
     max_new_tokens: int = 260,
@@ -178,19 +179,38 @@ def generate_span_rewrites(
 
     tok, model, dev = _get_hf(rewrite_model_id)
     style = "poem" if doc_type == "poem" else "prose"
+    mode = (rewrite_mode or "strict").strip().lower()
+    if mode not in ("strict", "creative"):
+        mode = "strict"
+
     sys_prompt = (
-        "You are a careful editor.\n"
+        "You are a careful literary editor.\n"
         "Return ONLY the rewritten SPAN text (no preface, no explanation, no quotes, no tags)."
     )
+    if mode == "creative":
+        rules = (
+            "- Preserve meaning, viewpoint, and tense.\n"
+            "- Keep named entities and numbers unchanged.\n"
+            "- Do NOT add new factual claims.\n"
+            "- Allow moderate changes (better rhythm, sharper images, cleaner structure).\n"
+            "- Prefer concrete verbs/nouns and sensory anchors; avoid purple prose.\n"
+            "- No meta commentary.\n"
+        )
+    else:
+        rules = (
+            "- Preserve meaning, viewpoint, and tense.\n"
+            "- Keep named entities and numbers unchanged.\n"
+            "- Do NOT add new facts.\n"
+            "- Keep edits minimal (small local changes; avoid rewriting everything).\n"
+            "- Reduce monotony: vary cadence and sentence shape; prefer concrete verbs/nouns.\n"
+            "- No meta commentary.\n"
+        )
+
     user_prompt = (
         f"You will rewrite ONLY the SPAN in a {style} document.\n"
         "Rules:\n"
-        "- Preserve meaning, viewpoint, and tense.\n"
-        "- Keep named entities and numbers unchanged.\n"
-        "- Do NOT add new facts.\n"
-        "- Keep edits minimal (small local changes; avoid rewriting everything).\n"
-        "- Reduce monotony: vary cadence and sentence shape; prefer concrete verbs/nouns.\n\n"
-        "CONTEXT BEFORE:\n"
+        + rules
+        + "\nCONTEXT BEFORE:\n"
         + (before if before else "(none)")
         + "\n\nSPAN:\n"
         + span
