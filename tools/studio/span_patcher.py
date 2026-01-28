@@ -247,7 +247,26 @@ def suggest_dead_zones(
     normalize_text: bool = True,
     window_sentences: int = 4,
     max_zones: int = 6,
+    window_start_char: Optional[int] = None,
+    window_end_char: Optional[int] = None,
 ) -> Dict[str, Any]:
+    """Suggest dead zones (flat/monotonous areas) in text.
+    
+    Args:
+        text: Input text to analyze
+        doc_type: Document type for analysis
+        scoring_model_id: Model for surprisal scoring
+        backend: Model backend
+        max_input_tokens: Max tokens for analysis
+        normalize_text: Whether to normalize text first
+        window_sentences: Number of sentences per sliding window
+        max_zones: Maximum number of dead zones to return
+        window_start_char: Optional start character to limit analysis to a window
+        window_end_char: Optional end character to limit analysis to a window
+        
+    Returns:
+        Dict with text, analysis, and list of dead zones
+    """
     raw = text or ""
     norm_text, norm_meta = normalize_for_studio(raw, doc_type=str(doc_type), enabled=bool(normalize_text))
     analysis = analyze_text(
@@ -267,6 +286,30 @@ def suggest_dead_zones(
     if not means or not items or len(means) < 6:
         return {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": []}
 
+    # Filter sentences to window bounds if specified
+    window_info: Optional[Dict[str, Any]] = None
+    if window_start_char is not None or window_end_char is not None:
+        ws = int(window_start_char) if window_start_char is not None else 0
+        we = int(window_end_char) if window_end_char is not None else len(norm_text)
+        # Find sentences overlapping the window
+        filtered_indices: List[int] = []
+        for idx, item in enumerate(items):
+            sc = int(item.get("start_char") or 0)
+            ec = int(item.get("end_char") or sc)
+            # Sentence overlaps window if it starts before window ends AND ends after window starts
+            if sc < we and ec > ws:
+                filtered_indices.append(idx)
+        if len(filtered_indices) < 4:
+            # Too few sentences in window for meaningful analysis
+            return {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": [],
+                    "window": {"start_char": ws, "end_char": we, "sentence_count": len(filtered_indices)}}
+        # Build filtered arrays
+        items = [items[i] for i in filtered_indices]
+        means = [means[i] for i in filtered_indices if i < len(means)]
+        tok_counts = [tok_counts[i] for i in filtered_indices if i < len(tok_counts)]
+        window_info = {"start_char": ws, "end_char": we, "sentence_count": len(filtered_indices),
+                       "original_indices": filtered_indices}
+
     arr = np.array([float(x) for x in means[: len(items)]], dtype=np.float32)
     counts_arr = None
     try:
@@ -276,7 +319,10 @@ def suggest_dead_zones(
         counts_arr = None
     global_sd = float(np.std(arr))
     if not math.isfinite(global_sd) or global_sd <= 1e-6:
-        return {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": []}
+        result: Dict[str, Any] = {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": []}
+        if window_info:
+            result["window"] = window_info
+        return result
 
     W = max(3, int(window_sentences))
     threshold = max(0.10, 0.25 * global_sd)
@@ -310,7 +356,10 @@ def suggest_dead_zones(
         candidates.append(((i, i + W - 1), sev, reasons))
 
     if not candidates:
-        return {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": []}
+        result = {"text": norm_text, "text_normalization": norm_meta, "analysis": analysis, "dead_zones": []}
+        if window_info:
+            result["window"] = window_info
+        return result
 
     candidates.sort(key=lambda x: float(x[1]), reverse=True)
 
@@ -359,12 +408,15 @@ def suggest_dead_zones(
         )
         zid += 1
 
-    return {
+    result = {
         "text": norm_text,
         "text_normalization": norm_meta,
         "analysis": analysis,
         "dead_zones": [z.to_dict() for z in zones],
     }
+    if window_info:
+        result["window"] = window_info
+    return result
 
 
 def _unified_span_diff(original: str, replacement: str) -> str:
