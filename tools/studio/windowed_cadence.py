@@ -155,22 +155,43 @@ class CadenceTimeline:
         }
 
 
-def _compute_cadence_score(dm: Dict[str, Any]) -> float:
+def _compute_cadence_score(
+    dm: Dict[str, Any],
+    *,
+    doc_median_spike_rate: Optional[float] = None,
+    doc_median_cv: Optional[float] = None,
+) -> float:
     """
     Compute a cadence score (0-100) from doc_metrics.
 
     Higher = better cadence (good spike rate, variety, not flat).
+    
+    When doc_median values are provided, scoring is relative to the document's
+    own baseline rather than absolute targets. This is better for within-document
+    comparison across windows.
     """
     spike_rate = float(dm.get("spike_rate") or dm.get("high_surprise_rate_per_100") or 0)
     surprisal_cv = float(dm.get("surprisal_cv") or 0)
     sent_burst_cv = float(dm.get("sent_burst_cv") or 0)
 
-    # Target spike rate around 6-10%
-    spike_score = 100 * (1 - abs(spike_rate - 8) / 10)
-    spike_score = max(0, min(100, spike_score))
+    # Spike rate scoring
+    if doc_median_spike_rate is not None and doc_median_spike_rate > 0:
+        # Relative: score by deviation from doc median
+        # Windows close to median get ~80, deviation down to ~40
+        deviation = abs(spike_rate - doc_median_spike_rate) / (doc_median_spike_rate + 1e-6)
+        spike_score = 80 - min(40, deviation * 40)
+    else:
+        # Absolute: target spike rate around 6-10%
+        spike_score = 100 * (1 - abs(spike_rate - 8) / 10)
+        spike_score = max(0, min(100, spike_score))
 
     # Surprisal CV: some variation is good
-    cv_score = min(100, surprisal_cv * 100)
+    if doc_median_cv is not None and doc_median_cv > 0:
+        # Relative: windows matching doc median get ~70
+        deviation = abs(surprisal_cv - doc_median_cv) / (doc_median_cv + 1e-6)
+        cv_score = 70 - min(30, deviation * 30)
+    else:
+        cv_score = min(100, surprisal_cv * 100)
 
     # Sentence burstiness: some variation is good
     burst_score = min(100, sent_burst_cv * 200)
@@ -228,6 +249,7 @@ def windowed_cadence_for_text(
     normalize_text: bool = True,
     window_chars: int = 6000,
     max_windows: int = 8,
+    relative_scoring: bool = True,
 ) -> CadenceTimeline:
     """
     Extract a cadence timeline for a document.
@@ -244,6 +266,8 @@ def windowed_cadence_for_text(
         normalize_text: Whether to normalize text first
         window_chars: Target characters per window
         max_windows: Maximum number of windows
+        relative_scoring: If True, score windows relative to doc median (better for
+            within-document comparison). If False, use absolute targets.
 
     Returns:
         CadenceTimeline with per-window analysis and worst/best identification
@@ -258,15 +282,12 @@ def windowed_cadence_for_text(
     if not windows or (len(windows) == 1 and not windows[0][2]):
         return CadenceTimeline()
 
-    window_cadences: List[WindowCadence] = []
-    cadence_scores: List[float] = []
-    surprisal_means: List[float] = []
-
+    # First pass: collect metrics from all windows
+    window_data: List[Dict[str, Any]] = []
     for i, (start, end, chunk) in enumerate(windows):
         if not chunk.strip():
             continue
 
-        # Analyze window
         analysis = analyze_text(
             chunk,
             model_id=str(model_id),
@@ -279,18 +300,49 @@ def windowed_cadence_for_text(
         )
 
         dm = analysis.get("doc_metrics") or {}
-
-        # Extract paragraph cadence for this window
         para_cad = extract_paragraph_cadence(analysis)
 
-        # Compute scores
-        cadence_score = _compute_cadence_score(dm)
+        window_data.append({
+            "index": i,
+            "start": start,
+            "end": end,
+            "dm": dm,
+            "para_cad": para_cad,
+        })
+
+    if not window_data:
+        return CadenceTimeline()
+
+    # Compute doc-level medians for relative scoring
+    doc_median_spike_rate: Optional[float] = None
+    doc_median_cv: Optional[float] = None
+    if relative_scoring and len(window_data) > 1:
+        spike_rates = [float(wd["dm"].get("spike_rate") or wd["dm"].get("high_surprise_rate_per_100") or 0) 
+                       for wd in window_data]
+        cvs = [float(wd["dm"].get("surprisal_cv") or 0) for wd in window_data]
+        doc_median_spike_rate = float(np.median(spike_rates)) if spike_rates else None
+        doc_median_cv = float(np.median(cvs)) if cvs else None
+
+    # Second pass: score windows (relative or absolute)
+    window_cadences: List[WindowCadence] = []
+    cadence_scores: List[float] = []
+    surprisal_means: List[float] = []
+
+    for wd in window_data:
+        dm = wd["dm"]
+        para_cad = wd["para_cad"]
+
+        cadence_score = _compute_cadence_score(
+            dm,
+            doc_median_spike_rate=doc_median_spike_rate,
+            doc_median_cv=doc_median_cv,
+        )
         texture_score = _compute_texture_score(dm)
 
         wc = WindowCadence(
-            window_index=i,
-            start_char=start,
-            end_char=end,
+            window_index=wd["index"],
+            start_char=wd["start"],
+            end_char=wd["end"],
             spike_rate=float(dm.get("spike_rate") or dm.get("high_surprise_rate_per_100") or 0),
             surprisal_mean=float(dm.get("surprisal_mean") or 0),
             surprisal_cv=float(dm.get("surprisal_cv") or 0),
@@ -344,3 +396,4 @@ def windowed_cadence_for_text(
         pacing_variety=pacing_variety,
         tension_arc=tension_arc,
     )
+
