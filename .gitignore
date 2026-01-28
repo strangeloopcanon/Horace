@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 .beads/
 AGENTS.md
+.codex/
 
 # Caches and generated data
 mlx_cache/

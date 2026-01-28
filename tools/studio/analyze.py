@@ -324,6 +324,8 @@ def _coerce_doc_type(doc_type: str) -> str:
         return "shortstory"
     if dt in ("novel",):
         return "novel"
+    if dt in ("essay", "article", "blog", "newsletter"):
+        return "prose"
     if dt in ("prose", ""):
         return "prose"
     return dt
@@ -355,6 +357,7 @@ def analyze_text(
     max_input_tokens: int = 1024,
     compute_cohesion: bool = True,
     max_spikes: int = 12,
+    include_token_metrics: bool = False,
 ) -> Dict[str, Any]:
     """Analyze arbitrary input text and return doc-level metrics + spike highlights.
 
@@ -750,13 +753,24 @@ def analyze_text(
     def _segment_series(spans: List[Tuple[int, int]]):
         means: List[float] = []
         token_counts: List[int] = []
+        items: List[Dict[str, Any]] = []
         for s0, s1 in spans:
             mask = (char_starts_arr >= int(s0)) & (char_starts_arr < int(s1))
-            c = int(mask.sum())
-            if c <= 0:
+            idxs = np.where(mask)[0]
+            if idxs.size <= 0:
                 continue
+            c = int(idxs.size)
             token_counts.append(c)
             means.append(float(np.mean(surprisal[mask])))
+            items.append(
+                {
+                    "start_char": int(s0),
+                    "end_char": int(s1),
+                    "token_count": int(c),
+                    "start_token": int(idxs[0]),
+                    "end_token": int(idxs[-1] + 1),
+                }
+            )
         cv = None
         if len(means) >= 2:
             mu = float(np.mean(means))
@@ -767,12 +781,12 @@ def analyze_text(
             mu = float(np.mean(token_counts))
             sd = float(np.std(token_counts))
             len_cv = float(sd / (abs(mu) + 1e-12))
-        return means, token_counts, cv, len_cv
+        return means, token_counts, cv, len_cv, items
 
-    sent_means, sent_counts, burst_cv_sent, len_cv_sent = _segment_series(sent_spans)
+    sent_means, sent_counts, burst_cv_sent, len_cv_sent, sent_items = _segment_series(sent_spans)
     para_spans = paragraph_units(text_used, "prose")
-    para_means, para_counts, burst_cv_para, len_cv_para = _segment_series(para_spans)
-    line_means, line_counts, burst_cv_line, len_cv_line = _segment_series(line_spans)
+    para_means, para_counts, burst_cv_para, len_cv_para, para_items = _segment_series(para_spans)
+    line_means, line_counts, burst_cv_line, len_cv_line, line_items = _segment_series(line_spans)
 
     def _tokens_mean_p90(counts: List[int]) -> Tuple[Optional[float], Optional[float]]:
         if not counts:
@@ -805,6 +819,10 @@ def analyze_text(
         }
     )
 
+    # Convenience aliases for UI/generation code.
+    if isinstance(doc_metrics.get("high_surprise_rate_per_100"), (int, float)):
+        doc_metrics["spike_rate"] = float(doc_metrics["high_surprise_rate_per_100"])
+
     segments = {
         "sentences": {
             "count": int(len(sent_spans)),
@@ -812,6 +830,7 @@ def analyze_text(
             "token_counts": sent_counts[:64],
             "burst_cv": burst_cv_sent,
             "len_cv": len_cv_sent,
+            "items": sent_items[:64],
         },
         "paragraphs": {
             "count": int(len(para_spans)),
@@ -819,6 +838,7 @@ def analyze_text(
             "token_counts": para_counts[:64],
             "burst_cv": burst_cv_para,
             "len_cv": len_cv_para,
+            "items": para_items[:64],
         },
         "lines": {
             "count": int(len(line_spans)),
@@ -826,11 +846,39 @@ def analyze_text(
             "token_counts": line_counts[:64],
             "burst_cv": burst_cv_line,
             "len_cv": len_cv_line,
+            "items": line_items[:64],
         },
     }
 
     series_max = 800
-    return {
+
+    token_metrics_out = None
+    tokens_out = None
+    if bool(include_token_metrics):
+        n_out = min(int(series_max), int(len(token_indices)))
+        token_metrics_out = {
+            "surprisal": [float(x) for x in surprisal[:n_out].tolist()],
+            "entropy": [float(x) for x in H_arr[:n_out].tolist()],
+            "rank": [int(x) for x in rk_arr[:n_out].tolist()],
+            "p_true": [float(x) for x in p_true_arr[:n_out].tolist()],
+            "logp": [float(x) for x in logp_arr[:n_out].tolist()],
+        }
+        tokens_out = [
+            {
+                "token": str(surfaces[i]),
+                "token_str": str(token_strs[i]),
+                "start": int(char_starts[i]),
+                "end": int(char_ends[i]),
+                "token_index": int(token_indices[i]),
+                "is_content": bool(is_content_list[i]),
+                "is_punct": bool(is_punct_list[i]),
+                "is_newline": bool(is_newline_list[i]),
+                "line_pos": str(line_pos_list[i]),
+            }
+            for i in range(n_out)
+        ]
+
+    out: Dict[str, Any] = {
         "doc_metrics": doc_metrics,
         "spikes": [asdict(s) for s in spikes],
         "segments": segments,
@@ -845,3 +893,8 @@ def analyze_text(
         "model_id": model.model_id,
         "text_normalization": norm_meta,
     }
+    if tokens_out is not None:
+        out["tokens"] = tokens_out
+    if token_metrics_out is not None:
+        out["token_metrics"] = token_metrics_out
+    return out

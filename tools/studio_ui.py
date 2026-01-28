@@ -15,6 +15,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -41,6 +42,10 @@ from tools.studio.score import score_text
 from tools.studio.critique import suggest_edits
 from tools.studio.llm_critic import llm_critique
 from tools.studio.rewrite import rewrite_and_rerank
+from tools.studio.span_patcher import patch_span as patch_one_span
+from tools.studio.span_patcher import suggest_dead_zones
+from tools.studio.write_like import write_like, extract_cadence_for_display
+from tools.studio.windowed_cadence import windowed_cadence_for_text
 
 
 def _ensure_baseline(model_id: str):
@@ -73,6 +78,58 @@ def _plot_surprisal(series: Dict[str, Any]) -> Optional[Image.Image]:
     ax.set_xlabel("Token (first window)")
     ax.set_ylabel("Surprisal")
     ax.set_title("Cadence (surprisal series)")
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=160)
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf)
+
+
+def _plot_cadence_timeline(timeline) -> Optional[Image.Image]:
+    """Plot cadence timeline as a horizontal bar chart showing window quality."""
+    if not timeline or not timeline.windows:
+        return None
+    
+    n = len(timeline.windows)
+    scores = [w.cadence_score for w in timeline.windows]
+    colors = []
+    for i, w in enumerate(timeline.windows):
+        if w.is_worst:
+            colors.append("#ff6b6b")  # Red for worst
+        elif w.is_best:
+            colors.append("#51cf66")  # Green for best
+        else:
+            # Gradient from yellow to green based on score
+            normalized = min(1.0, max(0.0, w.cadence_score / 100))
+            colors.append(plt.cm.RdYlGn(normalized))
+    
+    fig, ax = plt.subplots(figsize=(8.0, 1.8))
+    
+    # Horizontal bar for each window
+    bars = ax.barh(range(n), scores, color=colors, edgecolor="white", height=0.7)
+    
+    # Labels
+    ax.set_yticks(range(n))
+    labels = []
+    for i, w in enumerate(timeline.windows):
+        lbl = f"W{i+1}"
+        if w.is_worst:
+            lbl += " ⚠"
+        elif w.is_best:
+            lbl += " ★"
+        labels.append(lbl)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xlabel("Cadence Score")
+    ax.set_xlim(0, 100)
+    ax.set_title(f"Cadence Timeline (pacing variety: {timeline.pacing_variety:.2f})")
+    ax.invert_yaxis()  # Top to bottom
+    
+    # Add score annotations
+    for i, (bar, score) in enumerate(zip(bars, scores)):
+        ax.text(bar.get_width() + 2, bar.get_y() + bar.get_height()/2, 
+                f"{score:.0f}", va="center", fontsize=8)
+    
     plt.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=160)
@@ -145,7 +202,7 @@ def run_analyze(
     critic_seed: Optional[int],
 ):
     if not text or not text.strip():
-        return "", "", "", "", None, {}
+        return "", "", "", "", None, None, {}
 
     trained_score = None
     trained_err = None
@@ -170,14 +227,14 @@ def run_analyze(
             msg = "_Fast mode requires a valid trained scorer model path._"
             if trained_err:
                 msg += f"\n\nError: `{trained_err}`"
-            return msg, "", "", "", None, {"trained_score_error": trained_err}
+            return msg, "", "", "", None, None, {"trained_score_error": trained_err}
         score_md = []
         score_md.append(f"### Trained scorer: **{trained_score.score_0_100:.1f}/100**")
         score_md.append(f"- prob: `{trained_score.prob_0_1:.3f}`")
         score_md.append(f"- model: `{trained_score.model_path_or_id}`")
         score_md.append(f"- device: `{trained_score.device}`")
         out_json = {"trained_score": asdict(trained_score)}
-        return "\n".join(score_md), "", "", "", None, out_json
+        return "\n".join(score_md), "", "", "", None, None, out_json
 
     analysis = analyze_text(
         text,
@@ -233,6 +290,7 @@ def run_analyze(
     profile_md = _md_profile(score)
     spikes_md = _md_spikes(analysis.get("spikes") or [])
     plot_img = _plot_surprisal(analysis.get("series") or {})
+    
     out_json = {
         "analysis": analysis,
         "score": {
@@ -248,6 +306,23 @@ def run_analyze(
         out_json["primary_score"] = {"overall_0_100": float(trained_score.score_0_100), "source": "trained_scorer"}
     if trained_err is not None:
         out_json["trained_score_error"] = trained_err
+    
+    # Compute cadence timeline for longer texts
+    timeline_img = None
+    tokens_count = int(analysis["doc_metrics"].get("tokens_count") or 0)
+    if tokens_count >= 100:  # Only compute timeline for longer texts
+        try:
+            timeline = windowed_cadence_for_text(
+                text,
+                model_id=scoring_model.strip() or "gpt2",
+                doc_type=doc_type,
+                max_input_tokens=int(max_input_tokens),
+                normalize_text=bool(normalize_text),
+            )
+            timeline_img = _plot_cadence_timeline(timeline)
+            out_json["timeline"] = timeline.to_dict()
+        except Exception:
+            pass  # Timeline is optional, don't fail on errors
 
     llm_md = ""
     if bool(use_llm_critic):
@@ -286,7 +361,7 @@ def run_analyze(
         suggestions_md += f"- **{s.get('title','')}** — {s.get('why','')}\n  - Try: {s.get('what_to_try','')}\n"
         if s.get("evidence"):
             suggestions_md += f"  - Evidence: {s.get('evidence')}\n"
-    return score_md, profile_md, suggestions_md + "\n\n" + spikes_md, llm_md, plot_img, out_json
+    return score_md, profile_md, suggestions_md + "\n\n" + spikes_md, llm_md, plot_img, timeline_img, out_json
 
 
 def run_rewrite(
@@ -358,6 +433,394 @@ def run_rewrite(
     return "\n".join(md), res
 
 
+def _md_dead_zones(zones: list[dict]) -> str:
+    if not zones:
+        return "_No obvious dead zones found (or text too short)._"
+    lines = []
+    lines.append("**Dead zones (low texture candidates)**")
+    for z in zones:
+        zid = z.get("zone_id")
+        sev = z.get("severity")
+        s = z.get("start_char")
+        e = z.get("end_char")
+        reasons = ", ".join(z.get("reasons") or [])
+        excerpt = (z.get("excerpt") or "").replace("\n", " ").strip()
+        lines.append(f"- `{zid}` sev={sev:.2f} chars={s}-{e} ({reasons}) — {excerpt}")
+    return "\n".join(lines)
+
+
+def patch_mode_preset(mode: str):
+    m = (mode or "strict").strip().lower()
+    if m == "creative":
+        return (
+            gr.Slider.update(value=0.95),
+            gr.Slider.update(value=0.95),
+            gr.Slider.update(value=0.82),
+            gr.Slider.update(value=1.80),
+            gr.Slider.update(value=0.75),
+        )
+    return (
+        gr.Slider.update(value=0.8),
+        gr.Slider.update(value=0.92),
+        gr.Slider.update(value=0.86),
+        gr.Slider.update(value=1.45),
+        gr.Slider.update(value=0.55),
+    )
+
+
+def _md_history(history: list[str]) -> str:
+    if not history:
+        return "_No patches applied yet._"
+    lines = []
+    lines.append(f"**Patch history** ({len(history)} undo levels)")
+    for i, txt in enumerate(history[-3:], 1):
+        preview = (txt or "").replace("\n", " ").strip()
+        if len(preview) > 140:
+            preview = preview[:140].rstrip() + "…"
+        lines.append(f"- {max(1, len(history) - 3 + i)}: {len(txt)} chars — {preview}")
+    return "\n".join(lines)
+
+
+def apply_best_patch(current_text: str, best_text: str, history: list[str]):
+    if not best_text or not best_text.strip():
+        return current_text, history or [], _md_history(history or [])
+    hist = list(history or [])
+    hist.append(current_text or "")
+    md = _md_history(hist)
+    a = (current_text or "").splitlines(keepends=True)
+    b = (best_text or "").splitlines(keepends=True)
+    dd = difflib.unified_diff(a, b, fromfile="doc_before", tofile="doc_after", lineterm="")
+    out_dd = list(dd)
+    if len(out_dd) > 140:
+        out_dd = out_dd[:140] + ["… (diff truncated)"]
+    diff_txt = "\n".join(out_dd).strip()
+    if diff_txt:
+        md += (
+            "\n\n<details><summary>Last apply diff</summary>\n\n```diff\n"
+            + diff_txt
+            + "\n```\n</details>"
+        )
+    return best_text, hist, md
+
+
+def undo_last_patch(current_text: str, history: list[str]):
+    hist = list(history or [])
+    if not hist:
+        return current_text, hist, _md_history(hist)
+    prev = hist.pop()
+    md = _md_history(hist)
+    a = (current_text or "").splitlines(keepends=True)
+    b = (prev or "").splitlines(keepends=True)
+    dd = difflib.unified_diff(a, b, fromfile="doc_before", tofile="doc_after", lineterm="")
+    out_dd = list(dd)
+    if len(out_dd) > 140:
+        out_dd = out_dd[:140] + ["… (diff truncated)"]
+    diff_txt = "\n".join(out_dd).strip()
+    if diff_txt:
+        md += (
+            "\n\n<details><summary>Last undo diff</summary>\n\n```diff\n"
+            + diff_txt
+            + "\n```\n</details>"
+        )
+    return prev, hist, md
+
+
+def run_patch_suggest(
+    text: str,
+    doc_type: str,
+    scoring_model: str,
+    max_input_tokens: int,
+    normalize_text: bool,
+    window_sentences: int,
+    max_zones: int,
+):
+    if not text or not text.strip():
+        return text, "_No text provided._", {}, gr.Dropdown.update(choices=[], value=None), []
+    out = suggest_dead_zones(
+        text,
+        doc_type=str(doc_type),
+        scoring_model_id=str(scoring_model).strip() or "gpt2",
+        max_input_tokens=int(max_input_tokens),
+        normalize_text=bool(normalize_text),
+        window_sentences=int(window_sentences),
+        max_zones=int(max_zones),
+    )
+    zones = out.get("dead_zones") or []
+    md = _md_dead_zones(zones)
+    choices = [
+        f"{z.get('zone_id')}: sev={float(z.get('severity') or 0.0):.2f} ({', '.join(z.get('reasons') or [])})"
+        for z in zones
+    ]
+    dd = gr.Dropdown.update(choices=choices, value=(choices[0] if choices else None))
+    return out.get("text") or text, md, out, dd, zones
+
+
+def run_patch_span(
+    text: str,
+    doc_type: str,
+    selected_zone: str,
+    zones_state: list[dict],
+    rewrite_mode: str,
+    intensity: float,
+    rewrite_model_id: str,
+    scoring_model: str,
+    baseline_model: str,
+    calibrator_path: str,
+    scorer_model_path: str,
+    scorer_max_length: int,
+    max_input_tokens: int,
+    n_candidates: int,
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    seed: Optional[int],
+    min_cosine_sim: float,
+    max_length_ratio: float,
+    max_edit_ratio: float,
+    allow_new_numbers: bool,
+    allow_new_proper_nouns: bool,
+    allow_negation_change: bool,
+):
+    if not text or not text.strip():
+        return "_No text provided._", "", {}
+    if not selected_zone:
+        return "_Select a dead zone first (or re-run suggest)._", "", {}
+    try:
+        zid = int(str(selected_zone).split(":", 1)[0].strip())
+    except Exception:
+        return "_Could not parse selected zone id._", "", {}
+    zone = None
+    for z in zones_state or []:
+        if int(z.get("zone_id") or -1) == zid:
+            zone = z
+            break
+    if zone is None:
+        return "_Selected zone not found; re-run suggest._", "", {}
+
+    from tools.studio.meaning_lock import MeaningLockConfig
+
+    cfg = MeaningLockConfig(
+        min_cosine_sim=float(min_cosine_sim),
+        max_length_ratio=float(max_length_ratio),
+        max_edit_ratio=float(max_edit_ratio),
+        allow_new_numbers=bool(allow_new_numbers),
+        allow_new_proper_nouns=bool(allow_new_proper_nouns),
+        allow_negation_change=bool(allow_negation_change),
+    )
+    out = patch_one_span(
+        text,
+        start_char=int(zone.get("start_char") or 0),
+        end_char=int(zone.get("end_char") or 0),
+        doc_type=str(doc_type),
+        rewrite_mode=str(rewrite_mode or "strict"),
+        intensity=float(intensity),
+        rewrite_model_id=str(rewrite_model_id).strip() or "Qwen/Qwen2.5-0.5B-Instruct",
+        scoring_model_id=str(scoring_model).strip() or "gpt2",
+        baseline_model_id=str(baseline_model).strip() or "gpt2_gutenberg_512",
+        calibrator_path=str(calibrator_path or ""),
+        scorer_model_path=str(scorer_model_path or ""),
+        scorer_max_length=int(scorer_max_length),
+        score_top_n=3,
+        max_input_tokens=int(max_input_tokens),
+        normalize_text=False,  # already normalized in this tab
+        n_candidates=int(n_candidates),
+        max_new_tokens=int(max_new_tokens),
+        temperature=float(temperature),
+        top_p=float(top_p),
+        seed=int(seed) if seed is not None else None,
+        meaning_lock=cfg,
+    )
+
+    cands = out.get("candidates") or []
+    if not cands:
+        msg = "_No candidates passed MeaningLock; try relaxing thresholds or increasing candidates._"
+        if out.get("error"):
+            msg += f"\n\nError: `{out.get('error')}`"
+        return msg, "", out
+
+    lines = []
+    pb = out.get("primary_before")
+    pb_err = out.get("primary_before_error")
+    if isinstance(pb, dict) and isinstance(pb.get("overall_0_100"), (int, float)):
+        src = pb.get("source") or "unknown"
+        lines.append(f"**Primary score before**: `{float(pb['overall_0_100']):.1f}/100` ({src})")
+    elif pb_err:
+        lines.append(f"_Primary score failed: {pb_err}_")
+    lines.append("")
+    ctrl = out.get("control") or {}
+    inten = ctrl.get("intensity_0_1")
+    inten_s = "N/A" if not isinstance(inten, (int, float)) else f"{float(inten):.2f}"
+    lines.append(f"**Patch candidates** (sorted by `rank_score`; intensity={inten_s}; 0–100 score is secondary)")
+    best_text = ""
+    best_doc_diff = ""
+    for i, c in enumerate(cands[:5], 1):
+        gain = float(c.get("texture_gain") or 0.0)
+        rank = c.get("rank_score")
+        dr = c.get("droning_delta")
+        pdelta = c.get("primary_delta_0_100")
+        pafter = (c.get("primary_after") or {}).get("overall_0_100") if isinstance(c.get("primary_after"), dict) else None
+        sim = (c.get("meaning_lock") or {}).get("cosine_sim")
+        er = (c.get("meaning_lock") or {}).get("edit_ratio")
+        ml = c.get("meaning_lock") or {}
+        sim_s = "N/A" if not isinstance(sim, (int, float)) else f"{float(sim):.3f}"
+        er_s = "N/A" if not isinstance(er, (int, float)) else f"{float(er):.2f}"
+        score_s = ""
+        if isinstance(pafter, (int, float)):
+            score_s = f"  score={float(pafter):.1f}"
+        if isinstance(pdelta, (int, float)):
+            score_s += f" (Δ {float(pdelta):+.1f})"
+        rank_s = "N/A" if not isinstance(rank, (int, float)) else f"{float(rank):+.3f}"
+        dr_s = "N/A" if not isinstance(dr, (int, float)) else f"{float(dr):+.3f}"
+        lines.append(f"{i}. rank={rank_s}  Δtexture={gain:+.3f}  Δdroning={dr_s}{score_s}  sim={sim_s}  edit={er_s}")
+        facts = []
+        for key, label in [
+            ("numbers_added", "+nums"),
+            ("numbers_removed", "-nums"),
+            ("proper_nouns_added", "+PN"),
+            ("proper_nouns_removed", "-PN"),
+            ("negations_added", "+neg"),
+            ("negations_removed", "-neg"),
+        ]:
+            vals = ml.get(key) if isinstance(ml, dict) else None
+            if isinstance(vals, list) and vals:
+                facts.append(f"{label}={vals}")
+        if facts:
+            lines.append(f"   - fact diff: `{'; '.join(facts)}`")
+        lines.append("```diff")
+        lines.append(c.get("span_diff") or "")
+        lines.append("```")
+        if i == 1:
+            best_text = c.get("patched_text") or ""
+            if best_text.strip():
+                a = (text or "").splitlines(keepends=True)
+                b = best_text.splitlines(keepends=True)
+                dd = difflib.unified_diff(a, b, fromfile="doc_before", tofile="doc_after", lineterm="")
+                out_dd = list(dd)
+                if len(out_dd) > 140:
+                    out_dd = out_dd[:140] + ["… (diff truncated)"]
+                best_doc_diff = "\n".join(out_dd).strip()
+
+    if best_doc_diff:
+        lines.append("")
+        lines.append("<details><summary>Document diff (best candidate)</summary>")
+        lines.append("")
+        lines.append("```diff")
+        lines.append(best_doc_diff)
+        lines.append("```")
+        lines.append("</details>")
+
+    return "\n".join(lines), best_text, out
+
+
+def _plot_cadence_comparison(
+    ref_surprisal: Optional[list],
+    gen_surprisal: Optional[list],
+) -> Optional[Image.Image]:
+    """Plot reference vs generated cadence side by side."""
+    if not ref_surprisal and not gen_surprisal:
+        return None
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 2.8))
+
+    if ref_surprisal:
+        axes[0].plot(ref_surprisal, lw=0.8, color="#4CAF50")
+        axes[0].set_title("Reference Cadence")
+        axes[0].set_xlabel("Token")
+        axes[0].set_ylabel("Surprisal")
+    else:
+        axes[0].text(0.5, 0.5, "No data", ha="center", va="center")
+
+    if gen_surprisal:
+        axes[1].plot(gen_surprisal, lw=0.8, color="#2196F3")
+        axes[1].set_title("Generated Cadence")
+        axes[1].set_xlabel("Token")
+        axes[1].set_ylabel("Surprisal")
+    else:
+        axes[1].text(0.5, 0.5, "No data", ha="center", va="center")
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=160)
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf)
+
+
+def run_write_like(
+    prompt: str,
+    reference_text: str,
+    doc_type: str,
+    model_id: str,
+    max_new_tokens: int,
+    seed: Optional[int],
+):
+    """Handler for Cadence Match tab."""
+    if not reference_text or not reference_text.strip():
+        return "Please provide reference text.", "", None, {}
+
+    if not prompt or not prompt.strip():
+        prompt = " "
+
+    try:
+        result = write_like(
+            prompt=prompt,
+            reference_text=reference_text,
+            model_id=model_id or "gpt2",
+            doc_type=doc_type or "prose",
+            max_new_tokens=int(max_new_tokens) if max_new_tokens else 200,
+            seed=int(seed) if seed is not None else 7,
+        )
+
+        # Build markdown report
+        lines = []
+        lines.append("### Generated Text")
+        lines.append("")
+        lines.append(result.generated_text)
+        lines.append("")
+        lines.append("---")
+        lines.append("### Cadence Match")
+        match = result.cadence_match
+        similarity = match.get("similarity_0_1", 0.0)
+        lines.append(f"**Similarity:** {similarity:.1%}")
+        lines.append("")
+        lines.append("| Metric | Generated | Reference |")
+        lines.append("|--------|-----------|-----------|")
+        details = match.get("details") or {}
+        for k, v in details.items():
+            if isinstance(v, dict):
+                gen_v = v.get("generated", "—")
+                ref_v = v.get("reference", "—")
+                if isinstance(gen_v, float):
+                    gen_v = f"{gen_v:.2f}"
+                if isinstance(ref_v, float):
+                    ref_v = f"{ref_v:.2f}"
+                lines.append(f"| {k} | {gen_v} | {ref_v} |")
+
+        md = "\n".join(lines)
+
+        # Get surprisal for plots
+        ref_display = extract_cadence_for_display(
+            reference_text,
+            model_id=model_id or "gpt2",
+            doc_type=doc_type or "prose",
+        )
+        gen_display = extract_cadence_for_display(
+            result.generated_text,
+            model_id=model_id or "gpt2",
+            doc_type=doc_type or "prose",
+        )
+
+        ref_surp = ref_display.get("token_surprisal") or []
+        gen_surp = gen_display.get("token_surprisal") or []
+
+        plot = _plot_cadence_comparison(ref_surp, gen_surp)
+
+        return md, result.generated_text, plot, result.to_dict()
+
+    except Exception as e:
+        return f"Error: {type(e).__name__}: {e}", "", None, {"error": f"{type(e).__name__}: {e}"}
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Horace Studio") as demo:
         gr.Markdown(
@@ -369,7 +832,7 @@ def build_ui() -> gr.Blocks:
 
         with gr.Row():
             doc_type = gr.Dropdown(
-                choices=["poem", "prose", "shortstory", "novel"],
+                choices=["poem", "prose", "essay", "shortstory", "novel"],
                 value="prose",
                 label="Type",
             )
@@ -407,6 +870,7 @@ def build_ui() -> gr.Blocks:
                     critic_seed = gr.Number(value=None, precision=0, label="Seed (optional)")
                 llm_md = gr.Markdown()
             plot_img = gr.Image(label="Cadence plot", type="pil")
+            timeline_img = gr.Image(label="Cadence timeline (page pacing)", type="pil")
             out_json = gr.JSON(label="Raw JSON")
 
             run_btn.click(
@@ -430,7 +894,7 @@ def build_ui() -> gr.Blocks:
                     critic_top_p,
                     critic_seed,
                 ],
-                outputs=[score_md, profile_md, suggestions_md, llm_md, plot_img, out_json],
+                outputs=[score_md, profile_md, suggestions_md, llm_md, plot_img, timeline_img, out_json],
             )
 
         with gr.Tab("Rewrite + Rerank"):
@@ -470,6 +934,153 @@ def build_ui() -> gr.Blocks:
                     seed,
                 ],
                 outputs=[rewrite_md, rewrite_json],
+            )
+
+        with gr.Tab("Patch (dead zones)"):
+            gr.Markdown(
+                "Find low-texture spans and patch them with MeaningLock (semantic similarity + no-new-facts heuristics). "
+                "Optimize locally with an intensity knob (clearer↔punchier); keep the 0–100 score as a secondary readout."
+            )
+            zones_state = gr.State([])
+            history_state = gr.State([])
+            with gr.Row():
+                patch_mode = gr.Dropdown(choices=["strict", "creative"], value="strict", label="Patch mode")
+                patch_intensity = gr.Slider(0.0, 1.0, value=0.55, step=0.05, label="Intensity (clearer ↔ punchier)")
+                patch_rewrite_model = gr.Textbox(
+                    value="Qwen/Qwen2.5-0.5B-Instruct",
+                    label="Rewrite model (span patching; instruct works best)",
+                )
+                patch_candidates = gr.Slider(2, 12, value=6, step=1, label="Candidates")
+                patch_max_new_tokens = gr.Slider(64, 520, value=260, step=16, label="Max new tokens (span)")
+            with gr.Row():
+                patch_temperature = gr.Slider(0.1, 1.5, value=0.8, step=0.05, label="Temperature")
+                patch_top_p = gr.Slider(0.05, 0.99, value=0.92, step=0.01, label="Top-p")
+                patch_seed = gr.Number(value=7, precision=0, label="Seed")
+            with gr.Row():
+                window_sentences = gr.Slider(3, 8, value=4, step=1, label="Dead-zone window (sentences)")
+                max_zones = gr.Slider(1, 10, value=6, step=1, label="Max zones")
+                suggest_btn = gr.Button("Suggest dead zones")
+
+            zones_md = gr.Markdown()
+            zones_json = gr.JSON(label="Raw JSON (zones + analysis)")
+            zone_dd = gr.Dropdown(choices=[], value=None, label="Pick a zone")
+
+            with gr.Accordion("MeaningLock (constraints)", open=False):
+                with gr.Row():
+                    min_cosine_sim = gr.Slider(0.70, 0.99, value=0.86, step=0.01, label="Min semantic similarity (cosine)")
+                    max_length_ratio = gr.Slider(1.05, 2.50, value=1.45, step=0.05, label="Max length ratio")
+                    max_edit_ratio = gr.Slider(0.10, 0.95, value=0.55, step=0.05, label="Max edit ratio (1-sim)")
+                with gr.Row():
+                    allow_new_numbers = gr.Checkbox(value=False, label="Allow number changes")
+                    allow_new_proper = gr.Checkbox(value=False, label="Allow proper-noun changes")
+                    allow_negation_change = gr.Checkbox(value=False, label="Allow negation changes")
+
+            patch_btn = gr.Button("Patch selected zone (slow)")
+            with gr.Row():
+                apply_btn = gr.Button("Apply best patch to editor")
+                undo_btn = gr.Button("Undo last apply")
+            patch_md = gr.Markdown()
+            patched_text = gr.Textbox(lines=14, label="Best patched text (candidate #1)")
+            patch_json = gr.JSON(label="Raw JSON (candidates)")
+            history_md = gr.Markdown()
+
+            suggest_btn.click(
+                fn=run_patch_suggest,
+                inputs=[text, doc_type, scoring_model, max_input_tokens, normalize_text, window_sentences, max_zones],
+                outputs=[text, zones_md, zones_json, zone_dd, zones_state],
+            )
+
+            patch_mode.change(
+                fn=patch_mode_preset,
+                inputs=[patch_mode],
+                outputs=[patch_temperature, patch_top_p, min_cosine_sim, max_length_ratio, max_edit_ratio],
+            )
+
+            patch_btn.click(
+                fn=run_patch_span,
+                inputs=[
+                    text,
+                    doc_type,
+                    zone_dd,
+                    zones_state,
+                    patch_mode,
+                    patch_intensity,
+                    patch_rewrite_model,
+                    scoring_model,
+                    baseline_model,
+                    calibrator_path,
+                    scorer_model_path,
+                    scorer_max_length,
+                    max_input_tokens,
+                    patch_candidates,
+                    patch_max_new_tokens,
+                    patch_temperature,
+                    patch_top_p,
+                    patch_seed,
+                    min_cosine_sim,
+                    max_length_ratio,
+                    max_edit_ratio,
+                    allow_new_numbers,
+                    allow_new_proper,
+                    allow_negation_change,
+                ],
+                outputs=[patch_md, patched_text, patch_json],
+            )
+
+            apply_btn.click(
+                fn=apply_best_patch,
+                inputs=[text, patched_text, history_state],
+                outputs=[text, history_state, history_md],
+            )
+
+            undo_btn.click(
+                fn=undo_last_patch,
+                inputs=[text, history_state],
+                outputs=[text, history_state, history_md],
+            )
+
+        with gr.Tab("Cadence Match"):
+            gr.Markdown(
+                """
+                ### Cadence Match
+                Generate text that matches the *cadence* (spikes, lulls, cooldowns) of a reference passage.
+
+                This is intentionally **cadence-only**: it tries to match rhythm, not copy vocabulary, facts, or voice.
+                """
+            )
+            with gr.Row():
+                wl_reference = gr.Textbox(
+                    lines=8,
+                    label="Reference Text (cadence to match)",
+                    placeholder="Paste a paragraph whose rhythm you like...",
+                )
+                wl_prompt = gr.Textbox(
+                    lines=4,
+                    label="Your Prompt (starting text)",
+                    placeholder="Begin your text here...",
+                    value="The morning light crept through the window",
+                )
+            with gr.Row():
+                wl_model = gr.Textbox(value="gpt2", label="Generation model")
+                wl_max_tokens = gr.Slider(50, 500, value=200, step=10, label="Max tokens")
+                wl_seed = gr.Number(value=7, precision=0, label="Seed")
+            wl_btn = gr.Button("Generate", variant="primary")
+            wl_md = gr.Markdown()
+            wl_output = gr.Textbox(lines=6, label="Generated Text", interactive=False)
+            wl_plot = gr.Image(label="Cadence Comparison", type="pil")
+            wl_json = gr.JSON(label="Raw Output")
+
+            wl_btn.click(
+                fn=run_write_like,
+                inputs=[
+                    wl_prompt,
+                    wl_reference,
+                    doc_type,
+                    wl_model,
+                    wl_max_tokens,
+                    wl_seed,
+                ],
+                outputs=[wl_md, wl_output, wl_plot, wl_json],
             )
 
     return demo
