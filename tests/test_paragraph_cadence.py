@@ -116,6 +116,35 @@ class TestExtractParagraphCadence(unittest.TestCase):
         self.assertEqual(result.paragraphs[0].sentence_count, 2)
         self.assertEqual(result.paragraphs[1].sentence_count, 2)
 
+    def test_pacing_variety_uses_paragraph_mean_surprisal(self) -> None:
+        # Paragraph means are equal, but openings differ. pacing_variety should be 0.
+        fake_analysis = {
+            "segments": {
+                "paragraphs": {
+                    "items": [
+                        {"start_token": 0, "end_token": 20, "start_char": 0, "end_char": 100},
+                        {"start_token": 20, "end_token": 40, "start_char": 100, "end_char": 200},
+                    ],
+                },
+                "sentences": {
+                    "items": [
+                        {"start_token": 0, "end_token": 10},
+                        {"start_token": 10, "end_token": 20},
+                        {"start_token": 20, "end_token": 30},
+                        {"start_token": 30, "end_token": 40},
+                    ],
+                    "mean_surprisal": [1.0, 5.0, 3.0, 3.0],
+                    "token_counts": [10, 10, 10, 10],
+                },
+            },
+            "token_metrics": {"surprisal": [0.0] * 40},
+            "series": {"threshold_surprisal": 1.0},
+        }
+        result = extract_paragraph_cadence(fake_analysis)
+        self.assertAlmostEqual(result.paragraphs[0].mean_surprisal, 3.0, places=3)
+        self.assertAlmostEqual(result.paragraphs[1].mean_surprisal, 3.0, places=3)
+        self.assertAlmostEqual(result.pacing_variety, 0.0, places=6)
+
 
 class TestParagraphStarts(unittest.TestCase):
     def test_no_paragraphs(self) -> None:

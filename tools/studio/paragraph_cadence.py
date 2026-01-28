@@ -20,6 +20,7 @@ class ParagraphCadence:
     # Shape metrics
     sentence_count: int = 0
     sentence_length_cv: float = 0.0  # Coefficient of variation in sentence lengths
+    mean_surprisal: float = 0.0  # Mean of sentence mean surprisals (paragraph tone)
     surprisal_range: float = 0.0  # Max - min sentence surprisal
     surprisal_cv: float = 0.0  # CV of sentence surprisals
 
@@ -42,6 +43,7 @@ class ParagraphCadence:
         return {
             "sentence_count": self.sentence_count,
             "sentence_length_cv": self.sentence_length_cv,
+            "mean_surprisal": self.mean_surprisal,
             "surprisal_range": self.surprisal_range,
             "surprisal_cv": self.surprisal_cv,
             "opening_surprisal": self.opening_surprisal,
@@ -120,14 +122,16 @@ def _spike_front_loading(spike_positions: List[int], total_tokens: int) -> float
 def extract_paragraph_cadence(
     analysis: Dict[str, Any],
     *,
-    spike_threshold: float = 2.0,
+    spike_threshold: Optional[float] = None,
 ) -> DocumentParagraphCadence:
     """
     Extract paragraph-level cadence profiles from an analysis result.
 
     Args:
         analysis: Output from analyze_text()
-        spike_threshold: Surprisal threshold for counting spikes
+        spike_threshold: Surprisal threshold for counting spikes. If None, uses the
+            analysis' own high-surprise threshold (mean + std), falling back to
+            mean + std computed from token surprisals.
 
     Returns:
         DocumentParagraphCadence with per-paragraph and aggregate metrics
@@ -141,12 +145,25 @@ def extract_paragraph_cadence(
     sent_means = sent_segment.get("mean_surprisal") or []
     sent_counts = sent_segment.get("token_counts") or []
 
-    tokens = analysis.get("tokens") or []
     token_metrics = analysis.get("token_metrics") or {}
     surprisals = token_metrics.get("surprisal") or []
 
     if not para_items:
         return DocumentParagraphCadence()
+
+    thr: float
+    if spike_threshold is not None:
+        thr = float(spike_threshold)
+    else:
+        series = analysis.get("series") or {}
+        thr_val = series.get("threshold_surprisal") if isinstance(series, dict) else None
+        if isinstance(thr_val, (int, float)) and math.isfinite(float(thr_val)):
+            thr = float(thr_val)
+        elif surprisals:
+            s_arr = np.array([float(x) for x in surprisals], dtype=np.float32)
+            thr = float(np.mean(s_arr) + np.std(s_arr))
+        else:
+            thr = 0.0
 
     # Build sentence-to-paragraph mapping
     para_cadences: List[ParagraphCadence] = []
@@ -188,6 +205,7 @@ def extract_paragraph_cadence(
         )
 
         # Shape metrics
+        mean_surprisal = float(np.mean(means)) if len(means) > 0 else 0.0
         sentence_length_cv = _coefficient_of_variation(lengths) if len(lengths) > 1 else 0.0
         surprisal_range = float(np.max(means) - np.min(means)) if len(means) > 1 else 0.0
         surprisal_cv = _coefficient_of_variation(means) if len(means) > 1 else 0.0
@@ -208,7 +226,7 @@ def extract_paragraph_cadence(
             sent_surp = [float(surprisals[i]) for i in range(st, min(et, len(surprisals)))]
             if not sent_surp:
                 return 0.0
-            spikes = sum(1 for s in sent_surp if s > spike_threshold)
+            spikes = sum(1 for s in sent_surp if float(s) >= thr)
             return float(spikes / len(sent_surp)) * 100  # per 100 tokens
 
         opening_spike_rate = _spike_rate_for_sent(para_sents[0])
@@ -221,7 +239,7 @@ def extract_paragraph_cadence(
         para_token_count = para_end_token - para_start_token
         spike_positions: List[int] = []
         for ti in range(para_start_token, min(para_end_token, len(surprisals))):
-            if ti < len(surprisals) and float(surprisals[ti]) > spike_threshold:
+            if ti < len(surprisals) and float(surprisals[ti]) >= thr:
                 spike_positions.append(ti - para_start_token)
         front_loading = _spike_front_loading(spike_positions, para_token_count)
 
@@ -229,6 +247,7 @@ def extract_paragraph_cadence(
             ParagraphCadence(
                 sentence_count=len(para_sents),
                 sentence_length_cv=sentence_length_cv,
+                mean_surprisal=mean_surprisal,
                 surprisal_range=surprisal_range,
                 surprisal_cv=surprisal_cv,
                 opening_surprisal=opening_surprisal,
@@ -252,7 +271,7 @@ def extract_paragraph_cadence(
     front_loadings = [p.spike_front_loading for p in para_cadences]
 
     # Pacing variety: CV of paragraph mean surprisals
-    para_means = np.array([p.opening_surprisal for p in para_cadences], dtype=np.float32)
+    para_means = np.array([p.mean_surprisal for p in para_cadences if p.sentence_count > 0], dtype=np.float32)
     pacing_variety = _coefficient_of_variation(para_means) if len(para_means) > 1 else 0.0
 
     return DocumentParagraphCadence(
