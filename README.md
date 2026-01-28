@@ -98,7 +98,24 @@ Endpoints:
 | [Final Report (HTML)](reports/final/report.html) | Self-contained book with figures |
 | [Studio Docs](docs/studio.md) | Detailed Studio documentation |
 | [Benchmark](docs/benchmark.md) | Eval dataset + held-out metrics |
+| [Data & Corpora](docs/data.md) | How corpora/splits/baselines are built |
 | [Reward Design](docs/reward.md) | GRPO reward plan |
+
+---
+
+## Corpora (data)
+
+So what: Horace’s baselines, evals, and (optional) training runs are driven by **corpus snapshots** — windowed text datasets written under `data/corpora/` (gitignored).
+
+<details>
+<summary>Build a corpus snapshot / add a new source</summary>
+
+- Curated public-domain prose (Standard Ebooks): `make build-standardebooks-corpus` (or `make modal-build-standardebooks-corpus`)
+- Modern prose via RSS/Atom: add feeds in `configs/rss_feeds_v1.json`, then `make build-rss-corpus` (or `make modal-build-rss-corpus`)
+- Gutenberg at scale: `make download-gutenberg-raw`, then sample windows with `make sample-windows-great` / `make sample-windows-other`
+
+More detail (splits, leakage rules, mixing sources): `docs/data.md`.
+</details>
 
 ---
 
