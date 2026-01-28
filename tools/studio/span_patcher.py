@@ -378,7 +378,6 @@ def suggest_dead_zones(
         # Recompute severity and reasons over the merged span.
         span_means = arr[ss : se + 1]
         span_sd = float(np.std(span_means))
-        wstats = _word_stats(norm_text[start_char:end_char])
         span_len_cv = None
         if counts_arr is not None and 0 <= ss <= se < len(counts_arr):
             wc = counts_arr[ss : se + 1]
@@ -390,6 +389,8 @@ def suggest_dead_zones(
             norm_text[start_char:end_char],
             sent_len_cv=span_len_cv,
         )
+        if not keep:
+            continue
 
         sev = float((threshold - span_sd) / max(threshold, 1e-6))
         sev = float(np.clip(sev + float(extra_pen), 0.0, 1.25))
@@ -553,7 +554,14 @@ def patch_span(
     norm_text, norm_meta = normalize_for_studio(raw, doc_type=str(doc_type), enabled=bool(normalize_text))
     s = max(0, min(int(start_char), len(norm_text)))
     e = max(s, min(int(end_char), len(norm_text)))
-    span = norm_text[s:e].strip()
+    span_slice = norm_text[s:e]
+    if not span_slice:
+        return {"error": "empty_span", "text": norm_text, "text_normalization": norm_meta, "candidates": []}
+    lead = len(span_slice) - len(span_slice.lstrip())
+    trail = len(span_slice) - len(span_slice.rstrip())
+    core_s = min(len(norm_text), s + int(lead))
+    core_e = max(core_s, e - int(trail))
+    span = norm_text[core_s:core_e]
     if not span:
         return {"error": "empty_span", "text": norm_text, "text_normalization": norm_meta, "candidates": []}
 
@@ -575,8 +583,8 @@ def patch_span(
     if use_cadence_sampler:
         rewrites = generate_cadence_span_rewrites(
             norm_text,
-            start_char=s,
-            end_char=e,
+            start_char=core_s,
+            end_char=core_e,
             doc_type=str(doc_type),
             target_profile=cadence_profile,
             model_id=str(scoring_model_id),  # Use scoring model for cadence gen
@@ -588,8 +596,8 @@ def patch_span(
     else:
         rewrites = generate_span_rewrites(
             norm_text,
-            start_char=s,
-            end_char=e,
+            start_char=core_s,
+            end_char=core_e,
             doc_type=str(doc_type),
             rewrite_mode=str(rewrite_mode),
             intensity=float(intensity_norm),
@@ -604,7 +612,7 @@ def patch_span(
         return {
             "text": norm_text,
             "text_normalization": norm_meta,
-            "span": {"start_char": s, "end_char": e, "text": span},
+            "span": {"start_char": s, "end_char": e, "core_start_char": core_s, "core_end_char": core_e, "text": span},
             "candidates": [],
             "error": "no_rewrites_generated",
         }
@@ -636,7 +644,7 @@ def patch_span(
             + ((1.0 - intensity_norm) * float(clarity_gain))
             - 0.10 * max(0.0, droning_delta)
         )
-        patched = norm_text[:s] + repl + norm_text[e:]
+        patched = norm_text[:core_s] + repl + norm_text[core_e:]
         scored.append(
             PatchCandidate(
                 candidate_id=int(cid),
@@ -717,7 +725,7 @@ def patch_span(
     return {
         "text": norm_text,
         "text_normalization": norm_meta,
-        "span": {"start_char": s, "end_char": e, "text": span},
+        "span": {"start_char": s, "end_char": e, "core_start_char": core_s, "core_end_char": core_e, "text": span},
         "control": {"intensity_0_1": float(intensity_norm)},
         "primary_before": primary_before,
         "primary_before_error": primary_before_err,

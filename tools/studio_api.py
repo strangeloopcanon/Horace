@@ -376,7 +376,7 @@ def cadence_match(req: WriteLikeReq) -> Dict[str, Any]:
             backend=req.backend or "auto",
             doc_type=req.doc_type or "prose",
             max_new_tokens=int(req.max_new_tokens) if req.max_new_tokens else 200,
-            seed=int(req.seed) if req.seed else 7,
+            seed=int(req.seed) if req.seed is not None else 7,
         )
         return result.to_dict()
     except Exception as e:

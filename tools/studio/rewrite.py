@@ -289,7 +289,7 @@ def generate_span_rewrites(
             raw = tok.decode(gen[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True)
             out = _extract_rewrite(raw)
             # Strip accidental wrappers
-            out = re.sub(r"^<span>\\s*|\\s*</span>$", "", out, flags=re.I)
+            out = re.sub(r"^<span>\s*|\s*</span>$", "", out, flags=re.I)
             out = out.strip()
             if out:
                 outputs.append(out)
@@ -299,7 +299,7 @@ def generate_span_rewrites(
     uniq: List[str] = []
     seen: set[str] = set()
     for o in outputs:
-        key = re.sub(r"\\s+", " ", o.strip().lower())
+        key = re.sub(r"\s+", " ", o.strip().lower())
         if key and key not in seen:
             seen.add(key)
             uniq.append(o)
@@ -737,7 +737,7 @@ def generate_cadence_span_rewrites(
     original_word_count = len(span.split())
 
     for i in range(max(1, int(n_candidates))):
-        sampler = CadenceSampler(be, config, seed=(int(seed) + i + 1) if seed else None)
+        sampler = CadenceSampler(be, config, seed=(int(seed) + i + 1) if seed is not None else None)
 
         # Generate continuation
         generated = sampler.generate(prompt, max_new_tokens=max_new_tokens)

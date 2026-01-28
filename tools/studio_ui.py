@@ -227,7 +227,7 @@ def run_analyze(
             msg = "_Fast mode requires a valid trained scorer model path._"
             if trained_err:
                 msg += f"\n\nError: `{trained_err}`"
-            return msg, "", "", "", None, {"trained_score_error": trained_err}
+            return msg, "", "", "", None, None, {"trained_score_error": trained_err}
         score_md = []
         score_md.append(f"### Trained scorer: **{trained_score.score_0_100:.1f}/100**")
         score_md.append(f"- prob: `{trained_score.prob_0_1:.3f}`")
@@ -768,7 +768,7 @@ def run_write_like(
             model_id=model_id or "gpt2",
             doc_type=doc_type or "prose",
             max_new_tokens=int(max_new_tokens) if max_new_tokens else 200,
-            seed=int(seed) if seed else 7,
+            seed=int(seed) if seed is not None else 7,
         )
 
         # Build markdown report

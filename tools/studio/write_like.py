@@ -164,7 +164,7 @@ def write_like_with_candidates(
 
     for i in range(max(1, int(n_candidates))):
         sampler = CadenceSampler(
-            be, config, seed=(int(seed) + i + 1) if seed else None
+            be, config, seed=(int(seed) + i + 1) if seed is not None else None
         )
         generated_full = sampler.generate(prompt_clean, max_new_tokens=max_new_tokens)
 
@@ -197,7 +197,7 @@ def write_like_with_candidates(
                     "doc_type": doc_type,
                     "max_new_tokens": max_new_tokens,
                     "candidate_index": i,
-                    "seed": (int(seed) + i + 1) if seed else None,
+                    "seed": (int(seed) + i + 1) if seed is not None else None,
                 },
             )
         )
