@@ -31,46 +31,46 @@ STUDIO_HTML = """<!doctype html>
         line-height: 1.5;
       }
       .container {
-        max-width: 640px;
+        max-width: 900px;
         margin: 0 auto;
-        padding: 24px 16px 48px;
-      }
-      @media (max-width: 480px) {
-        .container { padding: 16px 12px 32px; }
+        padding: 32px 24px 64px;
       }
       header {
         text-align: center;
-        margin-bottom: 24px;
+        margin-bottom: 32px;
       }
       h1 {
-        font-size: 24px;
+        font-size: 28px;
         font-weight: 600;
         letter-spacing: -0.5px;
       }
       .tagline {
         color: var(--muted);
-        font-size: 14px;
-        margin-top: 4px;
+        font-size: 15px;
+        margin-top: 6px;
       }
       
       /* Tabs */
       .tabs {
         display: flex;
-        gap: 2px;
+        gap: 4px;
         background: var(--card);
-        padding: 3px;
-        border-radius: 10px;
-        margin-bottom: 16px;
+        padding: 4px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
       }
       .tab {
         flex: 1;
-        padding: 8px 12px;
+        padding: 10px 20px;
         border: none;
         background: transparent;
         color: var(--muted);
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 500;
-        border-radius: 7px;
+        border-radius: 8px;
         cursor: pointer;
         transition: all 0.15s;
       }
@@ -89,26 +89,26 @@ STUDIO_HTML = """<!doctype html>
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
       }
       label {
         display: block;
-        font-size: 12px;
+        font-size: 13px;
         color: var(--muted);
-        margin-bottom: 6px;
+        margin-bottom: 8px;
       }
       textarea {
         width: 100%;
-        min-height: 140px;
-        padding: 12px;
+        min-height: 160px;
+        padding: 16px;
         background: rgba(0,0,0,0.3);
         border: 1px solid var(--border);
         border-radius: 10px;
         color: var(--text);
         font-family: var(--sans);
-        font-size: 14px;
-        line-height: 1.6;
+        font-size: 15px;
+        line-height: 1.7;
         resize: vertical;
         outline: none;
       }
@@ -116,12 +116,12 @@ STUDIO_HTML = """<!doctype html>
       textarea::placeholder { color: var(--muted); opacity: 0.6; }
       input[type="number"], input[type="text"], select {
         width: 100%;
-        padding: 8px 10px;
+        padding: 10px 12px;
         background: rgba(0,0,0,0.3);
         border: 1px solid var(--border);
-        border-radius: 6px;
+        border-radius: 8px;
         color: var(--text);
-        font-size: 13px;
+        font-size: 14px;
         outline: none;
       }
       input:focus, select:focus { border-color: var(--accent); }
@@ -130,12 +130,12 @@ STUDIO_HTML = """<!doctype html>
       .btn {
         display: block;
         width: 100%;
-        padding: 12px 20px;
+        padding: 14px 24px;
         background: var(--accent);
         color: white;
         border: none;
         border-radius: 10px;
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 500;
         cursor: pointer;
         transition: background 0.15s;
@@ -148,8 +148,8 @@ STUDIO_HTML = """<!doctype html>
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 16px;
-        margin-top: 16px;
+        padding: 24px;
+        margin-top: 20px;
         display: none;
       }
       .result.visible { display: block; }
@@ -158,12 +158,12 @@ STUDIO_HTML = """<!doctype html>
       .score-header {
         display: flex;
         align-items: center;
-        gap: 16px;
-        margin-bottom: 16px;
+        gap: 24px;
+        margin-bottom: 24px;
       }
       .score-circle {
-        width: 72px;
-        height: 72px;
+        width: 88px;
+        height: 88px;
         border-radius: 50%;
         background: var(--accent-dim);
         display: flex;
@@ -172,123 +172,133 @@ STUDIO_HTML = """<!doctype html>
         flex-shrink: 0;
       }
       .score-number {
-        font-size: 28px;
+        font-size: 32px;
         font-weight: 700;
         color: var(--accent);
       }
-      .score-summary {
-        font-size: 14px;
+      .score-meta {
+        flex: 1;
+      }
+      .score-label {
+        font-size: 13px;
         color: var(--muted);
-        line-height: 1.5;
+        margin-bottom: 4px;
+      }
+      .score-summary {
+        font-size: 15px;
+        color: var(--text);
+        line-height: 1.6;
       }
       
       /* Highlighted text */
+      .section-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
       .text-display {
-        background: rgba(0,0,0,0.2);
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 14px;
-        line-height: 1.7;
-        margin-bottom: 16px;
+        background: rgba(0,0,0,0.25);
+        padding: 16px;
+        border-radius: 10px;
+        font-size: 15px;
+        line-height: 1.8;
+        margin-bottom: 24px;
         white-space: pre-wrap;
         word-wrap: break-word;
       }
       .spike {
-        background: rgba(251, 191, 36, 0.25);
+        background: rgba(251, 191, 36, 0.2);
         border-bottom: 2px solid #fbbf24;
-        padding: 1px 2px;
-        border-radius: 2px;
+        padding: 2px 3px;
+        border-radius: 3px;
         cursor: help;
       }
       .spike:hover {
-        background: rgba(251, 191, 36, 0.4);
+        background: rgba(251, 191, 36, 0.35);
       }
-      .text-legend {
-        display: flex;
-        gap: 16px;
+      .legend-hint {
         font-size: 11px;
         color: var(--muted);
-        margin-bottom: 12px;
-      }
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-      .legend-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 2px;
-        background: rgba(251, 191, 36, 0.25);
-        border-bottom: 2px solid #fbbf24;
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
       }
       
       /* Metrics */
       .metrics {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 16px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      @media (max-width: 600px) {
+        .metrics { grid-template-columns: repeat(2, 1fr); }
       }
       .metric {
-        flex: 1;
-        min-width: 70px;
-        background: rgba(0,0,0,0.2);
-        padding: 10px;
-        border-radius: 8px;
+        background: rgba(0,0,0,0.25);
+        padding: 16px;
+        border-radius: 10px;
         text-align: center;
       }
       .metric-value {
-        font-size: 18px;
+        font-size: 24px;
         font-weight: 600;
       }
       .metric-label {
-        font-size: 10px;
+        font-size: 11px;
         color: var(--muted);
         text-transform: uppercase;
         letter-spacing: 0.3px;
-        margin-top: 2px;
+        margin-top: 4px;
       }
       
       /* Canvas */
+      .chart-container {
+        margin-bottom: 24px;
+      }
       canvas {
         width: 100%;
-        height: 60px;
-        border-radius: 8px;
-        background: rgba(0,0,0,0.2);
-        margin-bottom: 16px;
+        height: 80px;
+        border-radius: 10px;
+        background: rgba(0,0,0,0.25);
       }
       
       /* Suggestions */
-      .suggestions-title {
-        font-size: 12px;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 10px;
+      .suggestions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
       .suggestion {
-        background: rgba(0,0,0,0.2);
-        border-radius: 8px;
-        margin-bottom: 8px;
+        background: rgba(0,0,0,0.25);
+        border-radius: 10px;
         overflow: hidden;
+        border-left: 3px solid var(--accent);
       }
       .suggestion-header {
-        padding: 10px 12px;
+        padding: 14px 16px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 12px;
       }
       .suggestion-header:hover {
-        background: rgba(255,255,255,0.03);
+        background: rgba(255,255,255,0.02);
       }
       .suggestion-title {
         font-weight: 500;
-        font-size: 13px;
+        font-size: 14px;
       }
       .suggestion-arrow {
         color: var(--muted);
+        font-size: 18px;
         transition: transform 0.2s;
       }
       .suggestion.open .suggestion-arrow {
@@ -296,51 +306,63 @@ STUDIO_HTML = """<!doctype html>
       }
       .suggestion-body {
         display: none;
-        padding: 0 12px 12px;
-        font-size: 13px;
+        padding: 0 16px 16px;
+        font-size: 14px;
         color: var(--muted);
-        line-height: 1.5;
+        line-height: 1.6;
       }
       .suggestion.open .suggestion-body {
         display: block;
       }
       .suggestion-why {
-        font-size: 11px;
+        font-size: 12px;
         color: var(--muted);
         opacity: 0.7;
-        margin-top: 8px;
-        padding-top: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
         border-top: 1px solid var(--border);
+        font-style: italic;
       }
       
       /* Generated text */
       .generated-text {
-        font-size: 14px;
-        line-height: 1.7;
+        font-size: 15px;
+        line-height: 1.8;
         white-space: pre-wrap;
       }
       
       /* Rewrite output */
+      .rewrites-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
       .rewrite-item {
-        background: rgba(0,0,0,0.2);
-        border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 10px;
+        background: rgba(0,0,0,0.25);
+        border-radius: 10px;
+        padding: 16px;
+        border-left: 3px solid var(--accent);
       }
       .rewrite-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .rewrite-rank {
+        font-size: 13px;
+        color: var(--muted);
       }
       .rewrite-score {
-        font-size: 12px;
+        font-size: 14px;
         color: var(--accent);
         font-weight: 600;
       }
       .rewrite-text {
-        font-size: 14px;
-        line-height: 1.6;
+        font-size: 15px;
+        line-height: 1.7;
         white-space: pre-wrap;
       }
       
@@ -348,10 +370,10 @@ STUDIO_HTML = """<!doctype html>
       .settings-toggle {
         display: flex;
         align-items: center;
-        gap: 6px;
-        padding: 10px 0;
+        gap: 8px;
+        padding: 12px 0;
         color: var(--muted);
-        font-size: 12px;
+        font-size: 13px;
         cursor: pointer;
         border: none;
         background: none;
@@ -366,18 +388,28 @@ STUDIO_HTML = """<!doctype html>
         padding-top: 8px;
       }
       .settings-content.open { display: block; }
-      .settings-row {
-        display: flex;
-        gap: 10px;
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
       }
-      .settings-row > div { flex: 1; }
       
       /* Status */
       .status {
         text-align: center;
-        padding: 10px;
+        padding: 12px;
         color: var(--muted);
-        font-size: 13px;
+        font-size: 14px;
+      }
+      
+      /* Responsive */
+      @media (max-width: 600px) {
+        .container { padding: 20px 16px 48px; }
+        h1 { font-size: 24px; }
+        .tabs { max-width: 100%; }
+        .score-header { flex-direction: column; text-align: center; gap: 16px; }
+        .score-circle { width: 72px; height: 72px; }
+        .score-number { font-size: 28px; }
       }
     </style>
   </head>
@@ -391,12 +423,13 @@ STUDIO_HTML = """<!doctype html>
       <div class="tabs">
         <button class="tab active" data-tab="score">Score</button>
         <button class="tab" data-tab="rewrite">Rewrite</button>
-        <button class="tab" data-tab="match">Match</button>
+        <button class="tab" data-tab="match">Match Cadence</button>
       </div>
       
       <!-- Score Panel -->
       <div id="panel-score" class="panel active">
         <div class="card">
+          <label>Your writing</label>
           <textarea id="score-text" placeholder="Paste your text here...">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
         </div>
         
@@ -407,22 +440,28 @@ STUDIO_HTML = """<!doctype html>
             <div class="score-circle">
               <span class="score-number" id="score-value">--</span>
             </div>
-            <div class="score-summary" id="score-summary">Analyzing your text...</div>
+            <div class="score-meta">
+              <div class="score-label">out of 100</div>
+              <div class="score-summary" id="score-summary">Analyzing your text...</div>
+            </div>
           </div>
           
-          <div class="text-legend">
-            <div class="legend-item">
-              <div class="legend-dot"></div>
-              <span>High-impact words (spikes)</span>
-            </div>
+          <div class="section-title">
+            Your text 
+            <span class="legend-hint">— highlighted words have high surprise (spikes)</span>
           </div>
           <div class="text-display" id="text-highlighted"></div>
           
-          <canvas id="cadence-chart" width="608" height="60"></canvas>
+          <div class="section-title">Cadence curve</div>
+          <div class="chart-container">
+            <canvas id="cadence-chart" width="852" height="80"></canvas>
+          </div>
           
+          <div class="section-title">Category scores</div>
           <div class="metrics" id="score-metrics"></div>
           
-          <div id="score-suggestions"></div>
+          <div class="section-title">Suggestions</div>
+          <div class="suggestions-list" id="score-suggestions"></div>
         </div>
         
         <div class="status" id="score-status"></div>
@@ -431,12 +470,12 @@ STUDIO_HTML = """<!doctype html>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Settings
+          Advanced settings
         </button>
         <div class="settings-content" id="score-settings">
-          <div class="settings-row">
+          <div class="settings-grid">
             <div>
-              <label>Type</label>
+              <label>Document type</label>
               <select id="doc-type">
                 <option value="prose">Prose</option>
                 <option value="poem">Poetry</option>
@@ -453,13 +492,15 @@ STUDIO_HTML = """<!doctype html>
       <!-- Rewrite Panel -->
       <div id="panel-rewrite" class="panel">
         <div class="card">
+          <label>Text to improve</label>
           <textarea id="rewrite-text" placeholder="Paste text to rewrite with better cadence..."></textarea>
         </div>
         
         <button class="btn" id="rewrite-btn">Rewrite</button>
         
         <div id="rewrite-result" class="result">
-          <div id="rewrite-output"></div>
+          <div class="section-title">Rewritten versions (ranked by score)</div>
+          <div class="rewrites-grid" id="rewrite-output"></div>
         </div>
         
         <div class="status" id="rewrite-status"></div>
@@ -468,12 +509,12 @@ STUDIO_HTML = """<!doctype html>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Settings
+          Advanced settings
         </button>
         <div class="settings-content" id="rewrite-settings">
-          <div class="settings-row">
+          <div class="settings-grid">
             <div>
-              <label>Candidates</label>
+              <label>Candidates to generate</label>
               <input type="number" id="rewrite-candidates" value="4" />
             </div>
             <div>
@@ -487,19 +528,20 @@ STUDIO_HTML = """<!doctype html>
       <!-- Match Panel -->
       <div id="panel-match" class="panel">
         <div class="card">
-          <label>Reference (cadence to match)</label>
-          <textarea id="match-reference" style="min-height:100px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again.</textarea>
+          <label>Reference text (cadence to match)</label>
+          <textarea id="match-reference" style="min-height:120px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again.</textarea>
         </div>
         
         <div class="card">
           <label>Your starting prompt</label>
-          <textarea id="match-prompt" style="min-height:60px;">The morning light crept through the window</textarea>
+          <textarea id="match-prompt" style="min-height:80px;">The morning light crept through the window</textarea>
         </div>
         
         <button class="btn" id="match-btn">Generate</button>
         
         <div id="match-result" class="result">
-          <div class="generated-text" id="match-output"></div>
+          <div class="section-title">Generated text</div>
+          <div class="text-display generated-text" id="match-output"></div>
         </div>
         
         <div class="status" id="match-status"></div>
@@ -508,12 +550,12 @@ STUDIO_HTML = """<!doctype html>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Settings
+          Advanced settings
         </button>
         <div class="settings-content" id="match-settings">
-          <div class="settings-row">
+          <div class="settings-grid">
             <div>
-              <label>Max tokens</label>
+              <label>Max tokens to generate</label>
               <input type="number" id="match-tokens" value="200" />
             </div>
             <div>
@@ -562,7 +604,6 @@ STUDIO_HTML = """<!doctype html>
       function highlightText(text, spikes) {
         if (!spikes || !spikes.length) return escapeHtml(text);
         
-        // Sort by char_start
         const sorted = [...spikes].sort((a, b) => a.char_start - b.char_start);
         let result = '';
         let lastEnd = 0;
@@ -570,7 +611,7 @@ STUDIO_HTML = """<!doctype html>
         for (const spike of sorted) {
           const start = spike.char_start;
           const end = spike.char_end;
-          if (start < lastEnd) continue; // overlapping
+          if (start < lastEnd) continue;
           
           result += escapeHtml(text.slice(lastEnd, start));
           const word = text.slice(start, end);
@@ -590,19 +631,25 @@ STUDIO_HTML = """<!doctype html>
       function drawCadence(series, threshold) {
         const canvas = $('cadence-chart');
         const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        
         if (!series || series.length < 2) return;
         
         let min = Math.min(...series), max = Math.max(...series);
         if (max - min < 0.1) { min = 0; max = 10; }
         
-        const pad = 8, w = canvas.width - pad*2, h = canvas.height - pad*2;
+        const pad = 12, w = rect.width - pad*2, h = rect.height - pad*2;
         const xAt = i => pad + (i / (series.length - 1)) * w;
         const yAt = v => pad + (1 - (v - min) / (max - min)) * h;
         
         if (threshold) {
           ctx.strokeStyle = 'rgba(239,68,68,0.3)';
-          ctx.setLineDash([3,3]);
+          ctx.setLineDash([4,4]);
           ctx.beginPath();
           ctx.moveTo(pad, yAt(threshold));
           ctx.lineTo(pad + w, yAt(threshold));
@@ -611,7 +658,7 @@ STUDIO_HTML = """<!doctype html>
         }
         
         ctx.strokeStyle = '#6366f1';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(xAt(0), yAt(series[0]));
         for (let i = 1; i < series.length; i++) ctx.lineTo(xAt(i), yAt(series[i]));
@@ -668,24 +715,21 @@ STUDIO_HTML = """<!doctype html>
           // Suggestions
           const suggestions = data.critique?.suggestions || [];
           if (suggestions.length) {
-            $('score-suggestions').innerHTML = `
-              <div class="suggestions-title">Suggestions</div>
-              ${suggestions.slice(0, 4).map(s => `
-                <div class="suggestion">
-                  <div class="suggestion-header">
-                    <span class="suggestion-title">${s.title || ''}</span>
-                    <span class="suggestion-arrow">›</span>
-                  </div>
-                  <div class="suggestion-body">
-                    ${s.what_to_try || ''}
-                    ${s.why ? `<div class="suggestion-why">${s.why}</div>` : ''}
-                  </div>
+            $('score-suggestions').innerHTML = suggestions.slice(0, 4).map(s => `
+              <div class="suggestion">
+                <div class="suggestion-header">
+                  <span class="suggestion-title">${s.title || ''}</span>
+                  <span class="suggestion-arrow">›</span>
                 </div>
-              `).join('')}
-            `;
+                <div class="suggestion-body">
+                  ${s.what_to_try || ''}
+                  ${s.why ? `<div class="suggestion-why">${s.why}</div>` : ''}
+                </div>
+              </div>
+            `).join('');
             setupSuggestionToggles();
           } else {
-            $('score-suggestions').innerHTML = '';
+            $('score-suggestions').innerHTML = '<p style="color:var(--muted);font-size:14px;">No suggestions.</p>';
           }
           
           $('score-result').classList.add('visible');
@@ -702,7 +746,7 @@ STUDIO_HTML = """<!doctype html>
         const btn = $('rewrite-btn');
         const status = $('rewrite-status');
         btn.disabled = true;
-        status.textContent = 'Rewriting... (may take a minute)';
+        status.textContent = 'Rewriting... (this may take a minute)';
         $('rewrite-result').classList.remove('visible');
         
         try {
@@ -719,7 +763,7 @@ STUDIO_HTML = """<!doctype html>
           $('rewrite-output').innerHTML = rewrites.length ? rewrites.map((r, i) => `
             <div class="rewrite-item">
               <div class="rewrite-header">
-                <span style="font-size:12px;color:var(--muted);">Version ${i + 1}</span>
+                <span class="rewrite-rank">#${i + 1}</span>
                 <span class="rewrite-score">Score: ${Math.round(r.score || 0)}</span>
               </div>
               <div class="rewrite-text">${escapeHtml(r.text || '')}</div>
@@ -758,6 +802,14 @@ STUDIO_HTML = """<!doctype html>
           status.textContent = 'Error: ' + e.message;
         } finally {
           btn.disabled = false;
+        }
+      });
+      
+      // Resize handler for canvas
+      window.addEventListener('resize', () => {
+        const canvas = $('cadence-chart');
+        if (canvas._lastSeries) {
+          drawCadence(canvas._lastSeries, canvas._lastThreshold);
         }
       });
     </script>
