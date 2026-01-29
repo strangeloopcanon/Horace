@@ -30,6 +30,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
+# Force rebuild version: 2026-01-29-ui-overhaul-v2
 
 # Request models defined at module level for FastAPI compatibility
 class AnalyzeReq(BaseModel):
@@ -339,6 +340,10 @@ def fastapi_app():  # pragma: no cover
     from fastapi.responses import HTMLResponse, JSONResponse
     from typing import Dict, Any
 
+    # Reload studio site to ensure latest version
+    import tools.studio.site
+    import importlib
+    importlib.reload(tools.studio.site)
     from tools.studio.site import STUDIO_HTML
 
     web = FastAPI(title="Horace")
