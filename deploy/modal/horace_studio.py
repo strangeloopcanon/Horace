@@ -28,6 +28,50 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from pydantic import BaseModel, Field
+
+
+# Request models defined at module level for FastAPI compatibility
+class AnalyzeReq(BaseModel):
+    text: str = Field(min_length=1, max_length=50_000)
+    doc_type: str = "prose"
+    scorer_model_path: str = ""
+    scorer_max_length: int = 384
+    fast_only: bool = False
+    scoring_model_id: str = "gpt2"
+    baseline_model: str = "gpt2_gutenberg_512"
+    baseline_model_id: Optional[str] = None
+    max_input_tokens: int = 512
+    normalize_text: bool = True
+    calibrator_path: str = ""
+
+
+class RewriteReq(BaseModel):
+    text: str = Field(min_length=1, max_length=50_000)
+    doc_type: str = "prose"
+    rewrite_model_id: str = "gpt2"
+    scoring_model_id: str = "gpt2"
+    baseline_model: str = "gpt2_gutenberg_512"
+    baseline_model_id: Optional[str] = None
+    n_candidates: int = 4
+    keep_top: int = 3
+    max_input_tokens: int = 512
+    max_new_tokens: int = 300
+    temperature: float = 0.8
+    top_p: float = 0.92
+    seed: Optional[int] = 7
+    normalize_text: bool = True
+    calibrator_path: str = ""
+
+
+class WriteLikeReq(BaseModel):
+    prompt: str = Field(default="", max_length=10_000)
+    reference_text: str = Field(min_length=1, max_length=50_000)
+    doc_type: str = "prose"
+    model_id: str = "gpt2"
+    max_new_tokens: int = 200
+    seed: Optional[int] = 7
+
 
 def _lazy_import_modal():
     try:
@@ -65,7 +109,7 @@ image = (
         "numpy>=1.24.0",
         "transformers>=4.40.0",
         "safetensors>=0.4.0",
-        "fastapi>=0.110.0",
+        "fastapi==0.115.6",
         "pydantic>=2.6.0",
     )
 )
@@ -289,54 +333,49 @@ def write_like_remote(
 @modal.asgi_app()
 def fastapi_app():  # pragma: no cover
     _bootstrap_repo()
-    from fastapi import FastAPI
-    from pydantic import BaseModel, Field
-    from fastapi.responses import HTMLResponse
+    import time
+    from collections import defaultdict
+    from fastapi import FastAPI, Body, Request
+    from fastapi.responses import HTMLResponse, JSONResponse
+    from typing import Dict, Any
 
     from tools.studio.site import STUDIO_HTML
 
     web = FastAPI(title="Horace Studio API")
 
-    class AnalyzeReq(BaseModel):
-        text: str = Field(min_length=1, max_length=50_000)
-        doc_type: str = "prose"
-        scorer_model_path: str = ""
-        scorer_max_length: int = 384
-        fast_only: bool = False
-        scoring_model_id: str = "gpt2"
-        baseline_model: str = "gpt2_gutenberg_512"
-        baseline_model_id: Optional[str] = None
-        max_input_tokens: int = 512
-        normalize_text: bool = True
-        calibrator_path: str = ""
+    # Simple in-memory rate limiting (per container)
+    _rate_limits: Dict[str, list] = defaultdict(list)
+    RATE_LIMIT = 30  # requests per minute per IP
+    RATE_WINDOW = 60  # seconds
 
-    class RewriteReq(BaseModel):
-        text: str = Field(min_length=1, max_length=50_000)
-        doc_type: str = "prose"
-        rewrite_model_id: str = "gpt2"
-        scoring_model_id: str = "gpt2"
-        baseline_model: str = "gpt2_gutenberg_512"
-        baseline_model_id: Optional[str] = None
-        n_candidates: int = 4
-        keep_top: int = 3
-        max_input_tokens: int = 512
-        max_new_tokens: int = 300
-        temperature: float = 0.8
-        top_p: float = 0.92
-        seed: Optional[int] = 7
-        normalize_text: bool = True
-        calibrator_path: str = ""
+    @web.middleware("http")
+    async def rate_limit_middleware(request: Request, call_next):
+        # Skip rate limiting for static assets and healthz
+        if request.url.path in ("/", "/docs", "/openapi.json", "/healthz"):
+            return await call_next(request)
 
-    class WriteLikeReq(BaseModel):
-        prompt: str = Field(default="", max_length=10_000)
-        reference_text: str = Field(min_length=1, max_length=50_000)
-        doc_type: str = "prose"
-        model_id: str = "gpt2"
-        max_new_tokens: int = 200
-        seed: Optional[int] = 7
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+
+        # Clean old entries and add new request
+        _rate_limits[client_ip] = [t for t in _rate_limits[client_ip] if now - t < RATE_WINDOW]
+
+        if len(_rate_limits[client_ip]) >= RATE_LIMIT:
+            return JSONResponse(
+                {"error": "Rate limit exceeded. Please wait a minute before trying again."},
+                status_code=429
+            )
+
+        _rate_limits[client_ip].append(now)
+        return await call_next(request)
+
+    @web.get("/healthz")
+    def healthz():
+        return {"ok": True}
 
     @web.post("/analyze")
-    async def analyze(req: AnalyzeReq):
+    async def analyze(body: Dict[str, Any] = Body(...)):
+        req = AnalyzeReq(**body)
         baseline = (req.baseline_model_id or req.baseline_model or "gpt2").strip()
         return analyze_remote.remote(
             req.text,
@@ -352,7 +391,8 @@ def fastapi_app():  # pragma: no cover
         )
 
     @web.post("/rewrite")
-    async def rewrite(req: RewriteReq):
+    async def rewrite(body: Dict[str, Any] = Body(...)):
+        req = RewriteReq(**body)
         baseline = (req.baseline_model_id or req.baseline_model or "gpt2").strip()
         return rewrite_remote.remote(
             req.text,
@@ -373,7 +413,8 @@ def fastapi_app():  # pragma: no cover
 
     @web.post("/write-like")
     @web.post("/cadence-match")
-    async def cadence_match(req: WriteLikeReq):
+    async def cadence_match(body: Dict[str, Any] = Body(...)):
+        req = WriteLikeReq(**body)
         return write_like_remote.remote(
             req.prompt,
             reference_text=req.reference_text,

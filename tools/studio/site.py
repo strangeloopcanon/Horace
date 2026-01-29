@@ -295,6 +295,51 @@ A gull lifts, then drops, then lifts again.</textarea>
           </details>
         </div>
       </div>
+
+      <!-- Cadence Match Section -->
+      <div style="margin-top: 24px;">
+        <div class="card">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+            <div>
+              <div style="font-size: 16px; font-weight: 600;">Cadence Match</div>
+              <div class="sub">Generate text that matches the rhythm of a reference passage.</div>
+            </div>
+            <div class="pill">/cadence-match</div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="cm_prompt">Your prompt (starting text)</label>
+              <textarea id="cm_prompt" style="min-height: 80px;">The morning light crept through the window</textarea>
+            </div>
+            <div>
+              <label for="cm_reference">Reference text (cadence to match)</label>
+              <textarea id="cm_reference" style="min-height: 80px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Max new tokens</label>
+              <input id="cm_max_new_tokens" type="number" value="200" min="32" step="16" />
+            </div>
+            <div>
+              <label>Seed (optional)</label>
+              <input id="cm_seed" type="number" value="7" />
+            </div>
+          </div>
+          <div class="btns">
+            <button id="cm_btn">Generate matching cadence</button>
+          </div>
+          <div id="cm_status" class="status"></div>
+          <div class="box" style="margin-top: 14px;">
+            <div class="muted" style="font-size: 12px;">Generated text</div>
+            <pre id="cm_output" style="margin-top: 8px; white-space: pre-wrap; color: var(--text);">(click "Generate matching cadence")</pre>
+          </div>
+          <details class="box">
+            <summary>Cadence Match raw JSON</summary>
+            <pre id="cm_raw"></pre>
+          </details>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -562,6 +607,39 @@ A gull lifts, then drops, then lifts again.</textarea>
       el("rewrite_btn").addEventListener("click", runRewrite);
       el("copy_btn").addEventListener("click", copyRaw);
       drawSparkline([], null);
+
+      // Cadence Match
+      function setCmStatus(s) { el("cm_status").textContent = s; }
+
+      function buildCadenceMatchReq() {
+        const seedRaw = v("cm_seed").trim();
+        const seed = seedRaw ? Number(seedRaw) : null;
+        return {
+          prompt: v("cm_prompt"),
+          reference_text: v("cm_reference"),
+          doc_type: v("doc_type"),
+          model_id: "gpt2",
+          max_new_tokens: vn("cm_max_new_tokens", 200),
+          seed: (seed !== null && Number.isFinite(seed)) ? Math.trunc(seed) : null,
+        };
+      }
+
+      async function runCadenceMatch() {
+        el("cm_btn").disabled = true;
+        setCmStatus("Generating… (first call may download models)");
+        try {
+          const out = await postJson("/cadence-match", buildCadenceMatchReq());
+          el("cm_output").textContent = out?.generated_text || out?.text || "(no text returned)";
+          el("cm_raw").textContent = JSON.stringify(out, null, 2);
+          setCmStatus("Done.");
+        } catch (e) {
+          setCmStatus("Error: " + (e?.message || e));
+        } finally {
+          el("cm_btn").disabled = false;
+        }
+      }
+
+      el("cm_btn").addEventListener("click", runCadenceMatch);
     </script>
   </body>
 </html>
