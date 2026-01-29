@@ -16,7 +16,9 @@ STUDIO_HTML = """<!doctype html>
         --muted: #9ca3af;
         --accent: #6366f1;
         --accent-hover: #818cf8;
+        --accent-dim: rgba(99, 102, 241, 0.15);
         --success: #10b981;
+        --warning: #f59e0b;
         --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
@@ -29,43 +31,46 @@ STUDIO_HTML = """<!doctype html>
         line-height: 1.5;
       }
       .container {
-        max-width: 720px;
+        max-width: 640px;
         margin: 0 auto;
-        padding: 32px 20px 64px;
+        padding: 24px 16px 48px;
+      }
+      @media (max-width: 480px) {
+        .container { padding: 16px 12px 32px; }
       }
       header {
         text-align: center;
-        margin-bottom: 32px;
+        margin-bottom: 24px;
       }
       h1 {
-        font-size: 28px;
+        font-size: 24px;
         font-weight: 600;
         letter-spacing: -0.5px;
       }
       .tagline {
         color: var(--muted);
-        font-size: 15px;
-        margin-top: 6px;
+        font-size: 14px;
+        margin-top: 4px;
       }
       
       /* Tabs */
       .tabs {
         display: flex;
-        gap: 4px;
+        gap: 2px;
         background: var(--card);
-        padding: 4px;
-        border-radius: 12px;
-        margin-bottom: 24px;
+        padding: 3px;
+        border-radius: 10px;
+        margin-bottom: 16px;
       }
       .tab {
         flex: 1;
-        padding: 10px 16px;
+        padding: 8px 12px;
         border: none;
         background: transparent;
         color: var(--muted);
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 500;
-        border-radius: 8px;
+        border-radius: 7px;
         cursor: pointer;
         transition: all 0.15s;
       }
@@ -83,175 +88,270 @@ STUDIO_HTML = """<!doctype html>
       .card {
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 16px;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
       }
       label {
         display: block;
-        font-size: 13px;
+        font-size: 12px;
         color: var(--muted);
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
       textarea {
         width: 100%;
-        min-height: 180px;
-        padding: 14px;
+        min-height: 140px;
+        padding: 12px;
         background: rgba(0,0,0,0.3);
         border: 1px solid var(--border);
-        border-radius: 12px;
+        border-radius: 10px;
         color: var(--text);
         font-family: var(--sans);
-        font-size: 15px;
+        font-size: 14px;
         line-height: 1.6;
         resize: vertical;
         outline: none;
       }
-      textarea:focus {
-        border-color: var(--accent);
-      }
-      textarea::placeholder {
-        color: var(--muted);
-        opacity: 0.6;
-      }
+      textarea:focus { border-color: var(--accent); }
+      textarea::placeholder { color: var(--muted); opacity: 0.6; }
       input[type="number"], input[type="text"], select {
         width: 100%;
-        padding: 10px 12px;
+        padding: 8px 10px;
         background: rgba(0,0,0,0.3);
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 6px;
         color: var(--text);
-        font-size: 14px;
+        font-size: 13px;
         outline: none;
       }
-      input:focus, select:focus {
-        border-color: var(--accent);
-      }
+      input:focus, select:focus { border-color: var(--accent); }
       
       /* Buttons */
       .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 12px 24px;
+        display: block;
+        width: 100%;
+        padding: 12px 20px;
         background: var(--accent);
         color: white;
         border: none;
         border-radius: 10px;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 500;
         cursor: pointer;
         transition: background 0.15s;
-        width: 100%;
       }
       .btn:hover { background: var(--accent-hover); }
-      .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
       
       /* Results */
       .result {
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 24px;
-        margin-top: 20px;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 16px;
         display: none;
       }
       .result.visible { display: block; }
-      .score-display {
-        text-align: center;
-        padding: 20px 0;
+      
+      /* Score header */
+      .score-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .score-circle {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: var(--accent-dim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
       }
       .score-number {
-        font-size: 64px;
+        font-size: 28px;
         font-weight: 700;
         color: var(--accent);
-        line-height: 1;
-      }
-      .score-label {
-        font-size: 14px;
-        color: var(--muted);
-        margin-top: 4px;
       }
       .score-summary {
-        text-align: center;
+        font-size: 14px;
         color: var(--muted);
-        font-size: 15px;
-        margin-top: 16px;
-        padding: 0 20px;
+        line-height: 1.5;
       }
-      .divider {
-        height: 1px;
-        background: var(--border);
-        margin: 20px 0;
+      
+      /* Highlighted text */
+      .text-display {
+        background: rgba(0,0,0,0.2);
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.7;
+        margin-bottom: 16px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
       }
-      .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
+      .spike {
+        background: rgba(251, 191, 36, 0.25);
+        border-bottom: 2px solid #fbbf24;
+        padding: 1px 2px;
+        border-radius: 2px;
+        cursor: help;
+      }
+      .spike:hover {
+        background: rgba(251, 191, 36, 0.4);
+      }
+      .text-legend {
+        display: flex;
+        gap: 16px;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        background: rgba(251, 191, 36, 0.25);
+        border-bottom: 2px solid #fbbf24;
+      }
+      
+      /* Metrics */
+      .metrics {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
       }
       .metric {
+        flex: 1;
+        min-width: 70px;
         background: rgba(0,0,0,0.2);
-        padding: 14px;
-        border-radius: 10px;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .metric-value {
+        font-size: 18px;
+        font-weight: 600;
       }
       .metric-label {
+        font-size: 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-top: 2px;
+      }
+      
+      /* Canvas */
+      canvas {
+        width: 100%;
+        height: 60px;
+        border-radius: 8px;
+        background: rgba(0,0,0,0.2);
+        margin-bottom: 16px;
+      }
+      
+      /* Suggestions */
+      .suggestions-title {
         font-size: 12px;
         color: var(--muted);
         text-transform: uppercase;
         letter-spacing: 0.5px;
-      }
-      .metric-value {
-        font-size: 20px;
-        font-weight: 600;
-        margin-top: 4px;
-      }
-      
-      /* Suggestions */
-      .suggestions {
-        margin-top: 20px;
-      }
-      .suggestions h3 {
-        font-size: 14px;
-        color: var(--muted);
-        margin-bottom: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-      .suggestion {
-        padding: 14px;
-        background: rgba(0,0,0,0.2);
-        border-radius: 10px;
         margin-bottom: 10px;
       }
-      .suggestion-title {
-        font-weight: 600;
-        font-size: 14px;
-        margin-bottom: 4px;
+      .suggestion {
+        background: rgba(0,0,0,0.2);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        overflow: hidden;
       }
-      .suggestion-text {
-        font-size: 14px;
+      .suggestion-header {
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .suggestion-header:hover {
+        background: rgba(255,255,255,0.03);
+      }
+      .suggestion-title {
+        font-weight: 500;
+        font-size: 13px;
+      }
+      .suggestion-arrow {
         color: var(--muted);
+        transition: transform 0.2s;
+      }
+      .suggestion.open .suggestion-arrow {
+        transform: rotate(90deg);
+      }
+      .suggestion-body {
+        display: none;
+        padding: 0 12px 12px;
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .suggestion.open .suggestion-body {
+        display: block;
+      }
+      .suggestion-why {
+        font-size: 11px;
+        color: var(--muted);
+        opacity: 0.7;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
       }
       
       /* Generated text */
       .generated-text {
-        font-size: 15px;
+        font-size: 14px;
         line-height: 1.7;
         white-space: pre-wrap;
       }
       
-      /* Settings collapse */
+      /* Rewrite output */
+      .rewrite-item {
+        background: rgba(0,0,0,0.2);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+      .rewrite-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .rewrite-score {
+        font-size: 12px;
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .rewrite-text {
+        font-size: 14px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+      
+      /* Settings */
       .settings-toggle {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 12px 0;
+        gap: 6px;
+        padding: 10px 0;
         color: var(--muted);
-        font-size: 13px;
+        font-size: 12px;
         cursor: pointer;
         border: none;
         background: none;
@@ -259,54 +359,25 @@ STUDIO_HTML = """<!doctype html>
         text-align: left;
       }
       .settings-toggle:hover { color: var(--text); }
-      .settings-toggle svg {
-        transition: transform 0.2s;
-      }
-      .settings-toggle.open svg {
-        transform: rotate(90deg);
-      }
+      .settings-toggle svg { transition: transform 0.2s; }
+      .settings-toggle.open svg { transform: rotate(90deg); }
       .settings-content {
         display: none;
-        padding-top: 12px;
+        padding-top: 8px;
       }
-      .settings-content.open {
-        display: block;
-      }
-      .settings-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-      }
-      .settings-grid > div {
+      .settings-content.open { display: block; }
+      .settings-row {
         display: flex;
-        flex-direction: column;
+        gap: 10px;
       }
+      .settings-row > div { flex: 1; }
       
       /* Status */
       .status {
         text-align: center;
-        padding: 12px;
-        color: var(--muted);
-        font-size: 14px;
-      }
-      
-      /* Cadence chart placeholder */
-      .chart-placeholder {
-        height: 100px;
-        background: rgba(0,0,0,0.2);
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        padding: 10px;
         color: var(--muted);
         font-size: 13px;
-      }
-      
-      canvas {
-        width: 100%;
-        height: 100px;
-        border-radius: 10px;
-        background: rgba(0,0,0,0.2);
       }
     </style>
   </head>
@@ -320,54 +391,55 @@ STUDIO_HTML = """<!doctype html>
       <div class="tabs">
         <button class="tab active" data-tab="score">Score</button>
         <button class="tab" data-tab="rewrite">Rewrite</button>
-        <button class="tab" data-tab="match">Match Cadence</button>
+        <button class="tab" data-tab="match">Match</button>
       </div>
       
       <!-- Score Panel -->
       <div id="panel-score" class="panel active">
         <div class="card">
-          <label>Your writing</label>
-          <textarea id="score-text" placeholder="Paste your text here...">At dawn, the city leans into light.
-A gull lifts, then drops, then lifts again.</textarea>
+          <textarea id="score-text" placeholder="Paste your text here...">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
         </div>
         
         <button class="btn" id="score-btn">Analyze</button>
         
         <div id="score-result" class="result">
-          <div class="score-display">
-            <div class="score-number" id="score-value">--</div>
-            <div class="score-label">out of 100</div>
+          <div class="score-header">
+            <div class="score-circle">
+              <span class="score-number" id="score-value">--</span>
+            </div>
+            <div class="score-summary" id="score-summary">Analyzing your text...</div>
           </div>
-          <p class="score-summary" id="score-summary"></p>
           
-          <div class="divider"></div>
+          <div class="text-legend">
+            <div class="legend-item">
+              <div class="legend-dot"></div>
+              <span>High-impact words (spikes)</span>
+            </div>
+          </div>
+          <div class="text-display" id="text-highlighted"></div>
           
-          <canvas id="cadence-chart" width="680" height="100"></canvas>
+          <canvas id="cadence-chart" width="608" height="60"></canvas>
           
-          <div class="divider"></div>
+          <div class="metrics" id="score-metrics"></div>
           
-          <div class="metrics-grid" id="score-metrics"></div>
-          
-          <div class="suggestions" id="score-suggestions"></div>
+          <div id="score-suggestions"></div>
         </div>
         
         <div class="status" id="score-status"></div>
         
         <button class="settings-toggle" id="score-settings-toggle">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Advanced settings
+          Settings
         </button>
         <div class="settings-content" id="score-settings">
-          <div class="settings-grid">
+          <div class="settings-row">
             <div>
-              <label>Document type</label>
+              <label>Type</label>
               <select id="doc-type">
                 <option value="prose">Prose</option>
                 <option value="poem">Poetry</option>
-                <option value="shortstory">Short story</option>
-                <option value="novel">Novel excerpt</option>
               </select>
             </div>
             <div>
@@ -381,70 +453,67 @@ A gull lifts, then drops, then lifts again.</textarea>
       <!-- Rewrite Panel -->
       <div id="panel-rewrite" class="panel">
         <div class="card">
-          <label>Text to improve</label>
-          <textarea id="rewrite-text" placeholder="Paste text you want to rewrite with better cadence..."></textarea>
+          <textarea id="rewrite-text" placeholder="Paste text to rewrite with better cadence..."></textarea>
         </div>
         
         <button class="btn" id="rewrite-btn">Rewrite</button>
         
         <div id="rewrite-result" class="result">
-          <h3 style="font-size: 14px; color: var(--muted); margin-bottom: 16px;">Rewritten versions (ranked by score)</h3>
           <div id="rewrite-output"></div>
         </div>
         
         <div class="status" id="rewrite-status"></div>
         
         <button class="settings-toggle" id="rewrite-settings-toggle">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Advanced settings
+          Settings
         </button>
         <div class="settings-content" id="rewrite-settings">
-          <div class="settings-grid">
+          <div class="settings-row">
             <div>
               <label>Candidates</label>
-              <input type="number" id="rewrite-candidates" value="4" min="1" max="8" />
+              <input type="number" id="rewrite-candidates" value="4" />
             </div>
             <div>
               <label>Temperature</label>
-              <input type="number" id="rewrite-temp" value="0.8" step="0.1" min="0.1" max="1.5" />
+              <input type="number" id="rewrite-temp" value="0.8" step="0.1" />
             </div>
           </div>
         </div>
       </div>
       
-      <!-- Match Cadence Panel -->
+      <!-- Match Panel -->
       <div id="panel-match" class="panel">
         <div class="card">
-          <label>Reference text (cadence to match)</label>
-          <textarea id="match-reference" placeholder="Paste a passage whose rhythm you want to emulate...">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
+          <label>Reference (cadence to match)</label>
+          <textarea id="match-reference" style="min-height:100px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again.</textarea>
         </div>
         
         <div class="card">
           <label>Your starting prompt</label>
-          <textarea id="match-prompt" style="min-height: 80px;" placeholder="Start of your new text...">The morning light crept through the window</textarea>
+          <textarea id="match-prompt" style="min-height:60px;">The morning light crept through the window</textarea>
         </div>
         
         <button class="btn" id="match-btn">Generate</button>
         
         <div id="match-result" class="result">
-          <label style="margin-bottom: 12px;">Generated text</label>
           <div class="generated-text" id="match-output"></div>
         </div>
         
         <div class="status" id="match-status"></div>
         
         <button class="settings-toggle" id="match-settings-toggle">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Advanced settings
+          Settings
         </button>
         <div class="settings-content" id="match-settings">
-          <div class="settings-grid">
+          <div class="settings-row">
             <div>
-              <label>Max new tokens</label>
+              <label>Max tokens</label>
               <input type="number" id="match-tokens" value="200" />
             </div>
             <div>
@@ -478,43 +547,62 @@ A gull lifts, then drops, then lifts again.</textarea>
         });
       });
       
-      // API helper
+      // API
       async function api(endpoint, body) {
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(err);
-        }
+        if (!res.ok) throw new Error(await res.text());
         return res.json();
       }
       
-      // Draw cadence chart
+      // Highlight text with spikes
+      function highlightText(text, spikes) {
+        if (!spikes || !spikes.length) return escapeHtml(text);
+        
+        // Sort by char_start
+        const sorted = [...spikes].sort((a, b) => a.char_start - b.char_start);
+        let result = '';
+        let lastEnd = 0;
+        
+        for (const spike of sorted) {
+          const start = spike.char_start;
+          const end = spike.char_end;
+          if (start < lastEnd) continue; // overlapping
+          
+          result += escapeHtml(text.slice(lastEnd, start));
+          const word = text.slice(start, end);
+          const title = `Surprisal: ${spike.surprisal?.toFixed(1) || '?'}`;
+          result += `<span class="spike" title="${title}">${escapeHtml(word)}</span>`;
+          lastEnd = end;
+        }
+        result += escapeHtml(text.slice(lastEnd));
+        return result;
+      }
+      
+      function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+      
+      // Cadence chart
       function drawCadence(series, threshold) {
         const canvas = $('cadence-chart');
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
         if (!series || series.length < 2) return;
         
-        const n = series.length;
-        let min = Math.min(...series);
-        let max = Math.max(...series);
+        let min = Math.min(...series), max = Math.max(...series);
         if (max - min < 0.1) { min = 0; max = 10; }
         
-        const pad = 10;
-        const w = canvas.width - pad * 2;
-        const h = canvas.height - pad * 2;
-        const xAt = i => pad + (i / (n - 1)) * w;
+        const pad = 8, w = canvas.width - pad*2, h = canvas.height - pad*2;
+        const xAt = i => pad + (i / (series.length - 1)) * w;
         const yAt = v => pad + (1 - (v - min) / (max - min)) * h;
         
-        // Threshold line
         if (threshold) {
-          ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
-          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = 'rgba(239,68,68,0.3)';
+          ctx.setLineDash([3,3]);
           ctx.beginPath();
           ctx.moveTo(pad, yAt(threshold));
           ctx.lineTo(pad + w, yAt(threshold));
@@ -522,13 +610,21 @@ A gull lifts, then drops, then lifts again.</textarea>
           ctx.setLineDash([]);
         }
         
-        // Series
         ctx.strokeStyle = '#6366f1';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(xAt(0), yAt(series[0]));
-        for (let i = 1; i < n; i++) ctx.lineTo(xAt(i), yAt(series[i]));
+        for (let i = 1; i < series.length; i++) ctx.lineTo(xAt(i), yAt(series[i]));
         ctx.stroke();
+      }
+      
+      // Suggestion toggle
+      function setupSuggestionToggles() {
+        $$('.suggestion-header').forEach(h => {
+          h.addEventListener('click', () => {
+            h.parentElement.classList.toggle('open');
+          });
+        });
       }
       
       // Score
@@ -540,8 +636,9 @@ A gull lifts, then drops, then lifts again.</textarea>
         $('score-result').classList.remove('visible');
         
         try {
+          const text = $('score-text').value;
           const data = await api('/analyze', {
-            text: $('score-text').value,
+            text,
             doc_type: $('doc-type').value,
             max_input_tokens: parseInt($('max-tokens').value) || 512,
             normalize_text: true
@@ -550,39 +647,46 @@ A gull lifts, then drops, then lifts again.</textarea>
           // Score
           const score = Math.round(data.score?.overall_0_100 || 0);
           $('score-value').textContent = score;
+          $('score-summary').textContent = data.critique?.summary || '';
           
-          // Summary from critique
-          const summary = data.critique?.summary || '';
-          $('score-summary').textContent = summary;
+          // Highlighted text
+          const spikes = data.analysis?.spikes || [];
+          $('text-highlighted').innerHTML = highlightText(text, spikes);
           
           // Metrics
           const cats = data.score?.categories || {};
-          const metricsHtml = Object.entries(cats).map(([k, v]) => `
+          $('score-metrics').innerHTML = Object.entries(cats).map(([k, v]) => `
             <div class="metric">
-              <div class="metric-label">${k}</div>
               <div class="metric-value">${Math.round(v * 100)}</div>
+              <div class="metric-label">${k}</div>
             </div>
           `).join('');
-          $('score-metrics').innerHTML = metricsHtml;
+          
+          // Cadence
+          drawCadence(data.analysis?.series?.surprisal, data.analysis?.series?.threshold_surprisal);
           
           // Suggestions
           const suggestions = data.critique?.suggestions || [];
           if (suggestions.length) {
-            const sugHtml = suggestions.slice(0, 3).map(s => `
-              <div class="suggestion">
-                <div class="suggestion-title">${s.title || ''}</div>
-                <div class="suggestion-text">${s.what_to_try || ''}</div>
-              </div>
-            `).join('');
-            $('score-suggestions').innerHTML = '<h3>Suggestions</h3>' + sugHtml;
+            $('score-suggestions').innerHTML = `
+              <div class="suggestions-title">Suggestions</div>
+              ${suggestions.slice(0, 4).map(s => `
+                <div class="suggestion">
+                  <div class="suggestion-header">
+                    <span class="suggestion-title">${s.title || ''}</span>
+                    <span class="suggestion-arrow">›</span>
+                  </div>
+                  <div class="suggestion-body">
+                    ${s.what_to_try || ''}
+                    ${s.why ? `<div class="suggestion-why">${s.why}</div>` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            `;
+            setupSuggestionToggles();
           } else {
             $('score-suggestions').innerHTML = '';
           }
-          
-          // Cadence chart
-          const series = data.analysis?.series?.surprisal || [];
-          const threshold = data.analysis?.series?.threshold_surprisal;
-          drawCadence(series, threshold);
           
           $('score-result').classList.add('visible');
           status.textContent = '';
@@ -598,7 +702,7 @@ A gull lifts, then drops, then lifts again.</textarea>
         const btn = $('rewrite-btn');
         const status = $('rewrite-status');
         btn.disabled = true;
-        status.textContent = 'Rewriting... (this may take a minute)';
+        status.textContent = 'Rewriting... (may take a minute)';
         $('rewrite-result').classList.remove('visible');
         
         try {
@@ -612,14 +716,16 @@ A gull lifts, then drops, then lifts again.</textarea>
           });
           
           const rewrites = data.rewrites || [];
-          const html = rewrites.map((r, i) => `
-            <div class="suggestion" style="margin-bottom: 16px;">
-              <div class="suggestion-title">Version ${i + 1} — Score: ${Math.round(r.score || 0)}</div>
-              <div style="margin-top: 10px; white-space: pre-wrap; line-height: 1.6;">${r.text || ''}</div>
+          $('rewrite-output').innerHTML = rewrites.length ? rewrites.map((r, i) => `
+            <div class="rewrite-item">
+              <div class="rewrite-header">
+                <span style="font-size:12px;color:var(--muted);">Version ${i + 1}</span>
+                <span class="rewrite-score">Score: ${Math.round(r.score || 0)}</span>
+              </div>
+              <div class="rewrite-text">${escapeHtml(r.text || '')}</div>
             </div>
-          `).join('');
+          `).join('') : '<p style="color:var(--muted);font-size:14px;">No rewrites generated.</p>';
           
-          $('rewrite-output').innerHTML = html || '<p style="color: var(--muted);">No rewrites generated.</p>';
           $('rewrite-result').classList.add('visible');
           status.textContent = '';
         } catch (e) {
@@ -629,7 +735,7 @@ A gull lifts, then drops, then lifts again.</textarea>
         }
       });
       
-      // Match Cadence
+      // Match
       $('match-btn').addEventListener('click', async () => {
         const btn = $('match-btn');
         const status = $('match-status');
@@ -645,7 +751,7 @@ A gull lifts, then drops, then lifts again.</textarea>
             seed: parseInt($('match-seed').value) || 7
           });
           
-          $('match-output').textContent = data.generated_text || data.text || '(no text generated)';
+          $('match-output').textContent = data.generated_text || data.text || '(no text)';
           $('match-result').classList.add('visible');
           status.textContent = '';
         } catch (e) {
