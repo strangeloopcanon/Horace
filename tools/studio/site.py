@@ -13,14 +13,15 @@ STUDIO_HTML = """<!doctype html>
         --card: #111827;
         --border: rgba(255, 255, 255, 0.08);
         --text: #f3f4f6;
-        --muted: #9ca3af;
-        --accent: #6366f1;
+        --text-secondary: #9ca3af;
+        --accent: #6366f1; /* Indigo - UI state */
         --accent-hover: #818cf8;
-        --accent-dim: rgba(99, 102, 241, 0.15);
-        --success: #10b981;
+        --score: #10b981; /* Emerald - Data/Score */
+        --score-dim: rgba(16, 185, 129, 0.15);
         --warning: #f59e0b;
         --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --ease: cubic-bezier(0.23, 1, 0.32, 1);
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -29,387 +30,360 @@ STUDIO_HTML = """<!doctype html>
         color: var(--text);
         min-height: 100vh;
         line-height: 1.5;
+        overflow-y: scroll;
       }
       .container {
         max-width: 900px;
         margin: 0 auto;
-        padding: 32px 24px 64px;
+        padding: 48px 24px 96px;
       }
+      
+      /* Typography */
       header {
         text-align: center;
-        margin-bottom: 32px;
+        margin-bottom: 40px;
+        animation: fade-in 0.6s var(--ease);
       }
       h1 {
-        font-size: 28px;
-        font-weight: 600;
-        letter-spacing: -0.5px;
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        background: linear-gradient(to right, #fff, #9ca3af);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
       .tagline {
-        color: var(--muted);
-        font-size: 15px;
-        margin-top: 6px;
+        color: var(--text-secondary);
+        font-size: 16px;
+        margin-top: 8px;
       }
+      
+      /* Animations */
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .fade-in { animation: fade-in 0.4s var(--ease) forwards; }
       
       /* Tabs */
       .tabs {
         display: flex;
         gap: 4px;
-        background: var(--card);
+        background: rgba(255,255,255,0.03);
         padding: 4px;
         border-radius: 12px;
-        margin-bottom: 24px;
-        max-width: 400px;
+        margin-bottom: 32px;
+        max-width: 420px;
         margin-left: auto;
         margin-right: auto;
+        border: 1px solid var(--border);
       }
       .tab {
         flex: 1;
-        padding: 10px 20px;
+        padding: 10px 16px;
         border: none;
         background: transparent;
-        color: var(--muted);
+        color: var(--text-secondary);
         font-size: 14px;
         font-weight: 500;
         border-radius: 8px;
         cursor: pointer;
-        transition: all 0.15s;
+        transition: all 0.2s var(--ease);
       }
-      .tab:hover { color: var(--text); }
+      .tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
       .tab.active {
         background: var(--accent);
         color: white;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
       }
       
       /* Panels */
       .panel { display: none; }
-      .panel.active { display: block; }
+      .panel.active { display: block; animation: fade-in 0.3s var(--ease); }
       
-      /* Form elements */
+      /* Cards & Inputs */
       .card {
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 16px;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       }
       label {
         display: block;
         font-size: 13px;
-        color: var(--muted);
-        margin-bottom: 8px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
       textarea {
         width: 100%;
-        min-height: 160px;
+        min-height: 180px;
         padding: 16px;
-        background: rgba(0,0,0,0.3);
+        background: rgba(0,0,0,0.2);
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 12px;
         color: var(--text);
         font-family: var(--sans);
-        font-size: 15px;
+        font-size: 16px;
         line-height: 1.7;
         resize: vertical;
         outline: none;
+        transition: border-color 0.2s;
       }
-      textarea:focus { border-color: var(--accent); }
-      textarea::placeholder { color: var(--muted); opacity: 0.6; }
+      textarea:focus { border-color: var(--accent); background: rgba(0,0,0,0.3); }
+      textarea::placeholder { color: var(--text-secondary); opacity: 0.5; }
+      
       input[type="number"], input[type="text"], select {
         width: 100%;
-        padding: 10px 12px;
-        background: rgba(0,0,0,0.3);
+        padding: 12px;
+        background: rgba(0,0,0,0.2);
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 10px;
         color: var(--text);
         font-size: 14px;
         outline: none;
+        transition: border-color 0.2s;
       }
       input:focus, select:focus { border-color: var(--accent); }
       
-      /* Buttons */
+      /* Primary Action */
       .btn {
-        display: block;
-        width: 100%;
-        padding: 14px 24px;
-        background: var(--accent);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        font-size: 15px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background 0.15s;
-      }
-      .btn:hover { background: var(--accent-hover); }
-      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-      
-      /* Results */
-      .result {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 24px;
-        margin-top: 20px;
-        display: none;
-      }
-      .result.visible { display: block; }
-      
-      /* Score header */
-      .score-header {
-        display: flex;
-        align-items: center;
-        gap: 24px;
-        margin-bottom: 24px;
-      }
-      .score-circle {
-        width: 88px;
-        height: 88px;
-        border-radius: 50%;
-        background: var(--accent-dim);
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-shrink: 0;
+        width: 100%;
+        padding: 16px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s var(--ease);
+        box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);
       }
-      .score-number {
-        font-size: 32px;
-        font-weight: 700;
-        color: var(--accent);
+      .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+      .btn:active { transform: translateY(0); }
+      .btn:disabled { opacity: 0.7; cursor: wait; transform: none; }
+      
+      /* Loading Skeleton */
+      .skeleton {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        background: rgba(255,255,255,0.05);
+        border-radius: 8px;
       }
-      .score-meta {
-        flex: 1;
-      }
-      .score-label {
-        font-size: 13px;
-        color: var(--muted);
-        margin-bottom: 4px;
-      }
-      .score-summary {
-        font-size: 15px;
-        color: var(--text);
-        line-height: 1.6;
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
       }
       
-      /* Highlighted text */
-      .section-title {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 12px;
+      /* Results Area */
+      .result-area {
+        margin-top: 40px;
+        border-top: 1px solid var(--border);
+        padding-top: 40px;
+        display: none;
+      }
+      .result-area.visible { display: block; animation: fade-in 0.5s var(--ease); }
+      
+      /* Score Hero */
+      .score-hero {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 32px;
+        margin-bottom: 40px;
+        background: rgba(255,255,255,0.02);
+        padding: 24px;
+        border-radius: 20px;
+        border: 1px solid var(--border);
       }
-      .text-display {
-        background: rgba(0,0,0,0.25);
-        padding: 16px;
-        border-radius: 10px;
-        font-size: 15px;
-        line-height: 1.8;
-        margin-bottom: 24px;
-        white-space: pre-wrap;
-        word-wrap: break-word;
+      .score-ring {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        flex-shrink: 0;
       }
-      .spike {
-        background: rgba(251, 191, 36, 0.2);
-        border-bottom: 2px solid #fbbf24;
-        padding: 2px 3px;
-        border-radius: 3px;
-        cursor: help;
+      .score-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+      .score-ring circle {
+        fill: none;
+        stroke-width: 8;
+        stroke-linecap: round;
       }
-      .spike:hover {
-        background: rgba(251, 191, 36, 0.35);
+      .score-ring-bg { stroke: rgba(255,255,255,0.05); }
+      .score-ring-val {
+        stroke: var(--score);
+        stroke-dasharray: 251; /* 2 * pi * 40 */
+        stroke-dashoffset: 251;
+        transition: stroke-dashoffset 1s var(--ease);
       }
-      .legend-hint {
-        font-size: 11px;
-        color: var(--muted);
-        font-weight: 400;
-        text-transform: none;
-        letter-spacing: 0;
+      .score-value-text {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--score);
       }
+      .score-details { flex: 1; }
+      .score-main-label { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 8px; }
+      .score-desc { font-size: 16px; line-height: 1.6; color: var(--text); }
       
-      /* Metrics */
-      .metrics {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 12px;
-        margin-bottom: 24px;
-      }
-      @media (max-width: 600px) {
-        .metrics { grid-template-columns: repeat(2, 1fr); }
-      }
-      .metric {
-        background: rgba(0,0,0,0.25);
-        padding: 16px;
-        border-radius: 10px;
-        text-align: center;
-      }
-      .metric-value {
-        font-size: 24px;
-        font-weight: 600;
-      }
-      .metric-label {
-        font-size: 11px;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-        margin-top: 4px;
-      }
-      
-      /* Canvas */
-      .chart-container {
-        margin-bottom: 24px;
-      }
-      canvas {
-        width: 100%;
-        height: 80px;
-        border-radius: 10px;
-        background: rgba(0,0,0,0.25);
-      }
-      
-      /* Suggestions */
-      .suggestions-list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .suggestion {
-        background: rgba(0,0,0,0.25);
-        border-radius: 10px;
-        overflow: hidden;
-        border-left: 3px solid var(--accent);
-      }
-      .suggestion-header {
-        padding: 14px 16px;
-        cursor: pointer;
+      /* Section Headers */
+      .section-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
+        margin-bottom: 16px;
+        margin-top: 32px;
       }
-      .suggestion-header:hover {
-        background: rgba(255,255,255,0.02);
-      }
-      .suggestion-title {
-        font-weight: 500;
+      .section-title {
         font-size: 14px;
+        font-weight: 700;
+        color: var(--text);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
-      .suggestion-arrow {
-        color: var(--muted);
-        font-size: 18px;
-        transition: transform 0.2s;
-      }
-      .suggestion.open .suggestion-arrow {
-        transform: rotate(90deg);
-      }
-      .suggestion-body {
-        display: none;
-        padding: 0 16px 16px;
-        font-size: 14px;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-      .suggestion.open .suggestion-body {
-        display: block;
-      }
-      .suggestion-why {
+      .copy-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        padding: 6px 12px;
+        border-radius: 6px;
         font-size: 12px;
-        color: var(--muted);
-        opacity: 0.7;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .copy-btn:hover { border-color: var(--text-secondary); color: var(--text); }
+      
+      /* Text Display */
+      .text-display {
+        background: #0f1520;
+        padding: 24px;
+        border-radius: 12px;
+        font-size: 16px;
+        line-height: 1.8;
+        white-space: pre-wrap;
+        border: 1px solid var(--border);
+      }
+      .spike {
+        background: rgba(251, 191, 36, 0.15);
+        border-bottom: 2px solid rgba(251, 191, 36, 0.8);
+        padding: 0 2px;
+        border-radius: 2px;
+        cursor: help;
+        transition: background 0.2s;
+      }
+      .spike:hover { background: rgba(251, 191, 36, 0.3); }
+      
+      /* Metrics Grid */
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+      .metric-card {
+        background: rgba(255,255,255,0.03);
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid transparent;
+        transition: border-color 0.2s;
+      }
+      .metric-card:hover { border-color: var(--border); }
+      .metric-val { font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+      .metric-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+      
+      /* Chart */
+      .chart-wrapper {
+        background: rgba(255,255,255,0.02);
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+      }
+      canvas { width: 100%; height: 100px; display: block; }
+      
+      /* Suggestions */
+      .suggestion {
+        background: rgba(255,255,255,0.03);
+        border-radius: 12px;
+        margin-bottom: 12px;
+        overflow: hidden;
+        border-left: 4px solid var(--accent);
+        transition: background 0.2s;
+      }
+      .suggestion:hover { background: rgba(255,255,255,0.05); }
+      .sugg-header {
+        padding: 16px 20px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 500;
+        font-size: 15px;
+      }
+      .sugg-arrow { color: var(--text-secondary); transition: transform 0.3s var(--ease); }
+      .suggestion.open .sugg-arrow { transform: rotate(180deg); }
+      .sugg-body {
+        display: none;
+        padding: 0 20px 20px;
+        font-size: 14px;
+        color: var(--text-secondary);
+        line-height: 1.6;
+        animation: fade-in 0.3s;
+      }
+      .suggestion.open .sugg-body { display: block; }
+      .sugg-why {
         margin-top: 12px;
         padding-top: 12px;
         border-top: 1px solid var(--border);
-        font-style: italic;
-      }
-      
-      /* Generated text */
-      .generated-text {
-        font-size: 15px;
-        line-height: 1.8;
-        white-space: pre-wrap;
-      }
-      
-      /* Rewrite output */
-      .rewrites-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-      .rewrite-item {
-        background: rgba(0,0,0,0.25);
-        border-radius: 10px;
-        padding: 16px;
-        border-left: 3px solid var(--accent);
-      }
-      .rewrite-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid var(--border);
-      }
-      .rewrite-rank {
         font-size: 13px;
-        color: var(--muted);
-      }
-      .rewrite-score {
-        font-size: 14px;
-        color: var(--accent);
-        font-weight: 600;
-      }
-      .rewrite-text {
-        font-size: 15px;
-        line-height: 1.7;
-        white-space: pre-wrap;
+        font-style: italic;
+        color: var(--text-secondary);
       }
       
       /* Settings */
       .settings-toggle {
+        margin-top: 32px;
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 12px 0;
-        color: var(--muted);
+        color: var(--text-secondary);
         font-size: 13px;
         cursor: pointer;
-        border: none;
         background: none;
-        width: 100%;
-        text-align: left;
+        border: none;
+        padding: 8px 0;
       }
       .settings-toggle:hover { color: var(--text); }
       .settings-toggle svg { transition: transform 0.2s; }
       .settings-toggle.open svg { transform: rotate(90deg); }
-      .settings-content {
-        display: none;
-        padding-top: 8px;
-      }
-      .settings-content.open { display: block; }
-      .settings-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 12px;
-      }
+      .settings-panel { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+      .settings-panel.open { display: block; animation: fade-in 0.3s; }
+      .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
       
-      /* Status */
-      .status {
-        text-align: center;
-        padding: 12px;
-        color: var(--muted);
-        font-size: 14px;
+      /* Rewrites */
+      .rewrite-card {
+        background: rgba(255,255,255,0.03);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border);
       }
+      .rewrite-meta { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+      .rewrite-score { font-weight: 600; color: var(--score); }
       
-      /* Responsive */
-      @media (max-width: 600px) {
-        .container { padding: 20px 16px 48px; }
-        h1 { font-size: 24px; }
-        .tabs { max-width: 100%; }
-        .score-header { flex-direction: column; text-align: center; gap: 16px; }
-        .score-circle { width: 72px; height: 72px; }
-        .score-number { font-size: 28px; }
+      /* Mobile */
+      @media (max-width: 640px) {
+        .container { padding: 24px 16px 80px; }
+        h1 { font-size: 26px; }
+        .score-hero { flex-direction: column; text-align: center; gap: 16px; }
+        .metrics-grid { grid-template-columns: 1fr 1fr; }
+        .settings-grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -430,41 +404,51 @@ STUDIO_HTML = """<!doctype html>
       <div id="panel-score" class="panel active">
         <div class="card">
           <label>Your writing</label>
-          <textarea id="score-text" placeholder="Paste your text here...">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
+          <textarea id="score-text" placeholder="Paste your text here (prose or poetry)...">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
         </div>
         
-        <button class="btn" id="score-btn">Analyze</button>
+        <button class="btn" id="score-btn">
+          <span>Analyze Text</span>
+        </button>
         
-        <div id="score-result" class="result">
-          <div class="score-header">
-            <div class="score-circle">
-              <span class="score-number" id="score-value">--</span>
+        <div id="score-result" class="result-area">
+          <div class="score-hero">
+            <div class="score-ring">
+              <svg viewBox="0 0 100 100">
+                <circle class="score-ring-bg" cx="50" cy="50" r="40"></circle>
+                <circle class="score-ring-val" cx="50" cy="50" r="40" id="score-ring-val"></circle>
+              </svg>
+              <div class="score-value-text" id="score-value">--</div>
             </div>
-            <div class="score-meta">
-              <div class="score-label">out of 100</div>
-              <div class="score-summary" id="score-summary">Analyzing your text...</div>
+            <div class="score-details">
+              <div class="score-main-label">Analysis Complete</div>
+              <div class="score-desc" id="score-summary"></div>
             </div>
           </div>
           
-          <div class="section-title">
-            Your text 
-            <span class="legend-hint">— highlighted words have high surprise (spikes)</span>
+          <div class="section-header">
+            <div class="section-title">Spike Analysis</div>
+            <div style="font-size:12px; color:var(--text-secondary);">High surprisal words highlighted</div>
           </div>
           <div class="text-display" id="text-highlighted"></div>
           
-          <div class="section-title">Cadence curve</div>
-          <div class="chart-container">
-            <canvas id="cadence-chart" width="852" height="80"></canvas>
+          <div class="section-header">
+            <div class="section-title">Cadence Curve</div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="cadence-chart"></canvas>
           </div>
           
-          <div class="section-title">Category scores</div>
-          <div class="metrics" id="score-metrics"></div>
+          <div class="section-header">
+            <div class="section-title">Metrics</div>
+          </div>
+          <div class="metrics-grid" id="score-metrics"></div>
           
-          <div class="section-title">Suggestions</div>
-          <div class="suggestions-list" id="score-suggestions"></div>
+          <div class="section-header">
+            <div class="section-title">Suggestions</div>
+          </div>
+          <div id="score-suggestions"></div>
         </div>
-        
-        <div class="status" id="score-status"></div>
         
         <button class="settings-toggle" id="score-settings-toggle">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -472,7 +456,7 @@ STUDIO_HTML = """<!doctype html>
           </svg>
           Advanced settings
         </button>
-        <div class="settings-content" id="score-settings">
+        <div class="settings-panel" id="score-settings">
           <div class="settings-grid">
             <div>
               <label>Document type</label>
@@ -496,25 +480,25 @@ STUDIO_HTML = """<!doctype html>
           <textarea id="rewrite-text" placeholder="Paste text to rewrite with better cadence..."></textarea>
         </div>
         
-        <button class="btn" id="rewrite-btn">Rewrite</button>
+        <button class="btn" id="rewrite-btn">Generate Rewrites</button>
         
-        <div id="rewrite-result" class="result">
-          <div class="section-title">Rewritten versions (ranked by score)</div>
-          <div class="rewrites-grid" id="rewrite-output"></div>
+        <div id="rewrite-result" class="result-area">
+          <div class="section-header">
+            <div class="section-title">Rewritten Versions</div>
+          </div>
+          <div id="rewrite-output"></div>
         </div>
-        
-        <div class="status" id="rewrite-status"></div>
         
         <button class="settings-toggle" id="rewrite-settings-toggle">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Advanced settings
+          Configuration
         </button>
-        <div class="settings-content" id="rewrite-settings">
+        <div class="settings-panel" id="rewrite-settings">
           <div class="settings-grid">
             <div>
-              <label>Candidates to generate</label>
+              <label>Candidates</label>
               <input type="number" id="rewrite-candidates" value="4" />
             </div>
             <div>
@@ -528,23 +512,24 @@ STUDIO_HTML = """<!doctype html>
       <!-- Match Panel -->
       <div id="panel-match" class="panel">
         <div class="card">
-          <label>Reference text (cadence to match)</label>
+          <label>Reference (Target Cadence)</label>
           <textarea id="match-reference" style="min-height:120px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again.</textarea>
         </div>
         
         <div class="card">
-          <label>Your starting prompt</label>
+          <label>Your Starting Prompt</label>
           <textarea id="match-prompt" style="min-height:80px;">The morning light crept through the window</textarea>
         </div>
         
-        <button class="btn" id="match-btn">Generate</button>
+        <button class="btn" id="match-btn">Generate Match</button>
         
-        <div id="match-result" class="result">
-          <div class="section-title">Generated text</div>
-          <div class="text-display generated-text" id="match-output"></div>
+        <div id="match-result" class="result-area">
+          <div class="section-header">
+            <div class="section-title">Generated Text</div>
+            <button class="copy-btn" onclick="copyText('match-output')">Copy</button>
+          </div>
+          <div class="text-display" id="match-output"></div>
         </div>
-        
-        <div class="status" id="match-status"></div>
         
         <button class="settings-toggle" id="match-settings-toggle">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -552,10 +537,10 @@ STUDIO_HTML = """<!doctype html>
           </svg>
           Advanced settings
         </button>
-        <div class="settings-content" id="match-settings">
+        <div class="settings-panel" id="match-settings">
           <div class="settings-grid">
             <div>
-              <label>Max tokens to generate</label>
+              <label>Max tokens</label>
               <input type="number" id="match-tokens" value="200" />
             </div>
             <div>
@@ -571,7 +556,7 @@ STUDIO_HTML = """<!doctype html>
       const $ = id => document.getElementById(id);
       const $$ = sel => document.querySelectorAll(sel);
       
-      // Tab switching
+      // Tabs
       $$('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
           $$('.tab').forEach(t => t.classList.remove('active'));
@@ -581,7 +566,7 @@ STUDIO_HTML = """<!doctype html>
         });
       });
       
-      // Settings toggles
+      // Settings
       $$('.settings-toggle').forEach(toggle => {
         toggle.addEventListener('click', () => {
           toggle.classList.toggle('open');
@@ -589,7 +574,17 @@ STUDIO_HTML = """<!doctype html>
         });
       });
       
-      // API
+      // Copy
+      async function copyText(id) {
+        const text = $(id).textContent;
+        await navigator.clipboard.writeText(text);
+        const btn = document.querySelector(`button[onclick="copyText('${id}')"]`);
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = original, 2000);
+      }
+      
+      // API Wrapper
       async function api(endpoint, body) {
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -600,10 +595,11 @@ STUDIO_HTML = """<!doctype html>
         return res.json();
       }
       
-      // Highlight text with spikes
+      // Helpers
+      const escapeHtml = str => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      
       function highlightText(text, spikes) {
         if (!spikes || !spikes.length) return escapeHtml(text);
-        
         const sorted = [...spikes].sort((a, b) => a.char_start - b.char_start);
         let result = '';
         let lastEnd = 0;
@@ -615,20 +611,14 @@ STUDIO_HTML = """<!doctype html>
           
           result += escapeHtml(text.slice(lastEnd, start));
           const word = text.slice(start, end);
-          const title = `Surprisal: ${spike.surprisal?.toFixed(1) || '?'}`;
-          result += `<span class="spike" title="${title}">${escapeHtml(word)}</span>`;
+          result += `<span class="spike" title="Surprisal: ${spike.surprisal?.toFixed(1)}">${escapeHtml(word)}</span>`;
           lastEnd = end;
         }
         result += escapeHtml(text.slice(lastEnd));
         return result;
       }
       
-      function escapeHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      }
-      
-      // Cadence chart
-      function drawCadence(series, threshold) {
+      function drawCadence(series) {
         const canvas = $('cadence-chart');
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
@@ -640,47 +630,65 @@ STUDIO_HTML = """<!doctype html>
         
         if (!series || series.length < 2) return;
         
+        // Gradient
+        const grad = ctx.createLinearGradient(0, 0, 0, rect.height);
+        grad.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+        grad.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+        
         let min = Math.min(...series), max = Math.max(...series);
         if (max - min < 0.1) { min = 0; max = 10; }
+        const range = max - min;
         
-        const pad = 12, w = rect.width - pad*2, h = rect.height - pad*2;
-        const xAt = i => pad + (i / (series.length - 1)) * w;
-        const yAt = v => pad + (1 - (v - min) / (max - min)) * h;
+        const pad = 0;
+        const w = rect.width;
+        const h = rect.height;
+        const xAt = i => (i / (series.length - 1)) * w;
+        const yAt = v => h - ((v - min) / range) * h;
         
-        if (threshold) {
-          ctx.strokeStyle = 'rgba(239,68,68,0.3)';
-          ctx.setLineDash([4,4]);
-          ctx.beginPath();
-          ctx.moveTo(pad, yAt(threshold));
-          ctx.lineTo(pad + w, yAt(threshold));
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-        
-        ctx.strokeStyle = '#6366f1';
-        ctx.lineWidth = 2;
+        // Path
         ctx.beginPath();
         ctx.moveTo(xAt(0), yAt(series[0]));
         for (let i = 1; i < series.length; i++) ctx.lineTo(xAt(i), yAt(series[i]));
+        
+        // Stroke
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
         ctx.stroke();
+        
+        // Fill
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+        
+        canvas._lastSeries = series;
       }
       
-      // Suggestion toggle
-      function setupSuggestionToggles() {
-        $$('.suggestion-header').forEach(h => {
-          h.addEventListener('click', () => {
-            h.parentElement.classList.toggle('open');
-          });
-        });
+      function setScore(score) {
+        const circle = $('score-ring-val');
+        const radius = 40;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (score / 100) * circumference;
+        circle.style.strokeDashoffset = offset;
+        $('score-value').textContent = Math.round(score);
+        
+        // Color transition based on score
+        const color = score > 80 ? '#10b981' : score > 60 ? '#6366f1' : '#f59e0b';
+        circle.style.stroke = color;
+        $('score-value').style.color = color;
       }
       
-      // Score
+      // Handlers
       $('score-btn').addEventListener('click', async () => {
         const btn = $('score-btn');
-        const status = $('score-status');
+        const result = $('score-result');
+        const originalText = btn.innerHTML;
+        
         btn.disabled = true;
-        status.textContent = 'Analyzing...';
-        $('score-result').classList.remove('visible');
+        btn.innerHTML = '<div class="skeleton" style="width:20px;height:20px;border-radius:50%;"></div>Analyzing...';
+        result.classList.remove('visible');
         
         try {
           const text = $('score-text').value;
@@ -691,63 +699,54 @@ STUDIO_HTML = """<!doctype html>
             normalize_text: true
           });
           
-          // Score
-          const score = Math.round(data.score?.overall_0_100 || 0);
-          $('score-value').textContent = score;
-          $('score-summary').textContent = data.critique?.summary || '';
+          result.classList.add('visible');
           
-          // Highlighted text
-          const spikes = data.analysis?.spikes || [];
-          $('text-highlighted').innerHTML = highlightText(text, spikes);
+          // Data population
+          setScore(data.score?.overall_0_100 || 0);
+          $('score-summary').textContent = data.critique?.summary || 'Analysis complete.';
+          $('text-highlighted').innerHTML = highlightText(text, data.analysis?.spikes || []);
+          drawCadence(data.analysis?.series?.surprisal);
           
           // Metrics
           const cats = data.score?.categories || {};
           $('score-metrics').innerHTML = Object.entries(cats).map(([k, v]) => `
-            <div class="metric">
-              <div class="metric-value">${Math.round(v * 100)}</div>
-              <div class="metric-label">${k}</div>
+            <div class="metric-card">
+              <div class="metric-val">${Math.round(v * 100)}</div>
+              <div class="metric-lbl">${k}</div>
             </div>
           `).join('');
           
-          // Cadence
-          drawCadence(data.analysis?.series?.surprisal, data.analysis?.series?.threshold_surprisal);
-          
           // Suggestions
-          const suggestions = data.critique?.suggestions || [];
-          if (suggestions.length) {
-            $('score-suggestions').innerHTML = suggestions.slice(0, 4).map(s => `
-              <div class="suggestion">
-                <div class="suggestion-header">
-                  <span class="suggestion-title">${s.title || ''}</span>
-                  <span class="suggestion-arrow">›</span>
-                </div>
-                <div class="suggestion-body">
-                  ${s.what_to_try || ''}
-                  ${s.why ? `<div class="suggestion-why">${s.why}</div>` : ''}
-                </div>
+          const suggs = data.critique?.suggestions || [];
+          $('score-suggestions').innerHTML = suggs.length ? suggs.slice(0, 5).map(s => `
+            <div class="suggestion">
+              <div class="sugg-header" onclick="this.parentElement.classList.toggle('open')">
+                <span>${s.title}</span>
+                <span class="sugg-arrow">▼</span>
               </div>
-            `).join('');
-            setupSuggestionToggles();
-          } else {
-            $('score-suggestions').innerHTML = '<p style="color:var(--muted);font-size:14px;">No suggestions.</p>';
-          }
+              <div class="sugg-body">
+                <div>${s.what_to_try}</div>
+                ${s.why ? `<div class="sugg-why">${s.why}</div>` : ''}
+              </div>
+            </div>
+          `).join('') : '<p style="color:var(--text-secondary);font-style:italic;">No specific suggestions found.</p>';
           
-          $('score-result').classList.add('visible');
-          status.textContent = '';
         } catch (e) {
-          status.textContent = 'Error: ' + e.message;
+          alert('Error: ' + e.message);
         } finally {
           btn.disabled = false;
+          btn.innerHTML = originalText;
         }
       });
       
-      // Rewrite
       $('rewrite-btn').addEventListener('click', async () => {
         const btn = $('rewrite-btn');
-        const status = $('rewrite-status');
+        const result = $('rewrite-result');
+        const originalText = btn.innerHTML;
+        
         btn.disabled = true;
-        status.textContent = 'Rewriting... (this may take a minute)';
-        $('rewrite-result').classList.remove('visible');
+        btn.innerHTML = 'Rewriting...';
+        result.classList.remove('visible');
         
         try {
           const data = await api('/rewrite', {
@@ -759,33 +758,38 @@ STUDIO_HTML = """<!doctype html>
             normalize_text: true
           });
           
+          result.classList.add('visible');
           const rewrites = data.rewrites || [];
-          $('rewrite-output').innerHTML = rewrites.length ? rewrites.map((r, i) => `
-            <div class="rewrite-item">
-              <div class="rewrite-header">
-                <span class="rewrite-rank">#${i + 1}</span>
-                <span class="rewrite-score">Score: ${Math.round(r.score || 0)}</span>
-              </div>
-              <div class="rewrite-text">${escapeHtml(r.text || '')}</div>
-            </div>
-          `).join('') : '<p style="color:var(--muted);font-size:14px;">No rewrites generated.</p>';
           
-          $('rewrite-result').classList.add('visible');
-          status.textContent = '';
+          $('rewrite-output').innerHTML = rewrites.length ? rewrites.map((r, i) => `
+            <div class="rewrite-card">
+              <div class="rewrite-meta">
+                <span>Option ${i + 1}</span>
+                <span class="rewrite-score">Score: ${Math.round(r.score)}</span>
+              </div>
+              <div style="white-space:pre-wrap;line-height:1.7;">${escapeHtml(r.text)}</div>
+              <div style="margin-top:12px;text-align:right;">
+                <button class="copy-btn" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.textContent).then(()=>alert('Copied!'))">Copy</button>
+              </div>
+            </div>
+          `).join('') : '<p style="color:var(--text-secondary);">No rewrites generated.</p>';
+          
         } catch (e) {
-          status.textContent = 'Error: ' + e.message;
+          alert(e.message);
         } finally {
           btn.disabled = false;
+          btn.innerHTML = originalText;
         }
       });
       
-      // Match
       $('match-btn').addEventListener('click', async () => {
         const btn = $('match-btn');
-        const status = $('match-status');
+        const result = $('match-result');
+        const originalText = btn.innerHTML;
+        
         btn.disabled = true;
-        status.textContent = 'Generating...';
-        $('match-result').classList.remove('visible');
+        btn.innerHTML = 'Generating...';
+        result.classList.remove('visible');
         
         try {
           const data = await api('/cadence-match', {
@@ -795,22 +799,20 @@ STUDIO_HTML = """<!doctype html>
             seed: parseInt($('match-seed').value) || 7
           });
           
-          $('match-output').textContent = data.generated_text || data.text || '(no text)';
-          $('match-result').classList.add('visible');
-          status.textContent = '';
+          result.classList.add('visible');
+          $('match-output').textContent = data.generated_text || data.text || '';
+          
         } catch (e) {
-          status.textContent = 'Error: ' + e.message;
+          alert(e.message);
         } finally {
           btn.disabled = false;
+          btn.innerHTML = originalText;
         }
       });
       
-      // Resize handler for canvas
       window.addEventListener('resize', () => {
-        const canvas = $('cadence-chart');
-        if (canvas._lastSeries) {
-          drawCadence(canvas._lastSeries, canvas._lastThreshold);
-        }
+        const c = $('cadence-chart');
+        if(c && c._lastSeries) drawCadence(c._lastSeries);
       });
     </script>
   </body>
