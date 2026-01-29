@@ -6,7 +6,7 @@ STUDIO_HTML = """<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Horace Studio</title>
+    <title>Horace</title>
     <style>
       :root {
         --bg: #0b1020;
@@ -106,7 +106,7 @@ STUDIO_HTML = """<!doctype html>
     <div class="wrap">
       <header>
         <div>
-          <h1>Horace Studio</h1>
+          <h1>Horace</h1>
           <div class="sub">Paste writing → score, profile vs baselines, grounded suggestions, optional rewrites.</div>
         </div>
         <div class="pill">/analyze + /rewrite</div>

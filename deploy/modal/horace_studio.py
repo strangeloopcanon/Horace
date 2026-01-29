@@ -341,7 +341,7 @@ def fastapi_app():  # pragma: no cover
 
     from tools.studio.site import STUDIO_HTML
 
-    web = FastAPI(title="Horace Studio API")
+    web = FastAPI(title="Horace")
 
     # Simple in-memory rate limiting (per container)
     _rate_limits: Dict[str, list] = defaultdict(list)
