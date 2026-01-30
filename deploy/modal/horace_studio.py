@@ -30,7 +30,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-# Force rebuild version: 2026-01-29-prototypes-v1
+# Force rebuild version: 2026-01-30-theme-toggle-v1
 
 # Request models defined at module level for FastAPI compatibility
 class AnalyzeReq(BaseModel):
@@ -340,15 +340,10 @@ def fastapi_app():  # pragma: no cover
     from fastapi.responses import HTMLResponse, JSONResponse
     from typing import Dict, Any
 
-    # Import both main site and concepts
     import tools.studio.site
-    import tools.studio.concepts
     import importlib
     importlib.reload(tools.studio.site)
-    importlib.reload(tools.studio.concepts)
-    
     from tools.studio.site import STUDIO_HTML
-    from tools.studio.concepts import HTML_CONSOLE, HTML_SWISS, HTML_PAPER, HTML_INDEX
 
     web = FastAPI(title="Horace")
 
@@ -360,7 +355,7 @@ def fastapi_app():  # pragma: no cover
     @web.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):
         # Skip rate limiting for static assets and healthz
-        if request.url.path in ("/", "/console", "/swiss", "/paper", "/main", "/docs", "/openapi.json", "/healthz"):
+        if request.url.path in ("/", "/docs", "/openapi.json", "/healthz"):
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"
@@ -434,23 +429,7 @@ def fastapi_app():  # pragma: no cover
         )
 
     @web.get("/")
-    async def index():
-        return HTMLResponse(content=HTML_INDEX)
-
-    @web.get("/console")
-    async def console():
-        return HTMLResponse(content=HTML_CONSOLE)
-
-    @web.get("/swiss")
-    async def swiss():
-        return HTMLResponse(content=HTML_SWISS)
-
-    @web.get("/paper")
-    async def paper():
-        return HTMLResponse(content=HTML_PAPER)
-
-    @web.get("/main")
-    async def main_ui():
+    async def root():
         return HTMLResponse(content=STUDIO_HTML)
 
     return web

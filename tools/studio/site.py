@@ -7,122 +7,144 @@ STUDIO_HTML = """<!doctype html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Horace</title>
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600;900&family=Playfair+Display:ital,wght@0,500;0,700;1,400&display=swap" rel="stylesheet">
     
     <style>
+      /* ========== Theme Variables ========== */
       :root {
-        /* Palette: The Obsidian Study */
-        --bg: #1c1b1a;         /* Warm Obsidian */
-        --surface: #262422;    /* Oiled Walnut */
-        --surface-light: #2f2d2b;
-        --border: #45403b;     /* Worn Iron */
-        --text: #e6e1d3;       /* Bone/Vellum */
+        /* Dark Theme (Obsidian) */
+        --bg: #1c1b1a;
+        --surface: #262422;
+        --border: #45403b;
+        --text: #e6e1d3;
         --text-muted: #9d968b;
+        --accent: #c5a059;
+        --accent-glow: rgba(197, 160, 89, 0.15);
+        --chart-color: #c5a059;
         
-        --accent: #c5a059;     /* Antique Brass */
-        --accent-glow: rgba(197, 160, 89, 0.2);
-        --accent-hover: #d6b064;
-        
-        --success: #a8bba0;    /* Sage */
-        --warning: #d4a373;    /* Terracotta */
-        
-        /* Typography */
         --font-display: "Playfair Display", serif;
-        --font-body: "Cormorant Garamond", serif;
+        --font-body: "Crimson Pro", serif;
         --font-ui: "Inter", sans-serif;
-        
         --ease: cubic-bezier(0.25, 1, 0.5, 1);
       }
       
+      [data-theme="light"] {
+        /* Light Theme (Paper/Swiss) */
+        --bg: #faf8f5;
+        --surface: #ffffff;
+        --border: #e5e2dd;
+        --text: #1a1a1a;
+        --text-muted: #666666;
+        --accent: #000000;
+        --accent-glow: rgba(0, 0, 0, 0.05);
+        --chart-color: #1a1a1a;
+      }
+      
+      /* ========== Base ========== */
       * { box-sizing: border-box; margin: 0; padding: 0; }
       
       body {
         font-family: var(--font-body);
-        background-color: var(--bg);
+        background: var(--bg);
         color: var(--text);
         min-height: 100vh;
         line-height: 1.6;
-        overflow-y: scroll;
-        /* Noise Texture */
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+        transition: background 0.4s ease, color 0.4s ease;
       }
       
       .container {
-        max-width: 860px;
+        max-width: 820px;
         margin: 0 auto;
-        padding: 64px 24px 120px;
+        padding: 48px 24px 120px;
       }
       
-      /* Typography & Header */
+      /* ========== Theme Toggle ========== */
+      .theme-toggle {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-ui);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .theme-toggle:hover { color: var(--text); border-color: var(--text-muted); }
+      .theme-toggle svg { width: 14px; height: 14px; }
+      
+      /* ========== Header ========== */
       header {
         text-align: center;
-        margin-bottom: 56px;
-        position: relative;
+        margin-bottom: 48px;
         padding-bottom: 24px;
         border-bottom: 1px solid var(--border);
-      }
-      header::after {
-        content: "";
-        position: absolute;
-        bottom: -3px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 40px;
-        height: 5px;
-        background: var(--bg);
-        border-left: 1px solid var(--border);
-        border-right: 1px solid var(--border);
       }
       
       h1 {
         font-family: var(--font-display);
-        font-size: 48px;
+        font-size: 42px;
         font-weight: 700;
-        letter-spacing: -0.01em;
-        color: var(--text);
+        letter-spacing: -0.02em;
         margin-bottom: 8px;
       }
-      .tagline {
+      
+      [data-theme="light"] h1 {
         font-family: var(--font-ui);
-        color: var(--accent);
-        font-size: 13px;
+        font-size: 64px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
         text-transform: uppercase;
-        letter-spacing: 0.15em;
-        font-weight: 500;
       }
       
-      /* Tabs - Editorial Style */
+      .tagline {
+        font-family: var(--font-ui);
+        color: var(--text-muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+      }
+      
+      [data-theme="light"] .tagline { color: var(--accent); }
+      
+      /* ========== Tabs ========== */
       .tabs {
         display: flex;
         justify-content: center;
-        gap: 40px;
-        margin-bottom: 48px;
+        gap: 32px;
+        margin-bottom: 40px;
         font-family: var(--font-ui);
       }
+      
       .tab {
         background: none;
         border: none;
         color: var(--text-muted);
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 500;
         letter-spacing: 0.05em;
         text-transform: uppercase;
         cursor: pointer;
-        padding-bottom: 8px;
+        padding: 8px 0;
         position: relative;
-        transition: color 0.3s ease;
+        transition: color 0.2s;
       }
       .tab:hover { color: var(--text); }
       .tab::after {
         content: "";
         position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 1px;
+        bottom: 0; left: 0;
+        width: 100%; height: 2px;
         background: var(--accent);
         transform: scaleX(0);
         transition: transform 0.3s var(--ease);
@@ -130,148 +152,156 @@ STUDIO_HTML = """<!doctype html>
       .tab.active { color: var(--accent); }
       .tab.active::after { transform: scaleX(1); }
       
-      /* Panels */
-      .panel { display: none; opacity: 0; transform: translateY(10px); transition: all 0.5s var(--ease); }
-      .panel.active { display: block; opacity: 1; transform: translateY(0); }
+      [data-theme="light"] .tab.active { color: var(--text); font-weight: 600; }
       
-      /* Form Elements */
-      .input-wrapper {
-        position: relative;
-        margin-bottom: 32px;
+      /* ========== Panels ========== */
+      .panel { display: none; }
+      .panel.active { display: block; animation: fade-in 0.5s var(--ease); }
+      
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
       }
+      
+      /* ========== Form Elements ========== */
+      .input-group {
+        margin-bottom: 24px;
+      }
+      
       .input-label {
-        position: absolute;
-        top: -10px;
-        left: 16px;
-        background: var(--bg);
-        padding: 0 8px;
+        display: block;
         font-family: var(--font-ui);
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.1em;
-        color: var(--accent);
-        z-index: 10;
+        color: var(--text-muted);
+        margin-bottom: 10px;
       }
       
       textarea {
         width: 100%;
-        min-height: 240px;
-        padding: 24px;
-        background: transparent;
+        min-height: 200px;
+        padding: 20px;
+        background: var(--surface);
         border: 1px solid var(--border);
         color: var(--text);
         font-family: var(--font-body);
-        font-size: 20px;
-        line-height: 1.6;
+        font-size: 19px;
+        line-height: 1.7;
         resize: vertical;
         outline: none;
-        transition: all 0.3s ease;
-        border-radius: 2px; /* Sharp corners */
+        transition: border-color 0.2s, box-shadow 0.2s;
       }
       textarea:focus {
         border-color: var(--accent);
-        box-shadow: 0 0 20px var(--accent-glow);
+        box-shadow: 0 0 0 3px var(--accent-glow);
       }
-      textarea::placeholder {
-        color: var(--text-muted);
-        font-style: italic;
-        opacity: 0.5;
+      textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
+      
+      [data-theme="light"] textarea {
+        font-size: 22px;
+        border-width: 2px;
       }
       
       input[type="number"], select {
         width: 100%;
-        padding: 12px;
-        background: transparent;
+        padding: 10px 12px;
+        background: var(--surface);
         border: 1px solid var(--border);
         color: var(--text);
         font-family: var(--font-ui);
         font-size: 14px;
         outline: none;
-        border-radius: 2px;
       }
       input:focus, select:focus { border-color: var(--accent); }
       
-      /* Primary Button - Gold Outline */
+      /* ========== Buttons ========== */
       .btn {
         display: block;
         width: 100%;
-        padding: 18px;
-        background: transparent;
-        border: 1px solid var(--accent);
-        color: var(--accent);
+        padding: 16px;
+        background: var(--accent);
+        border: none;
+        color: var(--bg);
         font-family: var(--font-ui);
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.15em;
+        letter-spacing: 0.12em;
         cursor: pointer;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
+        transition: all 0.2s;
       }
-      .btn:hover {
-        background: var(--accent);
-        color: var(--bg);
-        box-shadow: 0 0 30px var(--accent-glow);
-      }
-      .btn:disabled { opacity: 0.5; cursor: wait; }
+      .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+      .btn:disabled { opacity: 0.5; cursor: wait; transform: none; }
       
-      /* Results Area */
+      [data-theme="light"] .btn {
+        background: var(--text);
+        color: var(--bg);
+      }
+      
+      /* ========== Results ========== */
       .result-area {
-        margin-top: 64px;
+        margin-top: 48px;
+        padding-top: 40px;
         border-top: 1px solid var(--border);
-        padding-top: 48px;
         display: none;
       }
-      .result-area.visible { display: block; animation: fade-in 0.8s var(--ease); }
+      .result-area.visible { display: block; animation: fade-in 0.6s var(--ease); }
       
-      @keyframes fade-in {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      
-      /* Score Hero */
-      .score-display {
+      /* Score Display */
+      .score-row {
         display: flex;
-        align-items: center;
-        gap: 48px;
-        margin-bottom: 56px;
+        align-items: flex-start;
+        gap: 32px;
+        margin-bottom: 48px;
       }
-      .score-big {
+      
+      .score-number {
         font-family: var(--font-display);
-        font-size: 80px;
+        font-size: 72px;
+        font-weight: 500;
         line-height: 1;
         color: var(--accent);
-        font-weight: 400;
-        position: relative;
+        flex-shrink: 0;
       }
-      .score-big::after {
-        content: "/100";
+      .score-number sup {
         font-size: 20px;
         color: var(--text-muted);
         font-family: var(--font-ui);
-        position: absolute;
-        top: 8px;
-        right: -40px;
+        vertical-align: top;
+        margin-left: 4px;
       }
-      .score-context {
+      
+      [data-theme="light"] .score-number {
+        font-family: var(--font-ui);
+        font-weight: 900;
+        font-size: 80px;
+      }
+      
+      .score-summary {
         flex: 1;
-        font-family: var(--font-body);
-        font-size: 18px;
+        font-size: 17px;
+        line-height: 1.6;
         color: var(--text);
-        font-style: italic;
+        padding-top: 8px;
         border-left: 2px solid var(--border);
         padding-left: 24px;
       }
       
-      /* Section Headers */
+      [data-theme="light"] .score-summary {
+        font-size: 18px;
+        font-weight: 400;
+      }
+      
+      /* Section Labels */
       .section-label {
         font-family: var(--font-ui);
-        font-size: 12px;
+        font-size: 11px;
+        font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         color: var(--text-muted);
-        margin-bottom: 24px;
+        margin-bottom: 16px;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -283,158 +313,212 @@ STUDIO_HTML = """<!doctype html>
         background: var(--border);
       }
       
-      /* Text Display with Highlights */
+      /* Text Display */
       .text-display {
         background: var(--surface);
-        padding: 40px;
-        font-size: 19px;
+        padding: 32px;
+        font-size: 18px;
         line-height: 1.8;
         border: 1px solid var(--border);
-        position: relative;
-        margin-bottom: 48px;
+        margin-bottom: 40px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
       }
-      .text-display::before {
-        content: "";
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 4px;
-        background: var(--border);
+      
+      [data-theme="light"] .text-display {
+        border-width: 2px;
+        font-size: 20px;
       }
       
       .spike {
         border-bottom: 2px solid var(--accent);
-        background: rgba(197, 160, 89, 0.1);
+        background: var(--accent-glow);
         cursor: help;
         transition: background 0.2s;
       }
-      .spike:hover { background: rgba(197, 160, 89, 0.3); color: #fff; }
+      .spike:hover { background: rgba(197, 160, 89, 0.3); }
       
-      /* Charts & Metrics */
-      .metrics-row {
+      [data-theme="light"] .spike {
+        background: #fef3c7;
+        border-color: #f59e0b;
+      }
+      [data-theme="light"] .spike:hover { background: #fde68a; }
+      
+      /* Metrics */
+      .metrics-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 1px;
         background: var(--border);
         border: 1px solid var(--border);
-        margin-bottom: 48px;
+        margin-bottom: 40px;
       }
-      .metric-cell {
+      .metric {
         background: var(--bg);
-        padding: 24px 16px;
+        padding: 20px 12px;
         text-align: center;
       }
-      .metric-val {
+      .metric-value {
         font-family: var(--font-display);
-        font-size: 32px;
-        color: var(--text);
-        margin-bottom: 8px;
+        font-size: 28px;
+        font-weight: 500;
+        margin-bottom: 4px;
       }
-      .metric-name {
+      .metric-label {
         font-family: var(--font-ui);
-        font-size: 11px;
+        font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.08em;
         color: var(--text-muted);
       }
       
+      [data-theme="light"] .metric-value {
+        font-family: var(--font-ui);
+        font-weight: 700;
+      }
+      
+      /* Chart */
       canvas {
         width: 100%;
-        height: 120px;
-        margin-bottom: 48px;
-        border-bottom: 1px solid var(--border);
+        height: 100px;
+        margin-bottom: 40px;
       }
       
       /* Suggestions */
-      .suggestion-group {
-        border-left: 1px solid var(--border);
-        margin-left: 20px;
-        padding-left: 32px;
-        position: relative;
-      }
+      .suggestions-list { margin-bottom: 40px; }
+      
       .suggestion {
-        margin-bottom: 32px;
+        border-left: 2px solid var(--border);
+        padding-left: 20px;
+        margin-bottom: 24px;
+        transition: border-color 0.2s;
       }
-      .suggestion::before {
-        content: "";
-        position: absolute;
-        left: -5px;
-        width: 9px;
-        height: 9px;
-        background: var(--bg);
-        border: 1px solid var(--accent);
-        border-radius: 50%;
-        margin-top: 6px;
-      }
+      .suggestion:hover { border-color: var(--accent); }
+      
       .sugg-title {
         font-family: var(--font-display);
-        font-size: 20px;
-        color: var(--text);
-        margin-bottom: 8px;
+        font-size: 18px;
         cursor: pointer;
         display: flex;
         align-items: center;
         gap: 8px;
+        margin-bottom: 8px;
       }
       .sugg-title:hover { color: var(--accent); }
+      
       .sugg-body {
-        font-size: 16px;
-        color: var(--text-muted);
         display: none;
-        padding-top: 8px;
+        font-size: 15px;
+        color: var(--text-muted);
+        line-height: 1.6;
       }
       .suggestion.open .sugg-body { display: block; }
       .suggestion.open .sugg-title { color: var(--accent); }
       
-      /* Settings */
-      .settings-toggle {
+      [data-theme="light"] .sugg-title {
+        font-family: var(--font-ui);
+        font-weight: 600;
+        font-size: 16px;
+      }
+      
+      /* Rewrite Cards */
+      .rewrite-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .rewrite-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
         font-family: var(--font-ui);
         font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-muted);
+      }
+      .rewrite-score { font-weight: 600; color: var(--accent); }
+      .rewrite-text {
+        font-size: 17px;
+        line-height: 1.7;
+        white-space: pre-wrap;
+      }
+      .copy-btn {
         background: none;
-        border: none;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        padding: 4px 10px;
+        font-family: var(--font-ui);
+        font-size: 10px;
+        text-transform: uppercase;
         cursor: pointer;
-        margin-top: 48px;
+        transition: all 0.2s;
+      }
+      .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+      
+      /* Settings */
+      .settings-toggle {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 8px;
         width: 100%;
-        justify-content: center;
-      }
-      .settings-toggle:hover { color: var(--accent); }
-      .settings-content {
-        display: none;
-        background: var(--surface);
-        padding: 24px;
-        border: 1px solid var(--border);
-        margin-top: 24px;
-      }
-      .settings-content.open { display: block; animation: fade-in 0.3s; }
-      .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-      
-      /* Mobile */
-      @media (max-width: 600px) {
-        .score-display { flex-direction: column; text-align: center; gap: 24px; }
-        .score-context { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 24px; }
-        .metrics-row { grid-template-columns: 1fr 1fr; }
-        .tabs { gap: 20px; }
-        h1 { font-size: 36px; }
-      }
-      
-      /* Helper classes */
-      .copy-link {
+        padding: 12px;
+        margin-top: 32px;
+        background: none;
+        border: none;
+        color: var(--text-muted);
         font-family: var(--font-ui);
         font-size: 11px;
         text-transform: uppercase;
-        color: var(--accent);
+        letter-spacing: 0.1em;
         cursor: pointer;
-        float: right;
-        margin-bottom: 8px;
       }
-      .copy-link:hover { text-decoration: underline; }
+      .settings-toggle:hover { color: var(--text); }
+      
+      .settings-panel {
+        display: none;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 20px;
+        margin-top: 16px;
+      }
+      .settings-panel.open { display: block; animation: fade-in 0.3s; }
+      .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      
+      /* Mobile */
+      @media (max-width: 640px) {
+        .theme-toggle { position: static; margin-bottom: 24px; }
+        .container { padding: 24px 16px 80px; }
+        h1 { font-size: 32px; }
+        [data-theme="light"] h1 { font-size: 40px; }
+        .score-row { flex-direction: column; gap: 20px; }
+        .score-summary { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 16px; }
+        .metrics-grid { grid-template-columns: 1fr 1fr; }
+        .tabs { gap: 16px; }
+      }
     </style>
   </head>
   <body>
+    <button class="theme-toggle" id="theme-toggle" title="Switch theme">
+      <svg id="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <svg id="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <span id="theme-label">Light</span>
+    </button>
+    
     <div class="container">
       <header>
         <h1>Horace</h1>
@@ -444,51 +528,49 @@ STUDIO_HTML = """<!doctype html>
       <div class="tabs">
         <button class="tab active" data-tab="score">Analysis</button>
         <button class="tab" data-tab="rewrite">Rewrite</button>
-        <button class="tab" data-tab="match">Cadence Match</button>
+        <button class="tab" data-tab="match">Match</button>
       </div>
       
-      <!-- Score Panel -->
+      <!-- Analysis Panel -->
       <div id="panel-score" class="panel active">
-        <div class="input-wrapper">
-          <span class="input-label">Source Text</span>
-          <textarea id="score-text" placeholder="Paste your draft here. Let us measure its pulse...">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
+        <div class="input-group">
+          <label class="input-label">Source Text</label>
+          <textarea id="score-text" placeholder="Paste your text here...">At dawn, the city leans into light. A gull lifts, then drops, then lifts again. The harbor breathes salt and diesel.</textarea>
         </div>
         
-        <button class="btn" id="score-btn">Measure Cadence</button>
+        <button class="btn" id="score-btn">Analyze</button>
         
         <div id="score-result" class="result-area">
-          <div class="score-display">
-            <div class="score-big" id="score-value">--</div>
-            <div class="score-context" id="score-summary"></div>
+          <div class="score-row">
+            <div class="score-number" id="score-value">--<sup>/100</sup></div>
+            <div class="score-summary" id="score-summary"></div>
           </div>
           
-          <div class="section-label">Cadence Topography</div>
+          <div class="section-label">Text Analysis</div>
           <div class="text-display" id="text-highlighted"></div>
           
-          <div class="section-label">Rhythmic Flow</div>
+          <div class="section-label">Cadence</div>
           <canvas id="cadence-chart"></canvas>
           
           <div class="section-label">Metrics</div>
-          <div class="metrics-row" id="score-metrics"></div>
+          <div class="metrics-grid" id="score-metrics"></div>
           
-          <div class="section-label">Editorial Notes</div>
-          <div class="suggestion-group" id="score-suggestions"></div>
+          <div class="section-label">Suggestions</div>
+          <div class="suggestions-list" id="score-suggestions"></div>
         </div>
         
-        <button class="settings-toggle" id="score-settings-toggle">
-          <span>Config &middot; Advanced</span>
-        </button>
-        <div class="settings-content" id="score-settings">
+        <button class="settings-toggle" id="score-settings-toggle">Settings</button>
+        <div class="settings-panel" id="score-settings">
           <div class="settings-grid">
             <div>
-              <label class="input-label" style="position:static;margin-bottom:8px;display:block;">Form</label>
+              <label class="input-label">Document Type</label>
               <select id="doc-type">
                 <option value="prose">Prose</option>
                 <option value="poem">Poetry</option>
               </select>
             </div>
             <div>
-              <label class="input-label" style="position:static;margin-bottom:8px;display:block;">Token Limit</label>
+              <label class="input-label">Max Tokens</label>
               <input type="number" id="max-tokens" value="512" />
             </div>
           </div>
@@ -497,27 +579,27 @@ STUDIO_HTML = """<!doctype html>
       
       <!-- Rewrite Panel -->
       <div id="panel-rewrite" class="panel">
-        <div class="input-wrapper">
-          <span class="input-label">Draft to Rewrite</span>
-          <textarea id="rewrite-text" placeholder="Enter text to re-imagine..."></textarea>
+        <div class="input-group">
+          <label class="input-label">Text to Rewrite</label>
+          <textarea id="rewrite-text" placeholder="Enter text to improve..."></textarea>
         </div>
         
-        <button class="btn" id="rewrite-btn">Generate Variations</button>
+        <button class="btn" id="rewrite-btn">Generate Rewrites</button>
         
         <div id="rewrite-result" class="result-area">
           <div class="section-label">Variations</div>
           <div id="rewrite-output"></div>
         </div>
         
-        <button class="settings-toggle" id="rewrite-settings-toggle"><span>Configuration</span></button>
-        <div class="settings-content" id="rewrite-settings">
+        <button class="settings-toggle" id="rewrite-settings-toggle">Settings</button>
+        <div class="settings-panel" id="rewrite-settings">
           <div class="settings-grid">
             <div>
-              <label class="input-label" style="position:static;margin-bottom:8px;display:block;">Count</label>
+              <label class="input-label">Candidates</label>
               <input type="number" id="rewrite-candidates" value="4" />
             </div>
             <div>
-              <label class="input-label" style="position:static;margin-bottom:8px;display:block;">Temperature</label>
+              <label class="input-label">Temperature</label>
               <input type="number" id="rewrite-temp" value="0.8" step="0.1" />
             </div>
           </div>
@@ -526,33 +608,32 @@ STUDIO_HTML = """<!doctype html>
       
       <!-- Match Panel -->
       <div id="panel-match" class="panel">
-        <div class="input-wrapper">
-          <span class="input-label">Reference Cadence</span>
-          <textarea id="match-reference" style="min-height:160px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again.</textarea>
+        <div class="input-group">
+          <label class="input-label">Reference (Target Cadence)</label>
+          <textarea id="match-reference" style="min-height:140px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again.</textarea>
         </div>
         
-        <div class="input-wrapper">
-          <span class="input-label">Starting Prompt</span>
+        <div class="input-group">
+          <label class="input-label">Your Prompt</label>
           <textarea id="match-prompt" style="min-height:100px;">The morning light crept through the window</textarea>
         </div>
         
-        <button class="btn" id="match-btn">Extrapolate Pattern</button>
+        <button class="btn" id="match-btn">Generate</button>
         
         <div id="match-result" class="result-area">
-          <span class="copy-link" onclick="copyText('match-output')">Copy to Clipboard</span>
-          <div class="section-label">Generated Continuation</div>
+          <div class="section-label">Generated Text</div>
           <div class="text-display" id="match-output"></div>
         </div>
         
-        <button class="settings-toggle" id="match-settings-toggle"><span>Configuration</span></button>
-        <div class="settings-content" id="match-settings">
+        <button class="settings-toggle" id="match-settings-toggle">Settings</button>
+        <div class="settings-panel" id="match-settings">
           <div class="settings-grid">
             <div>
-              <label class="input-label" style="position:static;margin-bottom:8px;display:block;">Length</label>
+              <label class="input-label">Max Tokens</label>
               <input type="number" id="match-tokens" value="200" />
             </div>
             <div>
-              <label class="input-label" style="position:static;margin-bottom:8px;display:block;">Seed</label>
+              <label class="input-label">Seed</label>
               <input type="number" id="match-seed" value="7" />
             </div>
           </div>
@@ -563,6 +644,25 @@ STUDIO_HTML = """<!doctype html>
     <script>
       const $ = id => document.getElementById(id);
       const $$ = sel => document.querySelectorAll(sel);
+      
+      // Theme Toggle
+      const savedTheme = localStorage.getItem('horace-theme') || 'dark';
+      if (savedTheme === 'light') document.body.setAttribute('data-theme', 'light');
+      updateThemeUI();
+      
+      $('theme-toggle').addEventListener('click', () => {
+        const isLight = document.body.getAttribute('data-theme') === 'light';
+        document.body.setAttribute('data-theme', isLight ? '' : 'light');
+        localStorage.setItem('horace-theme', isLight ? 'dark' : 'light');
+        updateThemeUI();
+      });
+      
+      function updateThemeUI() {
+        const isLight = document.body.getAttribute('data-theme') === 'light';
+        $('theme-icon-dark').style.display = isLight ? 'none' : 'block';
+        $('theme-icon-light').style.display = isLight ? 'block' : 'none';
+        $('theme-label').textContent = isLight ? 'Dark' : 'Light';
+      }
       
       // Tabs
       $$('.tab').forEach(tab => {
@@ -581,14 +681,7 @@ STUDIO_HTML = """<!doctype html>
         });
       });
       
-      // Copy
-      async function copyText(id) {
-        const text = $(id).textContent;
-        await navigator.clipboard.writeText(text);
-        alert('Copied to clipboard');
-      }
-      
-      // API Wrapper
+      // API
       async function api(endpoint, body) {
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -599,11 +692,13 @@ STUDIO_HTML = """<!doctype html>
         return res.json();
       }
       
-      // Logic
+      // Helpers
+      function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+      
       function highlightText(text, spikes) {
-        if (!spikes || !spikes.length) return text; // Basic escape handled by browser innerText usually, but let's be safe
-        const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-        
+        if (!spikes || !spikes.length) return escapeHtml(text);
         const sorted = [...spikes].sort((a, b) => a.char_start - b.char_start);
         let result = '';
         let lastEnd = 0;
@@ -613,12 +708,12 @@ STUDIO_HTML = """<!doctype html>
           const end = spike.char_end;
           if (start < lastEnd) continue;
           
-          result += safeText.slice(lastEnd, start);
-          const word = safeText.slice(start, end);
-          result += `<span class="spike" title="Surprisal: ${spike.surprisal?.toFixed(1)}">${word}</span>`;
+          result += escapeHtml(text.slice(lastEnd, start));
+          const word = text.slice(start, end);
+          result += `<span class="spike" title="Surprisal: ${spike.surprisal?.toFixed(1)}">${escapeHtml(word)}</span>`;
           lastEnd = end;
         }
-        result += safeText.slice(lastEnd);
+        result += escapeHtml(text.slice(lastEnd));
         return result;
       }
       
@@ -634,43 +729,38 @@ STUDIO_HTML = """<!doctype html>
         
         if (!series || series.length < 2) return;
         
-        const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+        const style = getComputedStyle(document.body);
+        const chartColor = style.getPropertyValue('--chart-color').trim() || '#c5a059';
         
         let min = Math.min(...series), max = Math.max(...series);
         if (max - min < 0.1) { min = 0; max = 10; }
         
-        const w = rect.width;
-        const h = rect.height;
+        const w = rect.width, h = rect.height;
+        const pad = h * 0.1;
         const xAt = i => (i / (series.length - 1)) * w;
-        const yAt = v => h - ((v - min) / (max - min)) * (h * 0.8) - (h * 0.1); // add padding
+        const yAt = v => pad + (1 - (v - min) / (max - min)) * (h - 2 * pad);
         
         ctx.beginPath();
         ctx.moveTo(xAt(0), yAt(series[0]));
-        for (let i = 1; i < series.length; i++) {
-            // Smooth curve
-            const x = xAt(i);
-            const y = yAt(series[i]);
-            ctx.lineTo(x, y);
-        }
+        for (let i = 1; i < series.length; i++) ctx.lineTo(xAt(i), yAt(series[i]));
         
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = chartColor;
+        ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Fill
         ctx.lineTo(w, h);
         ctx.lineTo(0, h);
         ctx.closePath();
         const grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, accent + '22'); // 22 is hex alpha
-        grad.addColorStop(1, accent + '00');
+        grad.addColorStop(0, chartColor + '33');
+        grad.addColorStop(1, chartColor + '00');
         ctx.fillStyle = grad;
         ctx.fill();
         
         canvas._lastSeries = series;
       }
       
-      // Handlers
+      // Score Handler
       $('score-btn').addEventListener('click', async () => {
         const btn = $('score-btn');
         const result = $('score-result');
@@ -690,31 +780,31 @@ STUDIO_HTML = """<!doctype html>
           });
           
           result.classList.add('visible');
-          $('score-value').innerText = Math.round(data.score?.overall_0_100 || 0);
-          $('score-summary').innerText = data.critique?.summary || 'Analysis complete.';
+          $('score-value').innerHTML = Math.round(data.score?.overall_0_100 || 0) + '<sup>/100</sup>';
+          $('score-summary').innerText = data.critique?.summary || '';
           $('text-highlighted').innerHTML = highlightText(text, data.analysis?.spikes || []);
           drawCadence(data.analysis?.series?.surprisal);
           
           const cats = data.score?.categories || {};
           $('score-metrics').innerHTML = Object.entries(cats).map(([k, v]) => `
-            <div class="metric-cell">
-              <div class="metric-val">${Math.round(v * 100)}</div>
-              <div class="metric-name">${k}</div>
+            <div class="metric">
+              <div class="metric-value">${Math.round(v * 100)}</div>
+              <div class="metric-label">${k}</div>
             </div>
           `).join('');
           
           const suggs = data.critique?.suggestions || [];
-          $('score-suggestions').innerHTML = suggs.map(s => `
+          $('score-suggestions').innerHTML = suggs.length ? suggs.map(s => `
             <div class="suggestion">
               <div class="sugg-title" onclick="this.parentElement.classList.toggle('open')">
-                <span>✦ ${s.title}</span>
+                <span>→ ${escapeHtml(s.title || '')}</span>
               </div>
               <div class="sugg-body">
-                <p><strong>Try:</strong> ${s.what_to_try}</p>
-                <p style="margin-top:8px;font-style:italic;opacity:0.7;">${s.why || ''}</p>
+                <p>${escapeHtml(s.what_to_try || '')}</p>
+                ${s.why ? `<p style="margin-top:8px;opacity:0.7;font-style:italic;">${escapeHtml(s.why)}</p>` : ''}
               </div>
             </div>
-          `).join('') || '<div style="color:var(--text-muted);font-style:italic;">No suggestions available.</div>';
+          `).join('') : '<p style="color:var(--text-muted);">No suggestions.</p>';
           
         } catch (e) {
           alert(e.message);
@@ -724,43 +814,56 @@ STUDIO_HTML = """<!doctype html>
         }
       });
       
+      // Rewrite Handler
       $('rewrite-btn').addEventListener('click', async () => {
         const btn = $('rewrite-btn');
         const result = $('rewrite-result');
+        const origText = btn.innerText;
+        
         btn.disabled = true;
-        btn.innerText = 'Rewriting...';
+        btn.innerText = 'Generating...';
         result.classList.remove('visible');
         
         try {
           const data = await api('/rewrite', {
             text: $('rewrite-text').value,
-            n_candidates: parseInt($('rewrite-candidates').value) || 3,
+            n_candidates: parseInt($('rewrite-candidates').value) || 4,
             temperature: parseFloat($('rewrite-temp').value) || 0.8,
             normalize_text: true
           });
           
           result.classList.add('visible');
-          $('rewrite-output').innerHTML = (data.rewrites || []).map((r, i) => `
-            <div class="text-display" style="margin-bottom:24px;">
-              <span class="copy-link" onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText)">Copy</span>
-              <div style="font-family:var(--font-body);">${r.text.replace(/</g, '&lt;')}</div>
-              <div class="section-label" style="margin-top:16px;margin-bottom:0;">Score: ${Math.round(r.score)}</div>
+          const rewrites = data.rewrites || [];
+          
+          $('rewrite-output').innerHTML = rewrites.length ? rewrites.map((r, i) => `
+            <div class="rewrite-card">
+              <div class="rewrite-header">
+                <span>Version ${i + 1}</span>
+                <span class="rewrite-score">Score: ${Math.round(r.score || 0)}</span>
+              </div>
+              <div class="rewrite-text">${escapeHtml(r.text || '')}</div>
+              <div style="margin-top:12px;text-align:right;">
+                <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.rewrite-card').querySelector('.rewrite-text').innerText)">Copy</button>
+              </div>
             </div>
-          `).join('');
+          `).join('') : '<p style="color:var(--text-muted);">No rewrites generated.</p>';
           
         } catch (e) {
           alert(e.message);
         } finally {
           btn.disabled = false;
-          btn.innerText = 'Generate Variations';
+          btn.innerText = origText;
         }
       });
       
+      // Match Handler
       $('match-btn').addEventListener('click', async () => {
         const btn = $('match-btn');
         const result = $('match-result');
+        const origText = btn.innerText;
+        
         btn.disabled = true;
-        btn.innerText = 'Processing...';
+        btn.innerText = 'Generating...';
         result.classList.remove('visible');
         
         try {
@@ -770,13 +873,15 @@ STUDIO_HTML = """<!doctype html>
             max_new_tokens: parseInt($('match-tokens').value) || 200,
             seed: parseInt($('match-seed').value) || 7
           });
+          
           result.classList.add('visible');
           $('match-output').innerText = data.generated_text || data.text || '';
+          
         } catch (e) {
           alert(e.message);
         } finally {
           btn.disabled = false;
-          btn.innerText = 'Extrapolate Pattern';
+          btn.innerText = origText;
         }
       });
       
