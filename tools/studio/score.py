@@ -22,6 +22,15 @@ class ScoreReport:
 
 
 def _metric_score(pctl: Optional[float], mode: str) -> Optional[float]:
+    """Convert percentile to 0-1 score based on scoring mode.
+    
+    Modes:
+    - higher_is_better: 100th percentile = 1.0, 0th = 0.0
+    - lower_is_better: 0th percentile = 1.0, 100th = 0.0
+    - match_baseline: Plateau scoring - full score for 25th-75th percentile,
+      linear falloff outside that range. This allows stylistic variation
+      without penalizing distinctive but valid literary choices.
+    """
     if pctl is None:
         return None
     p = max(0.0, min(100.0, float(pctl)))
@@ -29,8 +38,18 @@ def _metric_score(pctl: Optional[float], mode: str) -> Optional[float]:
         return p / 100.0
     if mode == "lower_is_better":
         return 1.0 - (p / 100.0)
-    # match_baseline: best near median
-    return max(0.0, 1.0 - abs(p - 50.0) / 50.0)
+    # match_baseline: plateau scoring (25th-75th = full score)
+    # This tolerates stylistic variation while still penalizing extremes
+    PLATEAU_LOW = 25.0
+    PLATEAU_HIGH = 75.0
+    if PLATEAU_LOW <= p <= PLATEAU_HIGH:
+        return 1.0
+    elif p < PLATEAU_LOW:
+        # Linear falloff from 1.0 at 25th to 0.0 at 0th
+        return p / PLATEAU_LOW
+    else:
+        # Linear falloff from 1.0 at 75th to 0.0 at 100th
+        return (100.0 - p) / (100.0 - PLATEAU_HIGH)
 
 
 _RUBRIC: Dict[str, Dict[str, Any]] = {
@@ -47,7 +66,10 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
         "metrics": {
             "high_surprise_rate_per_100": {"weight": 0.25, "mode": "match_baseline"},
             "ipi_mean": {"weight": 0.25, "mode": "match_baseline"},
-            "cooldown_entropy_drop_3": {"weight": 0.20, "mode": "higher_is_better"},
+            # cooldown_entropy_drop_3: Changed from higher_is_better to match_baseline
+            # because low cooldown (maintaining tension) is a valid stylistic choice
+            # (e.g., Hemingway's minimalist style), not inherently worse.
+            "cooldown_entropy_drop_3": {"weight": 0.20, "mode": "match_baseline"},
             "sent_burst_cv": {"weight": 0.10, "mode": "match_baseline"},
             "para_burst_cv": {"weight": 0.10, "mode": "match_baseline"},
             "sent_words_cv": {"weight": 0.07, "mode": "match_baseline"},

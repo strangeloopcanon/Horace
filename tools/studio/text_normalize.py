@@ -102,6 +102,23 @@ def normalize_for_studio(text: str, *, doc_type: str, enabled: bool = True) -> T
     except Exception:
         pass
 
+    # Smart punctuation normalization (NFKC doesn't fully normalize these)
+    # This ensures consistency between training data and scoring
+    t = t.replace("\u2014", "--")   # em-dash → double hyphen
+    t = t.replace("\u2013", "-")    # en-dash → hyphen
+    t = t.replace("\u2015", "--")   # horizontal bar → double hyphen
+    t = t.replace("\u2012", "-")    # figure dash → hyphen
+    t = t.replace("\u2010", "-")    # hyphen character → ASCII hyphen
+    t = t.replace("\u2018", "'")    # left single quote
+    t = t.replace("\u2019", "'")    # right single quote (apostrophe)
+    t = t.replace("\u201c", '"')    # left double quote
+    t = t.replace("\u201d", '"')    # right double quote
+    t = t.replace("\u201a", "'")    # single low-9 quote
+    t = t.replace("\u201e", '"')    # double low-9 quote
+    t = t.replace("\u2026", "...")  # ellipsis → three dots
+    t = t.replace("\u2032", "'")    # prime (sometimes used as apostrophe)
+    t = t.replace("\u2033", '"')    # double prime
+
     # Light whitespace cleanup (safe for all types)
     t = t.replace("\u00a0", " ")
     t = t.replace("\u202f", " ").replace("\u2009", " ")
