@@ -343,7 +343,7 @@ def fastapi_app():  # pragma: no cover
     import tools.studio.site
     import importlib
     importlib.reload(tools.studio.site)
-    from tools.studio.site import STUDIO_HTML
+    from tools.studio.site import API_HTML, STUDIO_HTML
 
     web = FastAPI(title="Horace")
 
@@ -351,12 +351,22 @@ def fastapi_app():  # pragma: no cover
     _rate_limits: Dict[str, list] = defaultdict(list)
     RATE_LIMIT = 30  # requests per minute per IP
     RATE_WINDOW = 60  # seconds
+    API_KEY = (os.environ.get("HORACE_API_KEY") or "").strip()
+    OPEN_PATHS = ("/", "/api", "/docs", "/openapi.json", "/healthz")
 
     @web.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):
-        # Skip rate limiting for static assets and healthz
-        if request.url.path in ("/", "/docs", "/openapi.json", "/healthz"):
+        if request.url.path in OPEN_PATHS:
             return await call_next(request)
+
+        if API_KEY:
+            auth = (request.headers.get("authorization") or "").strip()
+            if auth.lower().startswith("bearer "):
+                supplied = auth[7:].strip()
+            else:
+                supplied = (request.headers.get("x-api-key") or "").strip()
+            if not supplied or supplied != API_KEY:
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
 
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()
@@ -376,6 +386,10 @@ def fastapi_app():  # pragma: no cover
     @web.get("/healthz")
     def healthz():
         return {"ok": True}
+
+    @web.get("/api")
+    async def api_docs():
+        return HTMLResponse(content=API_HTML)
 
     @web.post("/analyze")
     async def analyze(body: Dict[str, Any] = Body(...)):

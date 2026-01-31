@@ -11,6 +11,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -39,7 +40,7 @@ from tools.studio.rewrite import rewrite_and_rerank
 from tools.studio.score import score_text
 from tools.studio.span_patcher import patch_span as patch_one_span
 from tools.studio.span_patcher import suggest_dead_zones
-from tools.studio.site import STUDIO_HTML
+from tools.studio.site import API_HTML, STUDIO_HTML
 from tools.studio.write_like import write_like as write_like_gen
 
 
@@ -56,6 +57,30 @@ def _ensure_baseline(baseline_model_or_path: str):
 
 
 app = FastAPI(title="Horace Studio API")
+
+_HORACE_API_KEY = (os.environ.get("HORACE_API_KEY") or "").strip()
+
+
+@app.middleware("http")
+async def api_key_middleware(request, call_next):  # pragma: no cover
+    if not _HORACE_API_KEY:
+        return await call_next(request)
+
+    # Keep docs / landing open.
+    if request.url.path in ("/", "/api", "/docs", "/openapi.json", "/healthz"):
+        return await call_next(request)
+
+    auth = (request.headers.get("authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        supplied = auth[7:].strip()
+    else:
+        supplied = (request.headers.get("x-api-key") or "").strip()
+
+    if not supplied or supplied != _HORACE_API_KEY:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 class AnalyzeReq(BaseModel):
@@ -163,6 +188,13 @@ def index():  # pragma: no cover
     from fastapi.responses import HTMLResponse
 
     return HTMLResponse(content=STUDIO_HTML)
+
+
+@app.get("/api")
+def api_docs():  # pragma: no cover
+    from fastapi.responses import HTMLResponse
+
+    return HTMLResponse(content=API_HTML)
 
 
 @app.post("/analyze")

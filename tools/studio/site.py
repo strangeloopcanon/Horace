@@ -1,6 +1,103 @@
 from __future__ import annotations
 
 
+API_HTML = """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Horace API</title>
+    <style>
+      :root {
+        --bg: #0b0b0c;
+        --fg: #f0ede6;
+        --muted: rgba(240, 237, 230, 0.7);
+        --card: rgba(240, 237, 230, 0.06);
+        --border: rgba(240, 237, 230, 0.16);
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: ui-sans-serif, -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+        line-height: 1.5;
+      }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 40px 20px 80px; }
+      h1 { margin: 0 0 8px; font-size: 34px; letter-spacing: -0.02em; }
+      .sub { margin: 0 0 22px; color: var(--muted); }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin: 14px 0;
+      }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+      a { color: var(--fg); }
+      .muted { color: var(--muted); }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 12px;
+        margin-right: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Horace API</h1>
+      <p class="sub">
+        So what: call Horace from anything (scripts, apps, notebooks) to score text and generate cadence-matched writing.
+      </p>
+
+      <div class="card">
+        <div class="pill">OpenAPI</div>
+        <span class="muted">Interactive docs:</span> <a href="/docs">/docs</a>
+        <span class="muted"> • JSON schema:</span> <a href="/openapi.json">/openapi.json</a>
+      </div>
+
+      <div class="card">
+        <div class="pill">Auth</div>
+        <span class="muted">
+          If the server is configured with <code>HORACE_API_KEY</code>, send either
+          <code>Authorization: Bearer &lt;key&gt;</code> or <code>X-API-Key: &lt;key&gt;</code>.
+        </span>
+      </div>
+
+      <div class="card">
+        <div class="pill">POST</div><code>/analyze</code> <span class="muted">Score a passage (0–100) + breakdown.</span>
+        <pre>
+curl -s http://127.0.0.1:8000/analyze \\
+  -H 'Content-Type: application/json' \\
+  -d '{"text":"At dawn, the city leans into light.","doc_type":"prose","scoring_model_id":"gpt2","baseline_model":"gpt2_gutenberg_512"}'
+        </pre>
+      </div>
+
+      <div class="card">
+        <div class="pill">POST</div><code>/rewrite</code> <span class="muted">Generate candidates and rerank by score.</span>
+      </div>
+
+      <div class="card">
+        <div class="pill">POST</div><code>/cadence-match</code> <span class="muted">(alias: <code>/write-like</code>) Match cadence from a reference passage.</span>
+      </div>
+
+      <div class="card">
+        <div class="pill">POST</div><code>/patch/suggest</code> <span class="muted">Find “dead zones” (flat spans).</span><br/>
+        <div class="pill">POST</div><code>/patch/span</code> <span class="muted">Patch a span (MeaningLock + diff).</span>
+      </div>
+
+      <p class="muted">
+        Notes: the API is intentionally literal—Horace scores cadence, not “truth”. Use MeaningLock when you need meaning-preserving edits.
+      </p>
+    </div>
+  </body>
+</html>
+"""
+
 STUDIO_HTML = """<!doctype html>
 <html lang="en">
   <head>

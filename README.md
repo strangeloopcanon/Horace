@@ -82,6 +82,10 @@ pip install -r requirements.txt
 python -m tools.studio_api --port 8000
 ```
 
+Docs:
+- Human: `GET /api`
+- OpenAPI: `GET /docs` (or `GET /openapi.json`)
+
 Endpoints:
 - `POST /analyze` — Score text
 - `POST /rewrite` — Generate + rank rewrites  

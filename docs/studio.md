@@ -56,6 +56,12 @@ make run-api
 Then open:
 `http://127.0.0.1:8000/`
 
+API docs:
+- Human: `http://127.0.0.1:8000/api`
+- OpenAPI: `http://127.0.0.1:8000/docs`
+
+Optional auth: set `HORACE_API_KEY` to require `Authorization: Bearer <key>` or `X-API-Key: <key>` for non-doc routes.
+
 Health:
 ```bash
 curl http://127.0.0.1:8000/healthz
