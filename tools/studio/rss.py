@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import re
 import time
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import List, Optional
+
+from defusedxml import ElementTree as DefusedET
+
+
+MAX_FEED_XML_CHARS = 2_000_000
 
 
 def _strip_ns(tag: str) -> str:
@@ -98,14 +102,17 @@ def _parse_published_unix(s: str) -> Optional[int]:
 def parse_feed(xml_text: str) -> List[FeedEntry]:
     """Parse an Atom or RSS feed into lightweight entries (best-effort).
 
-    So what: we want a dependency-free way to ingest modern prose sources via feeds.
+    So what: feed payloads are untrusted network input; we cap payload size and use
+    defused XML parsing to avoid parser abuse while keeping ingestion lightweight.
     """
     t = (xml_text or "").strip()
     if not t:
         return []
+    if len(t) > int(MAX_FEED_XML_CHARS):
+        return []
 
     try:
-        root = ET.fromstring(t)
+        root = DefusedET.fromstring(t)
     except Exception:
         return []
 
@@ -171,4 +178,3 @@ def parse_feed(xml_text: str) -> List[FeedEntry]:
         return entries
 
     return []
-

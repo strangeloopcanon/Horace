@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Tuple
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+from tools.studio.model_security import resolve_model_source, resolve_trust_remote_code
 from tools.studio.text_normalize import normalize_for_studio
 
 
@@ -22,7 +23,7 @@ def _best_device(explicit: Optional[str] = None) -> str:
     if torch.cuda.is_available():
         return "cuda"
     try:
-        if torch.backends.mps.is_available():  # type: ignore[attr-defined]
+        if torch.backends.mps.is_available():
             return "mps"
     except Exception:
         pass
@@ -77,7 +78,10 @@ def _ensure_pad_token(tokenizer) -> None:
 
 def load_scorer(model_path_or_id: str, *, device: Optional[str] = None) -> Tuple[Any, Any, str]:
     """Load a trained scorer model (HF directory or model id) with a small in-process cache."""
-    key = _cache_key(model_path_or_id)
+    source = resolve_model_source(model_path_or_id, purpose="scorer model")
+    key = _cache_key(source.source_id)
+    if source.revision is not None:
+        key = f"{key}@{source.revision}"
     with _CACHE_LOCK:
         hit = _MODEL_CACHE.get(key)
         if hit is not None:
@@ -86,14 +90,19 @@ def load_scorer(model_path_or_id: str, *, device: Optional[str] = None) -> Tuple
             if device is None or str(device) == str(dev):
                 return tok, model, dev
     dev = _best_device(device)
-    trc = _needs_trust_remote_code(key)
-    tok_kwargs = {"trust_remote_code": trc}
+    trc_requested = _needs_trust_remote_code(source.source_id)
+    trc = resolve_trust_remote_code(source, requested=trc_requested, purpose="scorer model")
+    tok_kwargs: Dict[str, Any] = {"trust_remote_code": trc}
+    model_kwargs: Dict[str, Any] = {"trust_remote_code": trc}
+    if source.revision is not None:
+        tok_kwargs["revision"] = source.revision
+        model_kwargs["revision"] = source.revision
     try:
-        tok = AutoTokenizer.from_pretrained(key, fix_mistral_regex=True, **tok_kwargs)
+        tok = AutoTokenizer.from_pretrained(source.source_id, fix_mistral_regex=True, **tok_kwargs)
     except TypeError:
-        tok = AutoTokenizer.from_pretrained(key, **tok_kwargs)
+        tok = AutoTokenizer.from_pretrained(source.source_id, **tok_kwargs)
     _ensure_pad_token(tok)
-    model = AutoModelForSequenceClassification.from_pretrained(key, trust_remote_code=trc)
+    model = AutoModelForSequenceClassification.from_pretrained(source.source_id, **model_kwargs)
     if getattr(model.config, "pad_token_id", None) is None and getattr(tok, "pad_token_id", None) is not None:
         model.config.pad_token_id = tok.pad_token_id
     model.to(dev)

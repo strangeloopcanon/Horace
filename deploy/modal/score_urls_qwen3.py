@@ -99,8 +99,11 @@ def score_remote(
 
 
 def _fetch_html(url: str) -> str:
-    req = Request(str(url), headers={"User-Agent": "Mozilla/5.0"})
-    with urlopen(req, timeout=45) as resp:
+    from tools.studio.url_safety import validate_public_http_url
+
+    safe_url = validate_public_http_url(url)
+    req = Request(safe_url, headers={"User-Agent": "Mozilla/5.0"})
+    with urlopen(req, timeout=45) as resp:  # nosec B310
         return resp.read().decode("utf-8", errors="replace")
 
 
@@ -368,7 +371,11 @@ def main(
 
     rows: List[Dict[str, Any]] = []
     for url in url_list:
-        html = _fetch_html(url)
+        try:
+            html = _fetch_html(url)
+        except Exception as e:
+            rows.append({"url": url, "error": "fetch_failed", "fetch_error": f"{type(e).__name__}: {e}"})
+            continue
         title = _extract_og_title(html)
         text = _extract_essay(html)
         if not text:
