@@ -23,7 +23,8 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 def _lazy_import_modal():
@@ -99,12 +100,33 @@ def score_remote(
 
 
 def _fetch_html(url: str) -> str:
-    from tools.studio.url_safety import validate_public_http_url
+    from tools.studio.url_safety import validate_public_http_url, validate_public_redirect_target
 
-    safe_url = validate_public_http_url(url)
-    req = Request(safe_url, headers={"User-Agent": "Mozilla/5.0"})
-    with urlopen(req, timeout=45) as resp:  # nosec B310
-        return resp.read().decode("utf-8", errors="replace")
+    class _NoRedirect(HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+            return None
+
+    opener = build_opener(_NoRedirect())
+    current = validate_public_http_url(url)
+    visited: set[str] = set()
+    max_redirects = 5
+
+    for _ in range(max_redirects + 1):
+        if current in visited:
+            raise RuntimeError(f"redirect loop detected: {current}")
+        visited.add(current)
+        req = Request(current, headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            with opener.open(req, timeout=45) as resp:  # nosec B310
+                return resp.read().decode("utf-8", errors="replace")
+        except HTTPError as e:
+            code = int(getattr(e, "code", 0) or 0)
+            if code not in (301, 302, 303, 307, 308):
+                raise
+            location = str(e.headers.get("Location") or "").strip()
+            current = validate_public_redirect_target(current, location)
+
+    raise RuntimeError("too many redirects")
 
 
 def _extract_og_title(html: str) -> Optional[str]:
