@@ -39,6 +39,12 @@ class TestMeaningLock(unittest.TestCase):
         self.assertFalse(rep.ok)
         self.assertIn("too_much_changed", rep.reasons)
 
+    def test_meaning_lock_blocks_aggressive_shortening(self) -> None:
+        cfg = MeaningLockConfig(embedder_model_id="", min_length_ratio=0.85)
+        rep = check_meaning_lock("This sentence has enough detail.", "Too short.", cfg=cfg)
+        self.assertFalse(rep.ok)
+        self.assertIn("too_short", rep.reasons)
+
     def test_meaning_lock_blocks_negation_flip(self) -> None:
         cfg = MeaningLockConfig(embedder_model_id="", allow_negation_change=False)
         rep = check_meaning_lock("I do not agree.", "I agree.", cfg=cfg)

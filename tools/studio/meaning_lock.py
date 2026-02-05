@@ -158,6 +158,7 @@ class MeaningLockConfig:
     embedder_model_id: str = "distilbert-base-uncased"
     embedder_max_length: int = 256
     min_cosine_sim: float = 0.86
+    min_length_ratio: float = 0.75
     max_length_ratio: float = 1.45
     max_edit_ratio: float = 0.55  # approx char-level change ratio
     allow_new_numbers: bool = False
@@ -226,6 +227,8 @@ def check_meaning_lock(
         )
 
     length_ratio = float(len(b) / max(1, len(a)))
+    if length_ratio < float(c.min_length_ratio):
+        reasons.append("too_short")
     if length_ratio > float(c.max_length_ratio):
         reasons.append("too_long")
 

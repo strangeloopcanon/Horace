@@ -17,6 +17,7 @@ from tools.analyze import (
     permutation_entropy,
     hurst_rs,
 )
+from tools.studio.model_security import resolve_model_source
 from tools.studio.text_normalize import normalize_for_studio
 
 
@@ -333,12 +334,22 @@ def _coerce_doc_type(doc_type: str) -> str:
 
 def _get_backend(model_id: str, *, backend: str) -> ModelBackend:
     """Return a cached backend instance for interactive use (UI/API)."""
-    key = (str(backend or "auto").lower(), str(model_id))
+    source = resolve_model_source(model_id, purpose="analysis model")
+    resolved_id = str(source.source_id)
+    requested_backend = str(backend or "auto").lower()
+    # Pinned revisions are supported on the HF path; force it so the revision is honored.
+    if source.revision is not None:
+        resolved_id = f"{source.source_id}@{source.revision}"
+        effective_backend = "hf"
+    else:
+        effective_backend = requested_backend
+
+    key = (effective_backend, resolved_id)
     with _BACKEND_LOCK:
         cached = _BACKEND_CACHE.get(key)
         if cached is not None:
             return cached
-        inst: ModelBackend = pick_backend(model_id, prefer_mlx=True, backend=backend)
+        inst: ModelBackend = pick_backend(resolved_id, prefer_mlx=True, backend=effective_backend)
         _BACKEND_CACHE[key] = inst
         return inst
 
@@ -698,11 +709,12 @@ def analyze_text(
     }
     doc_metrics.update(surface_metrics)
 
+    seg_kind = "poem" if doc_type_norm == "poem" else "prose"
+
     # Cohesion delta (shuffled units) – expensive, but useful; run once if possible.
     if compute_cohesion:
         try:
-            kind = "poem" if doc_type_norm == "poem" else "prose"
-            units = paragraph_units(text_used, kind)
+            units = paragraph_units(text_used, seg_kind)
             if len(units) >= 3:
                 shuffled = units[:]
                 random.Random(0).shuffle(shuffled)
@@ -784,7 +796,7 @@ def analyze_text(
         return means, token_counts, cv, len_cv, items
 
     sent_means, sent_counts, burst_cv_sent, len_cv_sent, sent_items = _segment_series(sent_spans)
-    para_spans = paragraph_units(text_used, "prose")
+    para_spans = paragraph_units(text_used, seg_kind)
     para_means, para_counts, burst_cv_para, len_cv_para, para_items = _segment_series(para_spans)
     line_means, line_counts, burst_cv_line, len_cv_line, line_items = _segment_series(line_spans)
 
