@@ -161,6 +161,7 @@ class PatchSpanReq(BaseModel):
     meaning_lock_embedder_model_id: str = "distilbert-base-uncased"
     meaning_lock_embedder_max_length: int = 256
     meaning_lock_min_cosine_sim: float = 0.86
+    meaning_lock_min_length_ratio: float = 0.75
     meaning_lock_max_length_ratio: float = 1.45
     meaning_lock_max_edit_ratio: float = 0.55
     meaning_lock_allow_new_numbers: bool = False
@@ -364,6 +365,7 @@ def patch_span(req: PatchSpanReq) -> Dict[str, Any]:
         embedder_model_id=str(req.meaning_lock_embedder_model_id),
         embedder_max_length=int(req.meaning_lock_embedder_max_length),
         min_cosine_sim=float(req.meaning_lock_min_cosine_sim),
+        min_length_ratio=float(req.meaning_lock_min_length_ratio),
         max_length_ratio=float(req.meaning_lock_max_length_ratio),
         max_edit_ratio=float(req.meaning_lock_max_edit_ratio),
         allow_new_numbers=bool(req.meaning_lock_allow_new_numbers),

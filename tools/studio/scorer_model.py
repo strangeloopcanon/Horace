@@ -174,8 +174,23 @@ def score_with_scorer(
     tensors = {k: v.to(dev) for k, v in tensors.items()}
     with torch.no_grad():
         out = model(**tensors)
-        logits = out.logits.squeeze(-1)
-        probs = torch.sigmoid(logits).detach().cpu().numpy()
+        logits = out.logits
+        if logits.ndim == 1:
+            logits = logits.unsqueeze(-1)
+        if logits.ndim != 2:
+            raise ValueError(f"unexpected scorer logits shape: {tuple(logits.shape)}")
+        head_dim = int(logits.shape[-1])
+        if head_dim == 1:
+            probs_t = torch.sigmoid(logits[:, 0])
+        elif head_dim == 2:
+            # Binary classifier with two logits: use positive class probability.
+            probs_t = torch.softmax(logits, dim=-1)[:, 1]
+        else:
+            raise ValueError(
+                "score_with_scorer supports only binary classifier heads (1 or 2 logits); "
+                f"got {head_dim} logits"
+            )
+        probs = probs_t.detach().cpu().numpy()
 
     ps = [float(x) for x in probs.reshape(-1).tolist()] if probs.size else []
     ps = [0.0 if not math.isfinite(p) else max(0.0, min(1.0, float(p))) for p in ps]

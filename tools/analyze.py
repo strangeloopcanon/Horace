@@ -59,6 +59,21 @@ class ModelBackend:
         raise NotImplementedError
 
 
+def _split_model_revision(model_id: str) -> Tuple[str, Optional[str]]:
+    ident = str(model_id or "").strip()
+    if "@" not in ident:
+        return ident, None
+    repo, rev = ident.rsplit("@", 1)
+    repo = repo.strip()
+    rev = rev.strip()
+    if not repo or not rev:
+        return ident, None
+    # Avoid interpreting local filenames like "model@v2" as remote refs.
+    if "/" not in repo:
+        return ident, None
+    return repo, rev
+
+
 class HFBackend(ModelBackend):
     def __init__(self, model_id: str, device: Optional[str] = None):
         super().__init__(model_id, device)
@@ -69,13 +84,20 @@ class HFBackend(ModelBackend):
             print("Please install transformers and torch: pip install transformers torch", file=sys.stderr)
             raise
 
+        source_id, revision = _split_model_revision(model_id)
         self.torch = torch
         self.AutoTokenizer = AutoTokenizer
         self.AutoModelForCausalLM = AutoModelForCausalLM
+        tok_kwargs = {"use_fast": True, "trust_remote_code": True}
+        model_kwargs = {}
+        if revision is not None:
+            tok_kwargs["revision"] = revision
+            model_kwargs["revision"] = revision
         try:
-            self.tok = self.AutoTokenizer.from_pretrained(model_id, use_fast=True, trust_remote_code=True)
+            self.tok = self.AutoTokenizer.from_pretrained(source_id, **tok_kwargs)
         except TypeError:
-            self.tok = self.AutoTokenizer.from_pretrained(model_id, use_fast=True)
+            tok_kwargs.pop("trust_remote_code", None)
+            self.tok = self.AutoTokenizer.from_pretrained(source_id, **tok_kwargs)
         # Silence long-seq warning by bumping max length if available
         try:
             if hasattr(self.tok, 'model_max_length') and isinstance(self.tok.model_max_length, int):
@@ -83,7 +105,7 @@ class HFBackend(ModelBackend):
                     self.tok.model_max_length = 10**8
         except Exception:
             pass
-        self.model = self.AutoModelForCausalLM.from_pretrained(model_id)
+        self.model = self.AutoModelForCausalLM.from_pretrained(source_id, **model_kwargs)
         self.model.eval()
         # Device selection
         dev = device

@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from tools.studio.analyze import analyze_text
 from tools.studio.baselines import Baseline
-from tools.studio.score import ScoreReport, score_text
+from tools.studio.score import MetricScore, ScoreReport, score_text
 from tools.studio.text_normalize import normalize_for_studio
 
 
@@ -190,6 +190,45 @@ def windowed_rubric_for_text(
         if vals:
             agg_cats[c] = float(_weighted_mean(vals, ws))
 
+    all_metrics: set[str] = set()
+    for s in scores:
+        all_metrics.update((s.metrics or {}).keys())
+    agg_metrics: Dict[str, MetricScore] = {}
+    for m in sorted(all_metrics):
+        vals: List[float] = []
+        vals_w: List[float] = []
+        pcts: List[float] = []
+        pcts_w: List[float] = []
+        score01: List[float] = []
+        score01_w: List[float] = []
+        mode: Optional[str] = None
+        for sc, w in zip(scores, weights):
+            ms = (sc.metrics or {}).get(m)
+            if ms is None:
+                continue
+            ww = float(w)
+            if ww <= 0:
+                continue
+            if mode is None:
+                mode = str(ms.mode)
+            if isinstance(ms.value, (int, float)):
+                vals.append(float(ms.value))
+                vals_w.append(ww)
+            if isinstance(ms.percentile, (int, float)):
+                pcts.append(float(ms.percentile))
+                pcts_w.append(ww)
+            if isinstance(ms.score_0_1, (int, float)):
+                score01.append(float(ms.score_0_1))
+                score01_w.append(ww)
+        if not vals:
+            continue
+        agg_metrics[m] = MetricScore(
+            value=float(_weighted_mean(vals, vals_w)),
+            percentile=float(_weighted_mean(pcts, pcts_w)) if pcts else None,
+            score_0_1=float(_weighted_mean(score01, score01_w)) if score01 else None,
+            mode=mode or "match_baseline",
+        )
+
     eligible = [i for i, w in enumerate(weights) if float(w) >= 0.25]
     if not eligible:
         eligible = list(range(len(scores)))
@@ -197,7 +236,7 @@ def windowed_rubric_for_text(
     worst_i = min(eligible, key=lambda i: float(scores[i].overall_0_100))
     best_i = max(eligible, key=lambda i: float(scores[i].overall_0_100))
 
-    aggregate = ScoreReport(overall_0_100=float(agg_overall), categories=agg_cats, metrics=dict(scores[worst_i].metrics))
+    aggregate = ScoreReport(overall_0_100=float(agg_overall), categories=agg_cats, metrics=agg_metrics)
     return WindowedRubric(
         aggregate=aggregate,
         worst=scores[worst_i],
@@ -208,4 +247,3 @@ def windowed_rubric_for_text(
         worst_analysis=analyses[worst_i],
         text_normalization=dict(norm_meta),
     )
-

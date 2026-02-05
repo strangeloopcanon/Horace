@@ -479,6 +479,7 @@ def _score_one(
     backend: str,
     max_input_tokens: int,
     compute_cohesion: bool,
+    normalize_text: bool = True,
 ) -> Tuple[Dict[str, Any], ScoreReport]:
     analysis = analyze_text(
         text,
@@ -486,6 +487,7 @@ def _score_one(
         doc_type=doc_type,
         backend=backend,
         max_input_tokens=max_input_tokens,
+        normalize_text=bool(normalize_text),
         compute_cohesion=bool(compute_cohesion),
     )
     baseline = _ensure_baseline(baseline_model_id)
@@ -568,6 +570,7 @@ def rewrite_and_rerank(
         backend=backend,
         max_input_tokens=max_input_tokens,
         compute_cohesion=compute_cohesion,
+        normalize_text=False,  # already normalized once above (or intentionally left raw)
     )
     orig_cal_score = (
         _calibrated_score_0_100(
@@ -602,6 +605,7 @@ def rewrite_and_rerank(
             backend=backend,
             max_input_tokens=max_input_tokens,
             compute_cohesion=compute_cohesion,
+            normalize_text=False,  # avoid double-normalizing candidate text
         )
         cal_score = (
             _calibrated_score_0_100(

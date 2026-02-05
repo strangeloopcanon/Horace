@@ -637,8 +637,10 @@ def patch_span(
         droning_after = _droning_score(repl)
         droning_delta = float(droning_after - droning_before)
         len_ratio = float(len(repl) / max(1, len(span)))
-        brevity_gain = float(1.0 - len_ratio)
-        clarity_gain = float((-droning_delta) + 0.25 * brevity_gain)
+        # Reward modest tightening, but do not reward aggressive deletion.
+        brevity_gain = float(min(max(0.0, 1.0 - len_ratio), 0.12))
+        deletion_penalty = float(max(0.0, 0.90 - len_ratio))
+        clarity_gain = float((-droning_delta) + 0.25 * brevity_gain - deletion_penalty)
         rank_score = float(
             (intensity_norm * float(texture_after - texture_before))
             + ((1.0 - intensity_norm) * float(clarity_gain))
@@ -686,6 +688,8 @@ def patch_span(
             backend=str(backend),
             max_input_tokens=int(max_input_tokens),
         )
+        if isinstance(primary_before, dict) and primary_before.get("error"):
+            primary_before_err = str(primary_before.get("error"))
     except Exception as e:
         primary_before_err = f"{type(e).__name__}: {e}"
 
@@ -711,15 +715,31 @@ def patch_span(
             primary_after[i] = {"error": f"{type(e).__name__}: {e}"}
 
     before_0_100 = primary_before.get("overall_0_100") if isinstance(primary_before, dict) else None
+    primary_before_status = "not_scored"
+    if isinstance(primary_before, dict) and isinstance(primary_before.get("overall_0_100"), (int, float)):
+        primary_before_status = "scored"
+    elif primary_before_err:
+        primary_before_status = "error"
 
     for i, c in enumerate(scored[: max(1, int(n_candidates))]):
         d = c.to_dict()
         after = primary_after[i] if i < len(primary_after) else None
-        if isinstance(after, dict):
+        if i >= n_score:
+            d["primary_after_status"] = "not_scored"
+            d["primary_after_reason"] = "score_top_n_limit"
+        elif isinstance(after, dict):
             d["primary_after"] = after
-            after_0_100 = after.get("overall_0_100")
-            if isinstance(before_0_100, (int, float)) and isinstance(after_0_100, (int, float)):
-                d["primary_delta_0_100"] = float(after_0_100 - before_0_100)
+            if after.get("error"):
+                d["primary_after_status"] = "error"
+                d["primary_after_error"] = str(after.get("error"))
+            else:
+                d["primary_after_status"] = "scored"
+                after_0_100 = after.get("overall_0_100")
+                if isinstance(before_0_100, (int, float)) and isinstance(after_0_100, (int, float)):
+                    d["primary_delta_0_100"] = float(after_0_100 - before_0_100)
+        else:
+            d["primary_after_status"] = "not_scored"
+            d["primary_after_reason"] = "missing_result"
         candidates_out.append(d)
 
     return {
@@ -728,6 +748,7 @@ def patch_span(
         "span": {"start_char": s, "end_char": e, "core_start_char": core_s, "core_end_char": core_e, "text": span},
         "control": {"intensity_0_1": float(intensity_norm)},
         "primary_before": primary_before,
+        "primary_before_status": primary_before_status,
         "primary_before_error": primary_before_err,
         "candidates": candidates_out,
     }
