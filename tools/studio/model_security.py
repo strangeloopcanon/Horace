@@ -42,7 +42,8 @@ def _allowlisted_remote_models() -> Set[str]:
     return out
 
 
-def _split_remote_revision(model_path_or_id: str) -> Tuple[str, Optional[str]]:
+def split_model_revision(model_path_or_id: str) -> Tuple[str, Optional[str]]:
+    """Split '<repo>@<revision>' while preserving local filename semantics."""
     ident = str(model_path_or_id or "").strip()
     if "@" not in ident:
         return ident, None
@@ -55,6 +56,11 @@ def _split_remote_revision(model_path_or_id: str) -> Tuple[str, Optional[str]]:
         # Avoid interpreting local filenames like "model@v2" as remote refs.
         return ident, None
     return repo, rev
+
+
+def _split_remote_revision(model_path_or_id: str) -> Tuple[str, Optional[str]]:
+    # Backward-compatible alias kept for internal callers.
+    return split_model_revision(model_path_or_id)
 
 
 def _is_pinned_revision(revision: str) -> bool:
@@ -81,7 +87,7 @@ def resolve_model_source(model_path_or_id: str, *, purpose: str) -> ModelSource:
         except Exception:
             return ModelSource(source_id=str(p), revision=None, is_local=True)
 
-    repo, revision = _split_remote_revision(ident)
+    repo, revision = split_model_revision(ident)
     if revision and _is_pinned_revision(revision):
         return ModelSource(source_id=repo, revision=revision, is_local=False)
 
