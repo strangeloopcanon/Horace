@@ -6,10 +6,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.studio.model_security import resolve_model_source, resolve_trust_remote_code
+from tools.studio.model_security import resolve_model_source, resolve_trust_remote_code, split_model_revision
 
 
 class TestModelSecurity(unittest.TestCase):
+    def test_split_model_revision_parses_remote_reference(self) -> None:
+        repo, rev = split_model_revision("org/custom-model@abc123")
+        self.assertEqual(repo, "org/custom-model")
+        self.assertEqual(rev, "abc123")
+
+    def test_split_model_revision_preserves_local_like_identifier(self) -> None:
+        repo, rev = split_model_revision("model@v2")
+        self.assertEqual(repo, "model@v2")
+        self.assertIsNone(rev)
+
     def test_allows_local_path(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             model_dir = Path(td) / "model"

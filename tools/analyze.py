@@ -16,6 +16,8 @@ import itertools
 import numpy as np
 from tqdm import tqdm
 
+from tools.studio.model_security import split_model_revision
+
 
 # Backend selection: try MLX later, default to HF Transformers now.
 class ModelBackend:
@@ -59,21 +61,6 @@ class ModelBackend:
         raise NotImplementedError
 
 
-def _split_model_revision(model_id: str) -> Tuple[str, Optional[str]]:
-    ident = str(model_id or "").strip()
-    if "@" not in ident:
-        return ident, None
-    repo, rev = ident.rsplit("@", 1)
-    repo = repo.strip()
-    rev = rev.strip()
-    if not repo or not rev:
-        return ident, None
-    # Avoid interpreting local filenames like "model@v2" as remote refs.
-    if "/" not in repo:
-        return ident, None
-    return repo, rev
-
-
 class HFBackend(ModelBackend):
     def __init__(self, model_id: str, device: Optional[str] = None):
         super().__init__(model_id, device)
@@ -84,7 +71,7 @@ class HFBackend(ModelBackend):
             print("Please install transformers and torch: pip install transformers torch", file=sys.stderr)
             raise
 
-        source_id, revision = _split_model_revision(model_id)
+        source_id, revision = split_model_revision(model_id)
         self.torch = torch
         self.AutoTokenizer = AutoTokenizer
         self.AutoModelForCausalLM = AutoModelForCausalLM
