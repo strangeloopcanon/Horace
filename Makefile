@@ -1,9 +1,10 @@
-.PHONY: setup setup-modal modal-token check test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid
+.PHONY: setup setup-modal modal-token check lint typecheck security test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid
 .PHONY: modal-score-urls
 
 VENV ?= .venv
 PYTHON ?= $(VENV)/bin/python
 UV ?= uv
+UVX ?= uvx
 MODAL ?= $(PYTHON) -m modal
 MODAL_RUN_FLAGS ?=
 URL_SCORE_ARGS ?=
@@ -41,6 +42,9 @@ RSS_SLEEP_S ?= 0.0
 TRAINED_SCORER_MODEL ?= /vol/models/scorer_standardebooks_distilled
 REBUILD ?= 0
 DISTILL_DIR_V4_SMOKE ?= data/benchmarks/studio_benchmark_v4_distill_smoke
+LINT_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/rewrite.py tools/studio/scorer_model.py deploy/modal/score_urls_qwen3.py tests/test_rss.py tests/test_url_safety.py tests/test_model_security.py
+TYPECHECK_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py
+SECURITY_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py deploy/modal/score_urls_qwen3.py
 
 SETUP_SENTINEL := $(VENV)/.horace_setup
 
@@ -58,9 +62,18 @@ setup-modal: setup
 modal-token: setup-modal
 	$(MODAL) token new
 
-check: setup
+check: setup lint typecheck security
 	$(PYTHON) -m compileall tools deploy
 	$(UV) pip check --python $(PYTHON)
+
+lint: setup
+	$(UVX) ruff check $(LINT_FILES)
+
+typecheck: setup
+	$(UVX) ty check $(TYPECHECK_FILES)
+
+security: setup
+	$(UVX) bandit -q -s B110,B311 $(SECURITY_FILES)
 
 test: setup
 	$(PYTHON) -m unittest -v

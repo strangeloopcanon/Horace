@@ -48,7 +48,13 @@ class TestRSS(unittest.TestCase):
         self.assertIn("<p>", e.content_html)
         self.assertIsInstance(e.published_unix, int)
 
+    def test_parse_feed_rejects_oversized_xml(self):
+        from tools.studio.rss import MAX_FEED_XML_CHARS, parse_feed
+
+        huge = "<rss><channel><item><title>T</title><description>" + ("x" * (MAX_FEED_XML_CHARS + 8)) + "</description></item></channel></rss>"
+        entries = parse_feed(huge)
+        self.assertEqual(entries, [])
+
 
 if __name__ == "__main__":
     unittest.main()
-

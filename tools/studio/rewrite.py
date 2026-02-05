@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
 import os
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -12,6 +11,7 @@ import numpy as np
 from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.calibrator import featurize_from_report_row, load_logistic_calibrator
+from tools.studio.model_security import resolve_model_source, resolve_trust_remote_code
 from tools.studio.score import ScoreReport, score_text
 from tools.studio.text_normalize import normalize_for_studio
 
@@ -33,19 +33,30 @@ def _pick_device() -> str:
 
 
 def _get_hf(model_id: str, device: Optional[str] = None):
-    if model_id in _HF_CACHE:
-        return _HF_CACHE[model_id]
-    import torch
+    source = resolve_model_source(model_id, purpose="rewrite model")
+    cache_key = f"{source.source_id}@{source.revision or ''}"
+    hit = _HF_CACHE.get(cache_key)
+    if hit is not None:
+        tok, model, dev = hit
+        if device is None or str(device) == str(dev):
+            return tok, model, dev
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     dev = device or _pick_device()
-    tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+    needs_remote_code = "qwen" in source.source_id.lower()
+    trust_remote_code = resolve_trust_remote_code(source, requested=needs_remote_code, purpose="rewrite model")
+    tok_kwargs: Dict[str, Any] = {"trust_remote_code": bool(trust_remote_code)}
+    model_kwargs: Dict[str, Any] = {"trust_remote_code": bool(trust_remote_code)}
+    if source.revision is not None:
+        tok_kwargs["revision"] = source.revision
+        model_kwargs["revision"] = source.revision
+    tok = AutoTokenizer.from_pretrained(source.source_id, **tok_kwargs)
     if tok.pad_token_id is None:
         tok.pad_token_id = tok.eos_token_id
-    model = AutoModelForCausalLM.from_pretrained(model_id, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(source.source_id, **model_kwargs)
     model.to(dev)
     model.eval()
-    _HF_CACHE[model_id] = (tok, model, dev)
+    _HF_CACHE[cache_key] = (tok, model, dev)
     return tok, model, dev
 
 
@@ -680,7 +691,6 @@ def generate_cadence_span_rewrites(
     from tools.analyze import pick_backend
     from tools.sampler import CadenceSampler
     from tools.studio.cadence_profile import (
-        CadenceProfile,
         DEFAULT_POETRY_PROFILE,
         DEFAULT_PROSE_PROFILE,
         extract_cadence_profile,

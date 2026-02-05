@@ -93,6 +93,22 @@ Endpoints:
 - `POST /patch/span` — Patch a span
 - `POST /cadence-match` — Generate matching reference cadence
 
+## Runtime Safety
+
+So what: Horace can fetch remote web content and load HF models at runtime, so the defaults now block risky inputs unless explicitly allowed.
+
+- URL scoring only accepts public `http`/`https` targets (no `file://`, localhost, or private-network hosts).
+- Remote model IDs must be allowlisted or pinned as `<repo>@<revision>`.
+- Remote model code loading (`trust_remote_code`) is disabled by default.
+
+```bash
+# Optional: allow remote model code only for reviewed models
+export HORACE_ALLOW_REMOTE_CODE=1
+
+# Optional: extend default allowlist for unpinned remote model IDs
+export HORACE_MODEL_ID_ALLOWLIST="org/model-a,org/model-b"
+```
+
 ---
 
 ## Reports & Documentation
