@@ -3,7 +3,7 @@ from __future__ import annotations
 import ipaddress
 import socket
 from typing import Iterable
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 
 _ALLOWED_SCHEMES = {"http", "https"}
@@ -84,3 +84,18 @@ def validate_public_http_url(url: str, *, resolve_dns: bool = True) -> str:
             raise ValueError(f"non-public target is not allowed: {host}")
 
     return raw
+
+
+def validate_public_redirect_target(current_url: str, location: str, *, resolve_dns: bool = True) -> str:
+    """Resolve and validate a redirect Location header target.
+
+    So what: SSRF checks must apply to every redirect hop, not just the first URL.
+    """
+    base = str(current_url or "").strip()
+    if not base:
+        raise ValueError("current_url is empty")
+    loc = str(location or "").strip()
+    if not loc:
+        raise ValueError("redirect location is empty")
+    target = urljoin(base, loc)
+    return validate_public_http_url(target, resolve_dns=bool(resolve_dns))

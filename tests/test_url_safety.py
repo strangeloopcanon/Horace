@@ -4,7 +4,7 @@ import socket
 import unittest
 from unittest.mock import patch
 
-from tools.studio.url_safety import validate_public_http_url
+from tools.studio.url_safety import validate_public_http_url, validate_public_redirect_target
 
 
 class TestUrlSafety(unittest.TestCase):
@@ -35,6 +35,18 @@ class TestUrlSafety(unittest.TestCase):
         with patch("socket.getaddrinfo", return_value=fake_info):
             out = validate_public_http_url("https://example.com/path")
         self.assertEqual(out, "https://example.com/path")
+
+    def test_redirect_target_rejects_private_absolute_location(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_public_redirect_target("https://public.example/start", "http://169.254.169.254/latest/meta-data")
+
+    def test_redirect_target_accepts_relative_location(self) -> None:
+        out = validate_public_redirect_target(
+            "https://public.example/start",
+            "/next/page",
+            resolve_dns=False,
+        )
+        self.assertEqual(out, "https://public.example/next/page")
 
 
 if __name__ == "__main__":
