@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from tools.studio.score import ScoreReport
@@ -46,7 +46,6 @@ def suggest_edits(
     # 1) Focus / openness
     focus = score.categories.get("focus")
     ent = m("entropy_mean")
-    nuc = m("nucleus_w_mean")
     if focus is not None and focus < 0.55:
         why = "The distribution looks less like the reference band for your selected genre."
         if ent and ent.percentile is not None and ent.percentile > 70:

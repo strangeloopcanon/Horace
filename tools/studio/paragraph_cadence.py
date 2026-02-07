@@ -178,7 +178,6 @@ def extract_paragraph_cadence(
         para_sents: List[int] = []
         for si, sent in enumerate(sent_items):
             sent_start = int(sent.get("start_token") or 0)
-            sent_end = int(sent.get("end_token") or sent_start)
             # Sentence is in paragraph if it starts within paragraph bounds
             if para_start_token <= sent_start < para_end_token:
                 para_sents.append(si)
