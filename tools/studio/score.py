@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from tools.studio.baselines import Baseline, get_slice, percentile
 
@@ -15,21 +15,32 @@ class MetricScore:
 
 
 @dataclass(frozen=True)
+class ImprovementHint:
+    """A single actionable improvement suggestion tied to a metric."""
+    category: str
+    metric: str
+    current_score: float
+    potential_gain: float
+    direction: str  # 'too_low', 'too_high', or 'flat'
+
+
+@dataclass(frozen=True)
 class ScoreReport:
     overall_0_100: float
     categories: Dict[str, float]
     metrics: Dict[str, MetricScore]
+    top_improvements: List[ImprovementHint] = ()  # type: ignore[assignment]
 
 
 def _metric_score(pctl: Optional[float], mode: str) -> Optional[float]:
     """Convert percentile to 0-1 score based on scoring mode.
-    
+
     Modes:
     - higher_is_better: 100th percentile = 1.0, 0th = 0.0
     - lower_is_better: 0th percentile = 1.0, 100th = 0.0
-    - match_baseline: Plateau scoring - full score for 25th-75th percentile,
-      linear falloff outside that range. This allows stylistic variation
-      without penalizing distinctive but valid literary choices.
+    - match_baseline: Plateau scoring with excellence bonus — full score for
+      25th-75th percentile, linear falloff outside, plus a gentle bonus for
+      75th-90th to reward distinctive-but-controlled excellence.
     """
     if pctl is None:
         return None
@@ -38,18 +49,22 @@ def _metric_score(pctl: Optional[float], mode: str) -> Optional[float]:
         return p / 100.0
     if mode == "lower_is_better":
         return 1.0 - (p / 100.0)
-    # match_baseline: plateau scoring (25th-75th = full score)
-    # This tolerates stylistic variation while still penalizing extremes
+    # match_baseline: plateau scoring with excellence bonus
     PLATEAU_LOW = 25.0
     PLATEAU_HIGH = 75.0
+    EXCELLENCE_CEIL = 90.0
     if PLATEAU_LOW <= p <= PLATEAU_HIGH:
         return 1.0
     elif p < PLATEAU_LOW:
-        # Linear falloff from 1.0 at 25th to 0.0 at 0th
         return p / PLATEAU_LOW
+    elif p <= EXCELLENCE_CEIL:
+        # Excellence bonus zone: 75th-90th percentile gets a gentle bonus
+        # up to 1.08 (8% above plateau), rewarding controlled distinction.
+        bonus = 0.08 * ((p - PLATEAU_HIGH) / (EXCELLENCE_CEIL - PLATEAU_HIGH))
+        return 1.0 + bonus
     else:
-        # Linear falloff from 1.0 at 75th to 0.0 at 100th
-        return (100.0 - p) / (100.0 - PLATEAU_HIGH)
+        # Beyond 90th: linear falloff from 1.08 back to 0.0 at 100th
+        return 1.08 * (100.0 - p) / (100.0 - EXCELLENCE_CEIL)
 
 
 _RUBRIC: Dict[str, Dict[str, Any]] = {
@@ -101,13 +116,63 @@ _RUBRIC: Dict[str, Dict[str, Any]] = {
 }
 
 
+def _compute_top_improvements(
+    metric_scores: Dict[str, MetricScore],
+    category_scores: Dict[str, float],
+    n: int = 3,
+) -> List[ImprovementHint]:
+    """Find the N metrics with the most room for improvement, weighted by category impact."""
+    candidates: List[Tuple[float, ImprovementHint]] = []
+
+    for cat_name, cat_spec in _RUBRIC.items():
+        cat_weight = float(cat_spec["weight"])
+        for mkey, mspec in cat_spec["metrics"].items():
+            ms = metric_scores.get(mkey)
+            if ms is None or ms.score_0_1 is None or ms.percentile is None:
+                continue
+            metric_weight = float(mspec.get("weight", 1.0))
+            # Room for improvement: how far from a perfect 1.0 score
+            gap = max(0.0, 1.0 - float(ms.score_0_1))
+            # Impact: category weight * metric weight * gap
+            impact = cat_weight * metric_weight * gap
+            if impact < 0.005:
+                continue
+
+            p = float(ms.percentile)
+            mode = str(mspec.get("mode", "match_baseline"))
+            if mode == "higher_is_better":
+                direction = "too_low"
+            elif mode == "lower_is_better":
+                direction = "too_high"
+            elif p < 25:
+                direction = "too_low"
+            elif p > 75:
+                direction = "too_high"
+            else:
+                direction = "flat"
+
+            candidates.append((
+                impact,
+                ImprovementHint(
+                    category=cat_name,
+                    metric=mkey,
+                    current_score=float(ms.score_0_1),
+                    potential_gain=impact,
+                    direction=direction,
+                ),
+            ))
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return [hint for _, hint in candidates[:n]]
+
+
 def score_text(doc_metrics: Dict[str, Any], baseline: Baseline, *, doc_type: str) -> ScoreReport:
     """Score a single analyzed text against baseline distributions.
 
     Notes:
-    - This is intentionally conservative: it mostly rewards matching the baseline,
-      except for a few metrics with clearer directionality.
+    - Rewards matching the baseline, with a gentle excellence bonus (75th-90th pctl).
     - Missing metrics are skipped and weights renormalized within each category.
+    - Returns top-3 improvement hints ranked by potential impact.
     """
     base_slice = get_slice(baseline, doc_type)
     metric_scores: Dict[str, MetricScore] = {}
@@ -151,4 +216,10 @@ def score_text(doc_metrics: Dict[str, Any], baseline: Baseline, *, doc_type: str
         weight_sum += cat_weight
 
     overall = 100.0 * (weighted_total / weight_sum) if weight_sum > 0 else 0.0
-    return ScoreReport(overall_0_100=float(overall), categories=category_scores, metrics=metric_scores)
+    top_improvements = _compute_top_improvements(metric_scores, category_scores)
+    return ScoreReport(
+        overall_0_100=float(overall),
+        categories=category_scores,
+        metrics=metric_scores,
+        top_improvements=top_improvements,
+    )

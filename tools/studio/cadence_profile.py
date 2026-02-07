@@ -9,7 +9,9 @@ from __future__ import annotations
 import copy
 import math
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 
 from tools.studio.analyze import analyze_text
 
@@ -113,7 +115,7 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
 def extract_cadence_profile(
     text: str,
     *,
-    model_id: str = "gpt2",
+    model_id: str = "Qwen/Qwen3-0.6B",
     backend: str = "auto",
     max_input_tokens: int = 512,
     doc_type: str = "prose",
@@ -277,11 +279,71 @@ def blend_profiles(
     )
 
 
+def dtw_distance(
+    series_a: List[float],
+    series_b: List[float],
+    *,
+    window: Optional[int] = None,
+) -> float:
+    """Compute Dynamic Time Warping distance between two surprisal time series.
+
+    Uses the Sakoe-Chiba band constraint for efficiency. Returns the normalized
+    DTW distance (divided by path length).
+    """
+    a = np.array(series_a, dtype=np.float64)
+    b = np.array(series_b, dtype=np.float64)
+    n, m = len(a), len(b)
+    if n == 0 or m == 0:
+        return float("inf")
+
+    w = window or max(n, m)  # default: no constraint
+    w = max(w, abs(n - m))  # must be at least |n-m|
+
+    # DTW cost matrix with Sakoe-Chiba band
+    cost = np.full((n + 1, m + 1), np.inf)
+    cost[0, 0] = 0.0
+
+    for i in range(1, n + 1):
+        j_lo = max(1, i - w)
+        j_hi = min(m, i + w)
+        for j in range(j_lo, j_hi + 1):
+            d = abs(float(a[i - 1]) - float(b[j - 1]))
+            cost[i, j] = d + min(cost[i - 1, j], cost[i, j - 1], cost[i - 1, j - 1])
+
+    # Normalize by path length (approximated by n+m)
+    return float(cost[n, m]) / float(n + m)
+
+
+def dtw_similarity(
+    series_a: List[float],
+    series_b: List[float],
+    *,
+    window: Optional[int] = None,
+    scale: float = 3.0,
+) -> float:
+    """Compute DTW-based cadence similarity in [0, 1].
+
+    Higher means the two surprisal time series have more similar shapes.
+    Uses an exponential mapping: similarity = exp(-distance / scale).
+    """
+    dist = dtw_distance(series_a, series_b, window=window)
+    if not math.isfinite(dist):
+        return 0.0
+    return float(math.exp(-dist / max(0.01, scale)))
+
+
 def compare_cadence_profiles(
     profile_a: CadenceProfile,
     profile_b: CadenceProfile,
+    *,
+    series_a: Optional[List[float]] = None,
+    series_b: Optional[List[float]] = None,
 ) -> Dict[str, Any]:
-    """Compare two cadence profiles and return distance metrics."""
+    """Compare two cadence profiles and return distance metrics.
+
+    If surprisal time series are provided, also computes DTW-based similarity
+    which is more sensitive to the actual shape of the cadence curve.
+    """
 
     def tuple_dist(a: Tuple[int, int], b: Tuple[int, int]) -> float:
         return abs((a[0] + a[1]) / 2 - (b[0] + b[1]) / 2)
@@ -292,34 +354,45 @@ def compare_cadence_profiles(
     temperature_dist = abs(profile_a.spike_temperature - profile_b.spike_temperature)
     top_p_dist = abs(profile_a.base_top_p - profile_b.base_top_p)
 
-    # Weighted overall distance
-    overall = (
-        0.30 * (interval_dist / 10.0)  # normalize by typical range
+    # Profile-level distance (original method)
+    profile_dist = (
+        0.30 * (interval_dist / 10.0)
         + 0.20 * (cooldown_dist / 4.0)
         + 0.20 * (content_boost_dist / 0.3)
         + 0.15 * (temperature_dist / 0.3)
         + 0.15 * (top_p_dist / 0.1)
     )
 
-    return {
+    # DTW-based similarity if series are available
+    dtw_sim = None
+    dtw_dist = None
+    if series_a is not None and series_b is not None and len(series_a) >= 5 and len(series_b) >= 5:
+        dtw_dist = dtw_distance(series_a, series_b, window=max(len(series_a), len(series_b)) // 4)
+        dtw_sim = dtw_similarity(series_a, series_b, window=max(len(series_a), len(series_b)) // 4)
+
+    # Blend profile and DTW similarity if DTW is available
+    if dtw_sim is not None:
+        profile_sim = max(0.0, 1.0 - profile_dist)
+        overall_sim = 0.4 * profile_sim + 0.6 * dtw_sim  # DTW is the primary signal
+        overall_dist = 1.0 - overall_sim
+    else:
+        overall_dist = profile_dist
+        overall_sim = max(0.0, 1.0 - profile_dist)
+
+    result: Dict[str, Any] = {
         "interval_distance": interval_dist,
         "cooldown_distance": cooldown_dist,
         "content_boost_distance": content_boost_dist,
         "temperature_distance": temperature_dist,
         "top_p_distance": top_p_dist,
-        "overall_distance": float(overall),
-        "similarity_0_1": float(max(0.0, 1.0 - overall)),
+        "profile_distance": float(profile_dist),
+        "overall_distance": float(overall_dist),
+        "similarity_0_1": float(overall_sim),
         "details": {
             "interval_range": {"generated": profile_a.interval_range, "reference": profile_b.interval_range},
             "cooldown_range": {"generated": profile_a.cooldown_range, "reference": profile_b.cooldown_range},
-            "spike_content_boost": {
-                "generated": profile_a.spike_content_boost,
-                "reference": profile_b.spike_content_boost,
-            },
-            "spike_stop_punct_penalty": {
-                "generated": profile_a.spike_stop_punct_penalty,
-                "reference": profile_b.spike_stop_punct_penalty,
-            },
+            "spike_content_boost": {"generated": profile_a.spike_content_boost, "reference": profile_b.spike_content_boost},
+            "spike_stop_punct_penalty": {"generated": profile_a.spike_stop_punct_penalty, "reference": profile_b.spike_stop_punct_penalty},
             "base_top_p": {"generated": profile_a.base_top_p, "reference": profile_b.base_top_p},
             "cool_top_p": {"generated": profile_a.cool_top_p, "reference": profile_b.cool_top_p},
             "base_temperature": {"generated": profile_a.base_temperature, "reference": profile_b.base_temperature},
@@ -327,3 +400,9 @@ def compare_cadence_profiles(
             "cool_temperature": {"generated": profile_a.cool_temperature, "reference": profile_b.cool_temperature},
         },
     }
+
+    if dtw_sim is not None:
+        result["dtw_distance"] = float(dtw_dist)
+        result["dtw_similarity"] = float(dtw_sim)
+
+    return result

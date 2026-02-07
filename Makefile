@@ -42,8 +42,8 @@ RSS_SLEEP_S ?= 0.0
 TRAINED_SCORER_MODEL ?= /vol/models/scorer_standardebooks_distilled
 REBUILD ?= 0
 DISTILL_DIR_V4_SMOKE ?= data/benchmarks/studio_benchmark_v4_distill_smoke
-LINT_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/rewrite.py tools/studio/scorer_model.py deploy/modal/score_urls_qwen3.py tests/test_rss.py tests/test_url_safety.py tests/test_model_security.py
-TYPECHECK_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py
+LINT_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/rewrite.py tools/studio/scorer_model.py tools/studio/analyze.py tools/studio/score.py tools/studio/baselines.py tools/studio/calibrator.py tools/studio/cadence_profile.py tools/studio/write_like.py tools/studio/critique.py tools/studio/meaning_lock.py tools/studio/span_patcher.py tools/studio/paragraph_cadence.py tools/reward.py tools/cli.py tools/train.py deploy/modal/score_urls_qwen3.py tests/test_rss.py tests/test_url_safety.py tests/test_model_security.py
+TYPECHECK_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/score.py tools/studio/baselines.py tools/studio/calibrator.py tools/cli.py
 SECURITY_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py deploy/modal/score_urls_qwen3.py
 
 SETUP_SENTINEL := $(VENV)/.horace_setup

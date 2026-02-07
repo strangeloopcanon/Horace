@@ -45,7 +45,7 @@ def write_like(
     prompt: str,
     *,
     reference_text: str,
-    model_id: str = "gpt2",
+    model_id: str = "Qwen/Qwen3-0.6B",
     backend: str = "auto",
     doc_type: str = "prose",
     max_new_tokens: int = 200,
@@ -103,8 +103,35 @@ def write_like(
         doc_type=doc_type,
     )
 
-    # Compare profiles
-    cadence_match = compare_cadence_profiles(generated_profile, reference_profile)
+    # Extract surprisal series for DTW comparison
+    ref_series = None
+    gen_series = None
+    try:
+        ref_analysis = analyze_text(
+            reference_text, model_id=model_id, backend=backend,
+            max_input_tokens=512, doc_type=doc_type,
+            normalize_text=True, compute_cohesion=False, include_token_metrics=True,
+        )
+        ref_series = (ref_analysis.get("token_metrics") or {}).get("surprisal")
+        if ref_series is None:
+            ref_series = (ref_analysis.get("series") or {}).get("surprisal")
+
+        gen_analysis = analyze_text(
+            generated_text, model_id=model_id, backend=backend,
+            max_input_tokens=256, doc_type=doc_type,
+            normalize_text=True, compute_cohesion=False, include_token_metrics=True,
+        )
+        gen_series = (gen_analysis.get("token_metrics") or {}).get("surprisal")
+        if gen_series is None:
+            gen_series = (gen_analysis.get("series") or {}).get("surprisal")
+    except Exception:
+        pass
+
+    # Compare profiles (with DTW if series available)
+    cadence_match = compare_cadence_profiles(
+        generated_profile, reference_profile,
+        series_a=gen_series, series_b=ref_series,
+    )
 
     return WriteLikeResult(
         generated_text=generated_text,
@@ -125,7 +152,7 @@ def write_like_with_candidates(
     prompt: str,
     *,
     reference_text: str,
-    model_id: str = "gpt2",
+    model_id: str = "Qwen/Qwen3-0.6B",
     backend: str = "auto",
     doc_type: str = "prose",
     max_new_tokens: int = 200,
@@ -214,7 +241,7 @@ def write_like_with_candidates(
 def extract_cadence_for_display(
     text: str,
     *,
-    model_id: str = "gpt2",
+    model_id: str = "Qwen/Qwen3-0.6B",
     backend: str = "auto",
     doc_type: str = "prose",
 ) -> Dict[str, Any]:

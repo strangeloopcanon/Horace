@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "horace"
+version = "0.1.0"
+description = "Measure and generate literary cadence"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+dependencies = [
+    "transformers>=4.40.0",
+    "torch>=2.1.0",
+    "tqdm>=4.66.0",
+    "numpy>=1.24.0",
+    "matplotlib>=3.7.0",
+    "pydantic>=2.6.0",
+    "safetensors>=0.4.0",
+    "defusedxml>=0.7.1",
+]
+
+[project.optional-dependencies]
+ui = ["gradio>=4.0.0"]
+api = ["fastapi>=0.110.0", "uvicorn>=0.28.0"]
+apple = ["mlx>=0.20.0", "mlx-lm>=0.20.0"]
+dev = [
+    "ruff>=0.4.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
+
+[project.scripts]
+horace = "tools.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["tools*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
