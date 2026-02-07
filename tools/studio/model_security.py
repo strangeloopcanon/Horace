@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Set, Tuple
 
-
 _DEFAULT_REMOTE_MODEL_ALLOWLIST: Set[str] = {
     "gpt2",
     "distilbert-base-uncased",

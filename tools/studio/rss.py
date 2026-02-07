@@ -7,7 +7,6 @@ from typing import List, Optional
 
 from defusedxml import ElementTree as DefusedET
 
-
 MAX_FEED_XML_CHARS = 2_000_000
 
 

@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from typing import Iterable
+from typing import Iterable, Union
 from urllib.parse import urljoin, urlsplit
-
 
 _ALLOWED_SCHEMES = {"http", "https"}
 _BLOCKED_HOSTS = {"localhost", "localhost.localdomain"}
-IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 
 def _is_public_ip(ip: IPAddress) -> bool:

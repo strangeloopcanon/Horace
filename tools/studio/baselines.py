@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
-
-import threading
+from typing import Any, Dict, Iterable, List, Optional
 
 
 @dataclass(frozen=True)
@@ -261,3 +260,24 @@ def get_slice(baseline: Baseline, doc_type: str) -> BaselineSlice:
     if dt in ("poetry",):
         return baseline.doc_types.get("poem") or baseline.doc_types["all"]
     return baseline.doc_types.get("all") or next(iter(baseline.doc_types.values()))
+
+
+# Genre-specific baseline identifiers for different corpus types.
+# Maps a genre label to the baseline file stem expected under data/baselines/.
+GENRE_BASELINES: Dict[str, str] = {
+    "classical": "gpt2_gutenberg_512",          # 19th-century literary prose
+    "modern_literary": "gpt2_standardebooks_512",  # curated modern literary
+    "web_prose": "gpt2_rss_512",                # contemporary web writing
+    "mixed": "gpt2_mixed_512",                  # blended corpus
+}
+
+
+def load_genre_baseline(genre: str, *, model_id: str = "gpt2") -> Baseline:
+    """Load a baseline for a specific genre, falling back to the default if unavailable."""
+    stem = GENRE_BASELINES.get(genre)
+    if stem:
+        p = Path("data/baselines") / f"{stem}_docs.json"
+        if p.exists():
+            return load_baseline_cached(stem, path=p)
+    # Fallback to default
+    return load_baseline_cached(f"{safe_model_id(model_id)}_gutenberg_512")

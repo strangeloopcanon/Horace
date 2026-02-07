@@ -12,7 +12,6 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from tools.studio.model_security import resolve_model_source, resolve_trust_remote_code
 from tools.studio.text_normalize import normalize_for_studio
 
-
 _CACHE_LOCK = threading.Lock()
 _MODEL_CACHE: Dict[str, Tuple[Any, Any, str]] = {}
 

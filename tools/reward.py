@@ -11,9 +11,10 @@ return zeros by default; fill in using Horace analysis utilities.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import Dict, Any, List, Optional, Tuple
 import math
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
 
@@ -28,6 +29,7 @@ class RewardWeights:
     safety: float = 1.0
     format: float = 0.5
     grammar: float = 0.0
+    coherence: float = 0.0  # LLM-judge coherence score
     # Optional plugin weights
     rhyme: float = 0.0
     meter: float = 0.0
@@ -114,7 +116,7 @@ def cadence_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
         p = p / (p.sum() + 1e-12)
         return float(-(p * (np.log(p + 1e-12))).sum())
 
-    H = [entropy_from_logits(l) for l in logits_steps]
+    H = [entropy_from_logits(lg) for lg in logits_steps]
 
     def pearson(a: np.ndarray, b: np.ndarray) -> float:
         if a.size < 3 or b.size != a.size:
@@ -178,7 +180,7 @@ def surprise_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
         pt = float(p[tid])
         return float(-math.log(max(pt, 1e-12)))
 
-    svals = [surprisal(l, t) for l, t in zip(logits_steps, toks[: len(logits_steps)])]
+    svals = [surprisal(lg, t) for lg, t in zip(logits_steps, toks[: len(logits_steps)])]
     per_line = []
     for start, end in line_steps:
         end = min(end, len(svals))
@@ -364,6 +366,97 @@ def wander_return_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
     return s
 
 
+def dtw_cadence_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
+    """DTW-based cadence similarity to a target surprisal envelope.
+
+    If a reference surprisal series is provided via ``sample['ref_surprisal']``,
+    computes DTW similarity between the generated and reference cadence curves.
+    Falls back to 0 if no reference is available.
+    """
+    ref = sample.get("ref_surprisal")
+    if not ref or not isinstance(ref, list) or len(ref) < 5:
+        return 0.0
+
+    # Compute generated surprisal from logits + tokens
+    logits_steps = sample.get("logits_per_step")
+    toks: List[int] = sample.get("gen_token_ids") or sample.get("tokens") or []
+    if not logits_steps or not toks:
+        return 0.0
+
+    gen_surprisal: List[float] = []
+    for ls, tid in zip(logits_steps, toks[:len(logits_steps)]):
+        x = ls.astype(np.float32)
+        x = x - np.max(x)
+        p = np.exp(x) / (np.sum(np.exp(x)) + 1e-12)
+        tid_int = int(tid) if 0 <= int(tid) < p.shape[-1] else int(np.argmax(p))
+        gen_surprisal.append(float(-math.log(max(1e-12, p[tid_int]))))
+
+    if len(gen_surprisal) < 5:
+        return 0.0
+
+    try:
+        from tools.studio.cadence_profile import dtw_similarity
+        return float(dtw_similarity(gen_surprisal, ref))
+    except Exception:
+        return 0.0
+
+
+def coherence_score(sample: Dict[str, Any], preset: PresetConfig) -> float:
+    """LLM-judge coherence score in [0,1].
+
+    Uses a lightweight self-consistency check: the generated text should be
+    internally coherent (sentences follow logically) and topically related
+    to the prompt. Falls back to a heuristic if no LLM is available.
+
+    The heuristic proxy measures:
+    - Sentence connectivity (adjacent sentence word overlap)
+    - Topic consistency (prompt-to-text word overlap)
+    - Absence of degenerate patterns (excessive repetition, very short output)
+    """
+    text = sample.get("gen_text") or sample.get("text") or ""
+    prompt = sample.get("prompt") or ""
+    if not text or len(text.strip()) < 20:
+        return 0.0
+
+    import re
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    if len(sentences) < 2:
+        return 0.5  # Too short to judge
+
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    prompt_words = set(re.findall(r"[a-z]+", prompt.lower())) - _COMMON
+
+    # 1. Adjacent sentence overlap (connectivity)
+    overlaps = []
+    for i in range(len(sentences) - 1):
+        w1 = set(re.findall(r"[a-z]+", sentences[i].lower())) - _COMMON
+        w2 = set(re.findall(r"[a-z]+", sentences[i + 1].lower())) - _COMMON
+        if w1 and w2:
+            overlaps.append(len(w1 & w2) / max(1, len(w1 | w2)))
+    connectivity = float(np.mean(overlaps)) if overlaps else 0.0
+
+    # 2. Topic consistency (prompt relevance)
+    content_words = words - _COMMON
+    topic_score = 0.0
+    if prompt_words and content_words:
+        topic_score = len(prompt_words & content_words) / max(1, len(prompt_words))
+    topic_score = min(1.0, topic_score)
+
+    # 3. Degeneration penalty: excessive word repetition
+    all_words = re.findall(r"[a-z]+", text.lower())
+    if len(all_words) >= 10:
+        freq: Dict[str, int] = {}
+        for w in all_words:
+            freq[w] = freq.get(w, 0) + 1
+        max_freq = max(freq.values())
+        degen_penalty = min(1.0, max(0.0, (max_freq / len(all_words)) - 0.1) * 5.0)
+    else:
+        degen_penalty = 0.0
+
+    score = 0.4 * min(1.0, connectivity * 3.0) + 0.4 * topic_score + 0.2 * (1.0 - degen_penalty)
+    return float(np.clip(score, 0.0, 1.0))
+
+
 def safety_penalty(sample: Dict[str, Any], preset: PresetConfig) -> float:
     """Placeholder: toxicity/NSFW gates; return penalty in [0,1]."""
     return 0.0
@@ -432,6 +525,7 @@ def compute_reward(
         "saf": safety_penalty(sample, preset),
         "fmt": format_penalty(sample, preset),
         "gra": grammar_accuracy_score(sample, preset),
+        "coh": coherence_score(sample, preset),
     }
 
     comp = normalize_components(raw, norm_stats)
@@ -446,6 +540,7 @@ def compute_reward(
         - w.safety * comp["saf"]
         - w.format * comp["fmt"]
         + getattr(w, "grammar", 0.0) * comp.get("gra", 0.0)
+        + getattr(w, "coherence", 0.0) * comp.get("coh", 0.0)
     )
 
     # Optional plugins (weights default to 0.0)

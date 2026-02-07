@@ -46,6 +46,7 @@ from tools.studio.span_patcher import patch_span as patch_one_span
 from tools.studio.span_patcher import suggest_dead_zones
 from tools.studio.write_like import write_like, extract_cadence_for_display
 from tools.studio.windowed_cadence import windowed_cadence_for_text
+from tools.studio.paragraph_cadence import extract_paragraph_cadence
 
 
 def _ensure_baseline(model_id: str):
@@ -138,6 +139,57 @@ def _plot_cadence_timeline(timeline) -> Optional[Image.Image]:
     return Image.open(buf)
 
 
+def _plot_paragraph_heatmap(analysis: Dict[str, Any]) -> Optional[Image.Image]:
+    """Plot a per-paragraph quality heatmap based on paragraph cadence metrics."""
+    try:
+        para_cad = extract_paragraph_cadence(analysis, spike_threshold=None)
+    except Exception:
+        return None
+
+    if not para_cad.paragraphs or para_cad.para_count < 2:
+        return None
+
+    paras = para_cad.paragraphs
+    n = len(paras)
+
+    # Compute a composite quality score per paragraph:
+    # Higher sentence variety, purposeful surprisal range, balanced momentum.
+    scores = []
+    for p in paras:
+        if p.sentence_count < 1:
+            scores.append(50.0)
+            continue
+        variety = min(1.0, p.sentence_length_cv / 0.5)  # 0.5 CV is healthy
+        range_score = min(1.0, p.surprisal_range / 3.0)  # 3.0 nats range is good
+        balance = 1.0 - abs(p.spike_front_loading) * 0.5  # balanced > front/back-loaded
+        score = 100.0 * (0.35 * variety + 0.40 * range_score + 0.25 * balance)
+        scores.append(max(0.0, min(100.0, score)))
+
+    fig, ax = plt.subplots(figsize=(8.0, max(1.5, 0.4 * n + 0.6)))
+
+    colors = [plt.cm.RdYlGn(s / 100.0) for s in scores]
+    bars = ax.barh(range(n), scores, color=colors, edgecolor="white", height=0.7)
+
+    ax.set_yticks(range(n))
+    labels = [f"P{i+1} ({p.sentence_count}s)" for i, p in enumerate(paras)]
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.set_xlabel("Paragraph Quality")
+    ax.set_xlim(0, 100)
+    ax.set_title("Paragraph Heatmap")
+    ax.invert_yaxis()
+
+    for bar, score in zip(bars, scores):
+        ax.text(bar.get_width() + 2, bar.get_y() + bar.get_height() / 2,
+                f"{score:.0f}", va="center", fontsize=7)
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=160)
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf)
+
+
 def _md_score(score, baseline_model: str, doc_type: str, *, tokens_count: int, truncated: bool) -> str:
     lines = []
     lines.append(f"### Score: **{score.overall_0_100:.1f}/100**")
@@ -202,7 +254,7 @@ def run_analyze(
     critic_seed: Optional[int],
 ):
     if not text or not text.strip():
-        return "", "", "", "", None, None, {}
+        return "", "", "", "", None, None, None, {}
 
     trained_score = None
     trained_err = None
@@ -227,14 +279,14 @@ def run_analyze(
             msg = "_Fast mode requires a valid trained scorer model path._"
             if trained_err:
                 msg += f"\n\nError: `{trained_err}`"
-            return msg, "", "", "", None, None, {"trained_score_error": trained_err}
+            return msg, "", "", "", None, None, None, {"trained_score_error": trained_err}
         score_md = []
         score_md.append(f"### Trained scorer: **{trained_score.score_0_100:.1f}/100**")
         score_md.append(f"- prob: `{trained_score.prob_0_1:.3f}`")
         score_md.append(f"- model: `{trained_score.model_path_or_id}`")
         score_md.append(f"- device: `{trained_score.device}`")
         out_json = {"trained_score": asdict(trained_score)}
-        return "\n".join(score_md), "", "", "", None, None, out_json
+        return "\n".join(score_md), "", "", "", None, None, None, out_json
 
     analysis = analyze_text(
         text,
@@ -309,6 +361,7 @@ def run_analyze(
     
     # Compute cadence timeline for longer texts
     timeline_img = None
+    para_heatmap_img = None
     tokens_count = int(analysis["doc_metrics"].get("tokens_count") or 0)
     if tokens_count >= 100:  # Only compute timeline for longer texts
         try:
@@ -323,6 +376,23 @@ def run_analyze(
             out_json["timeline"] = timeline.to_dict()
         except Exception:
             pass  # Timeline is optional, don't fail on errors
+
+    # Paragraph-level heatmap (needs token_metrics in the analysis)
+    if tokens_count >= 30:
+        try:
+            # Re-analyze with token metrics for paragraph cadence
+            analysis_with_tokens = analyze_text(
+                text,
+                model_id=scoring_model.strip() or "gpt2",
+                doc_type=doc_type,
+                max_input_tokens=int(max_input_tokens),
+                normalize_text=bool(normalize_text),
+                compute_cohesion=False,
+                include_token_metrics=True,
+            )
+            para_heatmap_img = _plot_paragraph_heatmap(analysis_with_tokens)
+        except Exception:
+            pass
 
     llm_md = ""
     if bool(use_llm_critic):
@@ -361,7 +431,7 @@ def run_analyze(
         suggestions_md += f"- **{s.get('title','')}** — {s.get('why','')}\n  - Try: {s.get('what_to_try','')}\n"
         if s.get("evidence"):
             suggestions_md += f"  - Evidence: {s.get('evidence')}\n"
-    return score_md, profile_md, suggestions_md + "\n\n" + spikes_md, llm_md, plot_img, timeline_img, out_json
+    return score_md, profile_md, suggestions_md + "\n\n" + spikes_md, llm_md, plot_img, timeline_img, para_heatmap_img, out_json
 
 
 def run_rewrite(
@@ -871,6 +941,7 @@ def build_ui() -> gr.Blocks:
                 llm_md = gr.Markdown()
             plot_img = gr.Image(label="Cadence plot", type="pil")
             timeline_img = gr.Image(label="Cadence timeline (page pacing)", type="pil")
+            para_heatmap_img = gr.Image(label="Paragraph quality heatmap", type="pil")
             out_json = gr.JSON(label="Raw JSON")
 
             run_btn.click(
@@ -894,7 +965,7 @@ def build_ui() -> gr.Blocks:
                     critic_top_p,
                     critic_seed,
                 ],
-                outputs=[score_md, profile_md, suggestions_md, llm_md, plot_img, timeline_img, out_json],
+                outputs=[score_md, profile_md, suggestions_md, llm_md, plot_img, timeline_img, para_heatmap_img, out_json],
             )
 
         with gr.Tab("Rewrite + Rerank"):

@@ -5,14 +5,14 @@ import math
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
-from tools.studio.calibrator import featurize_from_report_row, load_logistic_calibrator
 from tools.studio.cadence_profile import CadenceProfile
+from tools.studio.calibrator import featurize_from_report_row, load_logistic_calibrator
 from tools.studio.meaning_lock import MeaningLockConfig, MeaningLockReport, check_meaning_lock
 from tools.studio.rewrite import generate_cadence_span_rewrites, generate_span_rewrites
 from tools.studio.score import score_text
@@ -251,7 +251,7 @@ def suggest_dead_zones(
     window_end_char: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Suggest dead zones (flat/monotonous areas) in text.
-    
+
     Args:
         text: Input text to analyze
         doc_type: Document type for analysis
@@ -263,7 +263,7 @@ def suggest_dead_zones(
         max_zones: Maximum number of dead zones to return
         window_start_char: Optional start character to limit analysis to a window
         window_end_char: Optional end character to limit analysis to a window
-        
+
     Returns:
         Dict with text, analysis, and list of dead zones
     """

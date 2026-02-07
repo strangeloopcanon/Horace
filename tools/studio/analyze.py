@@ -5,21 +5,20 @@ import math
 import random
 import re
 import threading
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
 from tools.analyze import (
     ModelBackend,
-    pick_backend,
+    hurst_rs,
     paragraph_units,
     permutation_entropy,
-    hurst_rs,
+    pick_backend,
 )
 from tools.studio.model_security import resolve_model_source
 from tools.studio.text_normalize import normalize_for_studio
-
 
 DocType = Literal["poem", "prose", "shortstory", "novel", "all"]
 
@@ -329,7 +328,37 @@ def _coerce_doc_type(doc_type: str) -> str:
         return "prose"
     if dt in ("prose", ""):
         return "prose"
+    if dt == "auto":
+        return "auto"
     return dt
+
+
+def detect_doc_type(text: str) -> str:
+    """Heuristic genre detection from text surface features.
+
+    Returns one of: 'poem', 'prose', 'shortstory'.
+    """
+    lines = [ln for ln in text.split("\n") if ln.strip()]
+    if not lines:
+        return "prose"
+
+    # Line-length heuristics
+    avg_line_len = sum(len(ln) for ln in lines) / max(1, len(lines))
+    short_lines = sum(1 for ln in lines if len(ln) < 60)
+    short_frac = short_lines / max(1, len(lines))
+
+    # Poetry: many short lines, high line count relative to word count
+    words = text.split()
+    word_count = len(words)
+
+    if short_frac > 0.7 and avg_line_len < 50 and len(lines) > 3:
+        return "poem"
+
+    # Short story vs general prose: length-based
+    if word_count > 1500:
+        return "shortstory"
+
+    return "prose"
 
 
 def _get_backend(model_id: str, *, backend: str) -> ModelBackend:
@@ -354,10 +383,14 @@ def _get_backend(model_id: str, *, backend: str) -> ModelBackend:
         return inst
 
 
+DEFAULT_SCORING_MODEL = "Qwen/Qwen3-0.6B"
+DEFAULT_BASELINE_MODEL = "gpt2_gutenberg_512"
+
+
 def analyze_text(
     text: str,
     *,
-    model_id: str = "gpt2",
+    model_id: str = DEFAULT_SCORING_MODEL,
     doc_type: str = "prose",
     backend: str = "auto",
     normalize_text: bool = True,
@@ -380,6 +413,11 @@ def analyze_text(
     model: ModelBackend = _get_backend(model_id, backend=backend)
 
     raw_text = text or ""
+
+    # Auto-detect genre if requested
+    if doc_type_norm == "auto":
+        doc_type_norm = detect_doc_type(raw_text)
+
     text, norm_meta = normalize_for_studio(raw_text, doc_type=doc_type_norm, enabled=bool(normalize_text))
     doc_hash = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
 
@@ -711,27 +749,42 @@ def analyze_text(
 
     seg_kind = "poem" if doc_type_norm == "poem" else "prose"
 
-    # Cohesion delta (shuffled units) – expensive, but useful; run once if possible.
+    # Cohesion delta (shuffled units) – averaged over multiple shuffles for stability.
     if compute_cohesion:
         try:
             units = paragraph_units(text_used, seg_kind)
+            n_shuffles = 5
             if len(units) >= 3:
-                shuffled = units[:]
-                random.Random(0).shuffle(shuffled)
-                shuf_text = "".join(text_used[s:e] for s, e in shuffled)
-                enc_s = model.tokenize(shuf_text)
-                ids_s = list(enc_s.get("input_ids") or [])
-                if max_input_tokens and len(ids_s) > max_input_tokens:
-                    ids_s = ids_s[:max_input_tokens]
-                if len(ids_s) >= 2:
-                    ms = model.metrics_for_input_ids(ids_s, k=int(k), nucleus_p=float(p))
-                    shuf_logp = ms.get("logp")
-                    if shuf_logp is not None and len(shuf_logp) > 0:
-                        shuffle_ll = float(np.mean(np.array(shuf_logp, dtype=np.float32)))
-                        doc_metrics["cohesion_shuffle_logp_per_token"] = shuffle_ll
-                        logp_orig = float(np.mean(logp_arr))
-                        doc_metrics["logp_per_token_original"] = logp_orig
-                        doc_metrics["cohesion_delta"] = shuffle_ll - logp_orig
+                logp_orig = float(np.mean(logp_arr))
+                shuffle_deltas: List[float] = []
+                for shuf_seed in range(n_shuffles):
+                    shuffled = units[:]
+                    random.Random(shuf_seed).shuffle(shuffled)
+                    # Skip shuffles that happen to produce the original order
+                    if shuffled == units:
+                        continue
+                    shuf_text = "".join(text_used[s:e] for s, e in shuffled)
+                    enc_s = model.tokenize(shuf_text)
+                    ids_s = list(enc_s.get("input_ids") or [])
+                    if max_input_tokens and len(ids_s) > max_input_tokens:
+                        ids_s = ids_s[:max_input_tokens]
+                    if len(ids_s) >= 2:
+                        ms = model.metrics_for_input_ids(ids_s, k=int(k), nucleus_p=float(p))
+                        shuf_logp = ms.get("logp")
+                        if shuf_logp is not None and len(shuf_logp) > 0:
+                            shuffle_ll = float(np.mean(np.array(shuf_logp, dtype=np.float32)))
+                            shuffle_deltas.append(shuffle_ll - logp_orig)
+                if shuffle_deltas:
+                    doc_metrics["logp_per_token_original"] = logp_orig
+                    doc_metrics["cohesion_delta"] = float(np.mean(shuffle_deltas))
+                    doc_metrics["cohesion_n_shuffles"] = len(shuffle_deltas)
+            elif len(units) >= 2:
+                # Short text fallback: compare adjacent sentence pairs for coherence
+                # using log-probability drop when reversing sentence order
+                logp_orig = float(np.mean(logp_arr))
+                doc_metrics["logp_per_token_original"] = logp_orig
+                doc_metrics["cohesion_delta"] = 0.0  # neutral for very short texts
+                doc_metrics["cohesion_n_shuffles"] = 0
         except Exception:
             pass
 

@@ -31,7 +31,7 @@ def _lazy_import_fastapi():
 
 FastAPI, BaseModel, Field = _lazy_import_fastapi()
 
-from tools.studio.analyze import analyze_text
+from tools.studio.analyze import analyze_text, DEFAULT_SCORING_MODEL, DEFAULT_BASELINE_MODEL
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.critique import suggest_edits
 from tools.studio.llm_critic import llm_critique
@@ -45,7 +45,7 @@ from tools.studio.write_like import write_like as write_like_gen
 
 
 def _ensure_baseline(baseline_model_or_path: str):
-    ident = (baseline_model_or_path or "").strip() or "gpt2"
+    ident = (baseline_model_or_path or "").strip() or DEFAULT_BASELINE_MODEL
     p = Path(ident)
     if p.exists():
         return load_baseline_cached(ident, path=p)
@@ -91,8 +91,8 @@ class AnalyzeReq(BaseModel):
     scorer_model_path: str = ""
     scorer_max_length: int = 384
     fast_only: bool = False
-    scoring_model_id: str = "gpt2"
-    baseline_model: str = "gpt2_gutenberg_512"  # model id or baseline json path
+    scoring_model_id: str = DEFAULT_SCORING_MODEL
+    baseline_model: str = DEFAULT_BASELINE_MODEL  # model id or baseline json path
     calibrator_path: str = ""  # optional JSON calibrator trained from eval reports
     backend: str = "auto"
     max_input_tokens: int = 512
@@ -109,9 +109,9 @@ class AnalyzeReq(BaseModel):
 class RewriteReq(BaseModel):
     text: str = Field(min_length=1, max_length=50_000)
     doc_type: str = "prose"
-    rewrite_model_id: str = "gpt2"
-    scoring_model_id: str = "gpt2"
-    baseline_model: str = "gpt2_gutenberg_512"  # model id or baseline json path
+    rewrite_model_id: str = DEFAULT_SCORING_MODEL
+    scoring_model_id: str = DEFAULT_SCORING_MODEL
+    baseline_model: str = DEFAULT_BASELINE_MODEL  # model id or baseline json path
     calibrator_path: str = ""  # optional JSON calibrator trained from eval reports
     n_candidates: int = 4
     keep_top: int = 3
@@ -128,7 +128,7 @@ class RewriteReq(BaseModel):
 class PatchSuggestReq(BaseModel):
     text: str = Field(min_length=1, max_length=50_000)
     doc_type: str = "prose"
-    scoring_model_id: str = "gpt2"
+    scoring_model_id: str = DEFAULT_SCORING_MODEL
     backend: str = "auto"
     max_input_tokens: int = 512
     normalize_text: bool = True
@@ -144,8 +144,8 @@ class PatchSpanReq(BaseModel):
     rewrite_mode: str = "strict"  # strict | creative
     intensity: float = 0.5  # 0=clearer, 1=punchier
     rewrite_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
-    scoring_model_id: str = "gpt2"
-    baseline_model: str = "gpt2_gutenberg_512"  # model id or baseline json path
+    scoring_model_id: str = DEFAULT_SCORING_MODEL
+    baseline_model: str = DEFAULT_BASELINE_MODEL  # model id or baseline json path
     calibrator_path: str = ""  # optional JSON calibrator trained from eval reports
     scorer_model_path: str = ""  # optional trained scorer (fast primary score)
     scorer_max_length: int = 384
@@ -173,7 +173,7 @@ class WriteLikeReq(BaseModel):
     prompt: str = Field(default="", max_length=10_000)
     reference_text: str = Field(min_length=1, max_length=50_000)
     doc_type: str = "prose"
-    model_id: str = "gpt2"
+    model_id: str = DEFAULT_SCORING_MODEL
     backend: str = "auto"
     max_new_tokens: int = 200
     seed: Optional[int] = 7
@@ -261,6 +261,16 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
                 k: {"value": v.value, "percentile": v.percentile, "score_0_1": v.score_0_1, "mode": v.mode}
                 for k, v in score.metrics.items()
             },
+            "top_improvements": [
+                {
+                    "category": h.category,
+                    "metric": h.metric,
+                    "current_score": h.current_score,
+                    "potential_gain": h.potential_gain,
+                    "direction": h.direction,
+                }
+                for h in (score.top_improvements or [])
+            ],
         },
         "critique": critique,
     }
@@ -406,7 +416,7 @@ def cadence_match(req: WriteLikeReq) -> Dict[str, Any]:
         result = write_like_gen(
             prompt=req.prompt or " ",
             reference_text=req.reference_text,
-            model_id=req.model_id or "gpt2",
+            model_id=req.model_id or DEFAULT_SCORING_MODEL,
             backend=req.backend or "auto",
             doc_type=req.doc_type or "prose",
             max_new_tokens=int(req.max_new_tokens) if req.max_new_tokens else 200,
