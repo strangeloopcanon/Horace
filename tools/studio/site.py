@@ -720,6 +720,9 @@ STUDIO_HTML = """<!doctype html>
         <div id="match-result" class="result-area">
           <div class="section-label">Generated Text</div>
           <div class="text-display" id="match-output"></div>
+          <div style="margin-top:-24px;text-align:right;">
+            <button class="copy-btn" id="match-copy" disabled>Copy</button>
+          </div>
         </div>
         
         <button class="settings-toggle" id="match-settings-toggle">Settings</button>
@@ -964,21 +967,40 @@ STUDIO_HTML = """<!doctype html>
         result.classList.remove('visible');
         
         try {
+          const prompt = $('match-prompt').value || '';
           const data = await api('/cadence-match', {
-            prompt: $('match-prompt').value,
+            prompt,
             reference_text: $('match-reference').value,
             max_new_tokens: parseInt($('match-tokens').value) || 200,
             seed: parseInt($('match-seed').value) || 7
           });
           
           result.classList.add('visible');
-          $('match-output').innerText = data.generated_text || data.text || '';
+          const continuation = data.generated_text || data.text || '';
+          let out = '';
+          if (prompt.trim() && continuation.trim()) {
+            out = prompt.trimEnd() + '\n\n' + continuation.trimStart();
+          } else {
+            out = (prompt || continuation).trim();
+          }
+          $('match-output').innerText = out;
+          $('match-copy').disabled = !out;
           
         } catch (e) {
           alert(e.message);
         } finally {
           btn.disabled = false;
           btn.innerText = origText;
+        }
+      });
+
+      $('match-copy').addEventListener('click', async () => {
+        const text = $('match-output').innerText || '';
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (e) {
+          alert('Copy failed. Select and copy manually.');
         }
       });
       
