@@ -965,6 +965,8 @@ STUDIO_HTML = """<!doctype html>
         btn.disabled = true;
         btn.innerText = 'Generating...';
         result.classList.remove('visible');
+        $('match-copy').disabled = true;
+        $('match-output').innerText = '';
         
         try {
           const prompt = $('match-prompt').value || '';
