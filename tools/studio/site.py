@@ -204,15 +204,39 @@ STUDIO_HTML = """<!doctype html>
         text-transform: uppercase;
       }
       
-      .tagline {
-        font-family: var(--font-ui);
-        color: var(--text-muted);
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.15em;
-      }
-      
-      [data-theme="light"] .tagline { color: var(--accent); }
+	      .tagline {
+	        font-family: var(--font-ui);
+	        color: var(--text-muted);
+	        font-size: 12px;
+	        text-transform: uppercase;
+	        letter-spacing: 0.15em;
+	      }
+	      
+	      [data-theme="light"] .tagline { color: var(--accent); }
+
+	      .exp-toggle {
+	        margin-top: 14px;
+	        display: inline-flex;
+	        align-items: center;
+	        gap: 10px;
+	        font-family: var(--font-ui);
+	        font-size: 11px;
+	        text-transform: uppercase;
+	        letter-spacing: 0.1em;
+	        color: var(--text-muted);
+	      }
+	      .exp-toggle input {
+	        width: 14px;
+	        height: 14px;
+	        accent-color: var(--accent);
+	      }
+	      .exp-note {
+	        margin: -16px 0 34px;
+	        color: var(--text-muted);
+	        font-family: var(--font-ui);
+	        font-size: 12px;
+	        text-align: center;
+	      }
       
       /* ========== Tabs ========== */
       .tabs {
@@ -617,16 +641,24 @@ STUDIO_HTML = """<!doctype html>
     </button>
     
     <div class="container">
-      <header>
-        <h1>Horace</h1>
-        <div class="tagline">The Rhythm of Rhetoric</div>
-      </header>
-      
-      <div class="tabs">
-        <button class="tab active" data-tab="score">Analysis</button>
-        <button class="tab" data-tab="rewrite">Rewrite</button>
-        <button class="tab" data-tab="match">Match</button>
-      </div>
+	      <header>
+	        <h1>Horace</h1>
+	        <div class="tagline">The Rhythm of Rhetoric</div>
+	        <label class="exp-toggle">
+	          <input type="checkbox" id="exp-enabled" />
+	          Experimental: Generate
+	        </label>
+	      </header>
+	      
+	      <div class="tabs">
+	        <button class="tab active" data-tab="score">Analysis</button>
+	        <button class="tab" data-tab="rewrite">Rewrite</button>
+	        <button class="tab" data-tab="match">Match</button>
+	      </div>
+
+	      <div class="exp-note" id="exp-note">
+	        Rewrite and Match are experimental. Enable “Experimental: Generate” to show them.
+	      </div>
       
       <!-- Analysis Panel -->
       <div id="panel-score" class="panel active">
@@ -720,6 +752,9 @@ STUDIO_HTML = """<!doctype html>
         <div id="match-result" class="result-area">
           <div class="section-label">Generated Text</div>
           <div class="text-display" id="match-output"></div>
+          <div style="margin-top:-24px;text-align:right;">
+            <button class="copy-btn" id="match-copy" disabled>Copy</button>
+          </div>
         </div>
         
         <button class="settings-toggle" id="match-settings-toggle">Settings</button>
@@ -754,17 +789,65 @@ STUDIO_HTML = """<!doctype html>
         updateThemeUI();
       });
       
-      function updateThemeUI() {
-        const isLight = document.body.getAttribute('data-theme') === 'light';
-        $('theme-icon-dark').style.display = isLight ? 'none' : 'block';
-        $('theme-icon-light').style.display = isLight ? 'block' : 'none';
-        $('theme-label').textContent = isLight ? 'Dark' : 'Light';
-      }
-      
-      // Tabs
-      $$('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          $$('.tab').forEach(t => t.classList.remove('active'));
+	      function updateThemeUI() {
+	        const isLight = document.body.getAttribute('data-theme') === 'light';
+	        $('theme-icon-dark').style.display = isLight ? 'none' : 'block';
+	        $('theme-icon-light').style.display = isLight ? 'block' : 'none';
+	        $('theme-label').textContent = isLight ? 'Dark' : 'Light';
+	      }
+
+	      // Experimental toggle (gates generation features)
+	      const EXP_KEY = 'horace-exp-generate';
+
+	      function applyExperimentalUI(enabled) {
+	        const rewriteTab = document.querySelector('.tab[data-tab="rewrite"]');
+	        const matchTab = document.querySelector('.tab[data-tab="match"]');
+	        const rewritePanel = $('panel-rewrite');
+	        const matchPanel = $('panel-match');
+	        const note = $('exp-note');
+
+	        const showEl = (el, show) => {
+	          if (!el) return;
+	          el.style.display = show ? '' : 'none';
+	        };
+
+	        showEl(rewriteTab, enabled);
+	        showEl(matchTab, enabled);
+	        showEl(rewritePanel, enabled);
+	        showEl(matchPanel, enabled);
+	        showEl(note, !enabled);
+
+	        try {
+	          localStorage.setItem(EXP_KEY, enabled ? '1' : '0');
+	        } catch (e) {}
+
+	        if (!enabled) {
+	          // Force Analysis active when hiding tabs/panels.
+	          $$('.tab').forEach(t => t.classList.remove('active'));
+	          $$('.panel').forEach(p => p.classList.remove('active'));
+	          const scoreTab = document.querySelector('.tab[data-tab="score"]');
+	          if (scoreTab) scoreTab.classList.add('active');
+	          const scorePanel = $('panel-score');
+	          if (scorePanel) scorePanel.classList.add('active');
+	        }
+	      }
+
+	      (function initExperimentalToggle() {
+	        const expBox = $('exp-enabled');
+	        if (!expBox) return;
+	        let enabled = false;
+	        try {
+	          enabled = localStorage.getItem(EXP_KEY) === '1';
+	        } catch (e) {}
+	        expBox.checked = enabled;
+	        applyExperimentalUI(enabled);
+	        expBox.addEventListener('change', () => applyExperimentalUI(expBox.checked));
+	      })();
+	      
+	      // Tabs
+	      $$('.tab').forEach(tab => {
+	        tab.addEventListener('click', () => {
+	          $$('.tab').forEach(t => t.classList.remove('active'));
           $$('.panel').forEach(p => p.classList.remove('active'));
           tab.classList.add('active');
           $('panel-' + tab.dataset.tab).classList.add('active');
@@ -962,23 +1045,44 @@ STUDIO_HTML = """<!doctype html>
         btn.disabled = true;
         btn.innerText = 'Generating...';
         result.classList.remove('visible');
+        $('match-copy').disabled = true;
+        $('match-output').innerText = '';
         
         try {
+          const prompt = $('match-prompt').value || '';
           const data = await api('/cadence-match', {
-            prompt: $('match-prompt').value,
+            prompt,
             reference_text: $('match-reference').value,
             max_new_tokens: parseInt($('match-tokens').value) || 200,
             seed: parseInt($('match-seed').value) || 7
           });
           
           result.classList.add('visible');
-          $('match-output').innerText = data.generated_text || data.text || '';
+          const continuation = data.generated_text || data.text || '';
+          let out = '';
+          if (prompt.trim() && continuation.trim()) {
+            out = prompt.trimEnd() + '\n\n' + continuation.trimStart();
+          } else {
+            out = (prompt || continuation).trim();
+          }
+          $('match-output').innerText = out;
+          $('match-copy').disabled = !out;
           
         } catch (e) {
           alert(e.message);
         } finally {
           btn.disabled = false;
           btn.innerText = origText;
+        }
+      });
+
+      $('match-copy').addEventListener('click', async () => {
+        const text = $('match-output').innerText || '';
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (e) {
+          alert('Copy failed. Select and copy manually.');
         }
       });
       
