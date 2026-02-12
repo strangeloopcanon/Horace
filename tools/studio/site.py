@@ -652,8 +652,8 @@ STUDIO_HTML = """<!doctype html>
 	      
 	      <div class="tabs">
 	        <button class="tab active" data-tab="score">Analysis</button>
-	        <button class="tab" data-tab="rewrite">Rewrite</button>
-	        <button class="tab" data-tab="match">Match</button>
+	        <button class="tab" data-tab="rewrite" style="display:none;">Rewrite</button>
+	        <button class="tab" data-tab="match" style="display:none;">Match</button>
 	      </div>
 
 	      <div class="exp-note" id="exp-note">
@@ -707,7 +707,7 @@ STUDIO_HTML = """<!doctype html>
       </div>
       
       <!-- Rewrite Panel -->
-      <div id="panel-rewrite" class="panel">
+      <div id="panel-rewrite" class="panel" style="display:none;">
         <div class="input-group">
           <label class="input-label">Text to Rewrite</label>
           <textarea id="rewrite-text" placeholder="Enter text to improve..."></textarea>
@@ -736,7 +736,7 @@ STUDIO_HTML = """<!doctype html>
       </div>
       
       <!-- Match Panel -->
-      <div id="panel-match" class="panel">
+      <div id="panel-match" class="panel" style="display:none;">
         <div class="input-group">
           <label class="input-label">Reference (Target Cadence)</label>
           <textarea id="match-reference" style="min-height:140px;">At dawn, the city leans into light. A gull lifts, then drops, then lifts again.</textarea>
@@ -776,16 +776,31 @@ STUDIO_HTML = """<!doctype html>
     <script>
       const $ = id => document.getElementById(id);
       const $$ = sel => document.querySelectorAll(sel);
+
+      function safeStorageGet(key, fallback = null) {
+        try {
+          const value = window.localStorage.getItem(key);
+          return value === null ? fallback : value;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      function safeStorageSet(key, value) {
+        try {
+          window.localStorage.setItem(key, value);
+        } catch (e) {}
+      }
       
       // Theme Toggle
-      const savedTheme = localStorage.getItem('horace-theme') || 'dark';
+      const savedTheme = safeStorageGet('horace-theme', 'dark');
       if (savedTheme === 'light') document.body.setAttribute('data-theme', 'light');
       updateThemeUI();
       
       $('theme-toggle').addEventListener('click', () => {
         const isLight = document.body.getAttribute('data-theme') === 'light';
         document.body.setAttribute('data-theme', isLight ? '' : 'light');
-        localStorage.setItem('horace-theme', isLight ? 'dark' : 'light');
+        safeStorageSet('horace-theme', isLight ? 'dark' : 'light');
         updateThemeUI();
       });
       
@@ -817,9 +832,7 @@ STUDIO_HTML = """<!doctype html>
 	        showEl(matchPanel, enabled);
 	        showEl(note, !enabled);
 
-	        try {
-	          localStorage.setItem(EXP_KEY, enabled ? '1' : '0');
-	        } catch (e) {}
+	        safeStorageSet(EXP_KEY, enabled ? '1' : '0');
 
 	        if (!enabled) {
 	          // Force Analysis active when hiding tabs/panels.
@@ -835,10 +848,7 @@ STUDIO_HTML = """<!doctype html>
 	      (function initExperimentalToggle() {
 	        const expBox = $('exp-enabled');
 	        if (!expBox) return;
-	        let enabled = false;
-	        try {
-	          enabled = localStorage.getItem(EXP_KEY) === '1';
-	        } catch (e) {}
+	        const enabled = safeStorageGet(EXP_KEY, '0') === '1';
 	        expBox.checked = enabled;
 	        applyExperimentalUI(enabled);
 	        expBox.addEventListener('change', () => applyExperimentalUI(expBox.checked));
@@ -1061,7 +1071,7 @@ STUDIO_HTML = """<!doctype html>
           const continuation = data.generated_text || data.text || '';
           let out = '';
           if (prompt.trim() && continuation.trim()) {
-            out = prompt.trimEnd() + '\n\n' + continuation.trimStart();
+            out = prompt.trimEnd() + '\\n\\n' + continuation.trimStart();
           } else {
             out = (prompt || continuation).trim();
           }
