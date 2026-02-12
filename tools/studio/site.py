@@ -335,6 +335,23 @@ STUDIO_HTML = """<!doctype html>
         outline: none;
       }
       input:focus, select:focus { border-color: var(--accent); }
+      input[type="text"] {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 14px;
+        outline: none;
+      }
+      .settings-full { grid-column: 1 / -1; }
+      .settings-hint {
+        margin-top: 6px;
+        color: var(--text-muted);
+        font-family: var(--font-ui);
+        font-size: 11px;
+      }
       
       /* ========== Buttons ========== */
       .btn {
@@ -354,6 +371,14 @@ STUDIO_HTML = """<!doctype html>
       }
       .btn:hover { opacity: 0.9; transform: translateY(-1px); }
       .btn:disabled { opacity: 0.5; cursor: wait; transform: none; }
+
+      .btn-secondary {
+        margin-top: 12px;
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
       
       [data-theme="light"] .btn {
         background: var(--text);
@@ -503,6 +528,35 @@ STUDIO_HTML = """<!doctype html>
         width: 100%;
         height: 100px;
         margin-bottom: 40px;
+      }
+
+      /* Improvements + Dead Zones */
+      .improvements-list, .deadzone-list { margin-bottom: 40px; }
+      .improvement, .deadzone {
+        border-left: 2px solid var(--border);
+        padding-left: 20px;
+        margin-bottom: 18px;
+      }
+      .improvement-title, .deadzone-title {
+        font-family: var(--font-ui);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+      .improvement-body, .deadzone-body {
+        font-size: 15px;
+        color: var(--text);
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .deadzone-meta {
+        font-family: var(--font-ui);
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 6px;
       }
       
       /* Suggestions */
@@ -668,6 +722,7 @@ STUDIO_HTML = """<!doctype html>
         </div>
         
         <button class="btn" id="score-btn">Analyze</button>
+        <button class="btn btn-secondary" id="deadzone-btn">Find Dead Zones</button>
         
         <div id="score-result" class="result-area">
           <div class="score-row">
@@ -683,14 +738,42 @@ STUDIO_HTML = """<!doctype html>
           
           <div class="section-label">Metrics</div>
           <div class="metrics-grid" id="score-metrics"></div>
+
+          <div class="section-label">Top Improvements</div>
+          <div class="improvements-list" id="score-improvements"></div>
           
           <div class="section-label">Suggestions</div>
           <div class="suggestions-list" id="score-suggestions"></div>
+
+          <div class="section-label">Dead Zones</div>
+          <div class="deadzone-list" id="score-deadzones"></div>
         </div>
         
         <button class="settings-toggle" id="score-settings-toggle">Settings</button>
         <div class="settings-panel" id="score-settings">
           <div class="settings-grid">
+            <div class="settings-full">
+              <label class="input-label">Trained Scorer Model Path</label>
+              <input type="text" id="scorer-model-path" value="" />
+              <div class="settings-hint">Uses <code>primary_score</code> from the trained scorer.</div>
+            </div>
+            <div class="settings-full">
+              <label class="input-label">Anti-Pattern Model Path (Optional)</label>
+              <input type="text" id="antipattern-model-path" value="" placeholder="models/..." />
+            </div>
+            <div>
+              <label class="input-label">Primary Score Mode</label>
+              <select id="primary-score-mode">
+                <option value="auto">Auto</option>
+                <option value="rubric">Rubric (Cadence)</option>
+                <option value="trained">Trained Scorer</option>
+                <option value="blend">Blend</option>
+              </select>
+            </div>
+            <div>
+              <label class="input-label">Blend Weight (0–1)</label>
+              <input type="number" id="primary-blend-weight" value="0.35" step="0.05" min="0" max="1" />
+            </div>
             <div>
               <label class="input-label">Document Type</label>
               <select id="doc-type">
@@ -701,6 +784,14 @@ STUDIO_HTML = """<!doctype html>
             <div>
               <label class="input-label">Max Tokens</label>
               <input type="number" id="max-tokens" value="512" />
+            </div>
+            <div>
+              <label class="input-label">Anti-Pattern Threshold</label>
+              <input type="number" id="antipattern-threshold" value="0.90" step="0.01" min="0" max="1" />
+            </div>
+            <div>
+              <label class="input-label">Anti-Pattern Weight</label>
+              <input type="number" id="antipattern-weight" value="0.35" step="0.01" min="0" max="2" />
             </div>
           </div>
         </div>
@@ -776,6 +867,13 @@ STUDIO_HTML = """<!doctype html>
     <script>
       const $ = id => document.getElementById(id);
       const $$ = sel => document.querySelectorAll(sel);
+      const IS_MODAL_HOST = String(window.location.hostname || '').includes('.modal.run');
+      const DEFAULT_SCORER_MODEL_PATH = '';
+      const DEFAULT_ANTIPATTERN_MODEL_PATH = IS_MODAL_HOST
+        ? '/vol/models/scorer_v5_authenticity_v1'
+        : 'models/scorer_v5_authenticity_v1';
+      const DEFAULT_PRIMARY_SCORE_MODE = 'rubric';
+      const DEFAULT_PRIMARY_BLEND_WEIGHT = '0.35';
 
       function safeStorageGet(key, fallback = null) {
         try {
@@ -791,6 +889,31 @@ STUDIO_HTML = """<!doctype html>
           window.localStorage.setItem(key, value);
         } catch (e) {}
       }
+
+      function bindPersistedInput(id, storageKey, defaultValue) {
+        const el = $(id);
+        if (!el) return;
+        const stored = safeStorageGet(storageKey, '');
+        if (stored !== null && String(stored).trim() !== '') {
+          el.value = String(stored);
+        } else if (typeof defaultValue === 'string') {
+          el.value = defaultValue;
+        }
+        el.addEventListener('change', () => safeStorageSet(storageKey, String(el.value || '').trim()));
+        el.addEventListener('blur', () => safeStorageSet(storageKey, String(el.value || '').trim()));
+      }
+
+      bindPersistedInput('scorer-model-path', 'horace-scorer-model-path', DEFAULT_SCORER_MODEL_PATH);
+      bindPersistedInput('antipattern-model-path', 'horace-antipattern-model-path', DEFAULT_ANTIPATTERN_MODEL_PATH);
+      bindPersistedInput('primary-score-mode', 'horace-primary-score-mode', DEFAULT_PRIMARY_SCORE_MODE);
+      bindPersistedInput('primary-blend-weight', 'horace-primary-blend-weight', DEFAULT_PRIMARY_BLEND_WEIGHT);
+
+      function refreshBlendUi() {
+        const mode = String(($('primary-score-mode').value || '')).trim().toLowerCase();
+        $('primary-blend-weight').disabled = (mode !== 'blend');
+      }
+      $('primary-score-mode').addEventListener('change', refreshBlendUi);
+      refreshBlendUi();
       
       // Theme Toggle
       const savedTheme = safeStorageGet('horace-theme', 'dark');
@@ -878,8 +1001,30 @@ STUDIO_HTML = """<!doctype html>
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
-        if (!res.ok) throw new Error(await res.text());
-        return res.json();
+        const raw = await res.text();
+        let parsed = null;
+        try {
+          parsed = raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          parsed = null;
+        }
+        if (!res.ok) {
+          let msg = raw || `HTTP ${res.status}`;
+          if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.error === 'string' && parsed.error) {
+              msg = parsed.error;
+              if (typeof parsed.details === 'string' && parsed.details) msg += `: ${parsed.details}`;
+            } else if (Array.isArray(parsed.detail) && parsed.detail.length) {
+              const first = parsed.detail[0] || {};
+              msg = String(first.msg || first.type || msg);
+            } else if (typeof parsed.detail === 'string' && parsed.detail) {
+              msg = parsed.detail;
+            }
+          }
+          throw new Error(msg);
+        }
+        if (parsed && typeof parsed === 'object') return parsed;
+        throw new Error('Invalid API response');
       }
       
       // Helpers
@@ -953,25 +1098,44 @@ STUDIO_HTML = """<!doctype html>
       // Score Handler
       $('score-btn').addEventListener('click', async () => {
         const btn = $('score-btn');
+        const deadBtn = $('deadzone-btn');
         const result = $('score-result');
         const origText = btn.innerText;
         
         btn.disabled = true;
+        deadBtn.disabled = true;
         btn.innerText = 'Analyzing...';
         result.classList.remove('visible');
         
         try {
           const text = $('score-text').value;
+          const scorerModelPath = String(($('scorer-model-path').value || '')).trim();
+          const antipatternModelPath = String(($('antipattern-model-path').value || '')).trim();
+          const primaryMode = String(($('primary-score-mode').value || '')).trim();
+          const primaryBlendWeight = parseFloat(($('primary-blend-weight').value || '0.35'));
           const data = await api('/analyze', {
             text,
             doc_type: $('doc-type').value,
             max_input_tokens: parseInt($('max-tokens').value) || 512,
-            normalize_text: true
+            normalize_text: true,
+            scorer_model_path: scorerModelPath,
+            antipattern_model_path: antipatternModelPath,
+            antipattern_penalty_threshold: parseFloat($('antipattern-threshold').value) || 0.90,
+            antipattern_penalty_weight: parseFloat($('antipattern-weight').value) || 0.35,
+            primary_score_mode: primaryMode || 'auto',
+            primary_blend_weight: Number.isFinite(primaryBlendWeight) ? primaryBlendWeight : 0.35
           });
           
+          const primary = data.primary_score || {};
+          const shownScore = primary.overall_0_100 ?? data.score?.overall_0_100 ?? 0;
+          const scoreSource = String(primary.source || '');
+          const antiPenalty = Number(primary.antipattern_penalty_0_100 || 0);
           result.classList.add('visible');
-          $('score-value').innerHTML = Math.round(data.score?.overall_0_100 || 0) + '<sup>/100</sup>';
-          $('score-summary').innerText = data.critique?.summary || '';
+          $('score-value').innerHTML = Math.round(shownScore || 0) + '<sup>/100</sup>';
+          const summary = String(data.critique?.summary || '');
+          const sourceLine = scoreSource ? `\n\nSource: ${scoreSource}` : '';
+          const penaltyLine = antiPenalty > 0 ? `\nAnti-pattern penalty: -${Math.round(antiPenalty * 10) / 10}` : '';
+          $('score-summary').innerText = summary + sourceLine + penaltyLine;
           $('text-highlighted').innerHTML = highlightText(text, data.analysis?.spikes || []);
           drawCadence(data.analysis?.series?.surprisal);
           
@@ -982,6 +1146,14 @@ STUDIO_HTML = """<!doctype html>
               <div class="metric-label">${k}</div>
             </div>
           `).join('');
+
+          const imps = data.score?.top_improvements || [];
+          $('score-improvements').innerHTML = imps.length ? imps.map(h => `
+            <div class="improvement">
+              <div class="improvement-title">${escapeHtml(h.category || '')} · ${escapeHtml(h.metric || '')}</div>
+              <div class="improvement-body">Direction: ${escapeHtml(h.direction || '')}\nPotential gain: ${(Number(h.potential_gain || 0) * 100).toFixed(1)}</div>
+            </div>
+          `).join('') : '<p style="color:var(--text-muted);">No improvement hints.</p>';
           
           const suggs = data.critique?.suggestions || [];
           $('score-suggestions').innerHTML = suggs.length ? suggs.map(s => `
@@ -995,14 +1167,110 @@ STUDIO_HTML = """<!doctype html>
               </div>
             </div>
           `).join('') : '<p style="color:var(--text-muted);">No suggestions.</p>';
+
+          $('score-deadzones').innerHTML = '<p style="color:var(--text-muted);">Click “Find Dead Zones”.</p>';
           
         } catch (e) {
           alert(e.message);
         } finally {
           btn.disabled = false;
+          deadBtn.disabled = false;
           btn.innerText = origText;
         }
       });
+
+      // Dead Zone Handler
+      $('deadzone-btn').addEventListener('click', async () => {
+        const btn = $('deadzone-btn');
+        const orig = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Finding...';
+        try {
+          const text = $('score-text').value;
+          const data = await api('/patch/suggest', {
+            text,
+            doc_type: $('doc-type').value,
+            max_input_tokens: parseInt($('max-tokens').value) || 512,
+            normalize_text: true
+          });
+          const zones = data.dead_zones || [];
+          const baseText = data.text || text;
+          window._lastDeadZones = zones;
+          window._lastDeadZoneText = baseText;
+          window._lastPatchByZone = {};
+
+          $('score-deadzones').innerHTML = zones.length ? zones.map((z, i) => `
+            <div class="deadzone">
+              <div class="deadzone-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                <span>Severity ${(Number(z.severity || 0)).toFixed(2)}</span>
+                <button class="copy-btn" onclick="patchDeadZone(${i})">Patch</button>
+              </div>
+              <div class="deadzone-body">${escapeHtml(z.excerpt || '')}</div>
+              <div class="deadzone-meta">${escapeHtml((z.reasons || []).join(', '))}</div>
+              <div id="patch-out-${i}" style="margin-top:10px;"></div>
+            </div>
+          `).join('') : '<p style="color:var(--text-muted);">No dead zones found.</p>';
+        } catch (e) {
+          alert(e.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerText = orig;
+        }
+      });
+
+      // Patch dead zone (span patcher)
+      window.patchDeadZone = async function(zoneIdx) {
+        const zones = window._lastDeadZones || [];
+        const z = zones[zoneIdx];
+        const outEl = document.getElementById('patch-out-' + String(zoneIdx));
+        if (!z || !outEl) return;
+        outEl.innerHTML = '<p style="color:var(--text-muted);">Patching…</p>';
+        try {
+          const baseText = window._lastDeadZoneText || $('score-text').value;
+          const data = await api('/patch/span', {
+            text: baseText,
+            doc_type: $('doc-type').value,
+            start_char: Number(z.start_char || 0),
+            end_char: Number(z.end_char || 0),
+            normalize_text: true
+          });
+          const cands = data.candidates || [];
+          window._lastPatchByZone[zoneIdx] = cands;
+          if (!cands.length) {
+            outEl.innerHTML = '<p style="color:var(--text-muted);">No patch candidates.</p>';
+            return;
+          }
+          outEl.innerHTML = cands.slice(0, 3).map((c, i) => {
+            const delta = (typeof c.primary_delta_0_100 === 'number' && Number.isFinite(c.primary_delta_0_100))
+              ? (c.primary_delta_0_100 >= 0 ? '+' : '') + (Math.round(c.primary_delta_0_100 * 10) / 10)
+              : '';
+            const deltaLine = delta ? `Score delta: ${delta}` : '';
+            return `
+              <div class="card" style="margin:10px 0 0;padding:12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <div style="font-family:var(--font-ui);font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);">
+                    Patch ${i + 1}${deltaLine ? ` · ${escapeHtml(deltaLine)}` : ''}
+                  </div>
+                  <button class="copy-btn" onclick="applyPatch(${zoneIdx}, ${i})">Apply</button>
+                </div>
+                <pre style="margin-top:10px;white-space:pre-wrap;word-break:break-word;border:1px solid var(--border);border-radius:8px;padding:10px;background:rgba(0,0,0,0.12);">${escapeHtml(String(c.span_diff || '').slice(0, 5000))}</pre>
+              </div>
+            `;
+          }).join('');
+        } catch (e) {
+          outEl.innerHTML = `<p style="color:var(--text-muted);">Patch failed: ${escapeHtml(String(e.message || e))}</p>`;
+        }
+      };
+
+      window.applyPatch = function(zoneIdx, candIdx) {
+        const zoneMap = window._lastPatchByZone || {};
+        const cands = zoneMap[zoneIdx] || [];
+        const cand = cands[candIdx];
+        if (!cand || !cand.patched_text) return;
+        $('score-text').value = String(cand.patched_text);
+        // Clear old dead zones since offsets no longer match.
+        $('score-deadzones').innerHTML = '<p style="color:var(--text-muted);">Click “Find Dead Zones”.</p>';
+      };
       
       // Rewrite Handler
       $('rewrite-btn').addEventListener('click', async () => {

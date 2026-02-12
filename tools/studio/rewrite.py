@@ -31,6 +31,11 @@ def _pick_device() -> str:
     return "cpu"
 
 
+def _truthy_env(name: str) -> bool:
+    v = str(os.environ.get(name) or "").strip().lower()
+    return v in {"1", "true", "yes", "on"}
+
+
 def _get_hf(model_id: str, device: Optional[str] = None):
     source = resolve_model_source(model_id, purpose="rewrite model")
     cache_key = f"{source.source_id}@{source.revision or ''}"
@@ -109,8 +114,18 @@ def generate_rewrites(
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt},
             ]
-            input_ids = tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(dev)
-            inputs = {"input_ids": input_ids}
+            enc = tok.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+            if hasattr(enc, "to"):
+                enc = enc.to(dev)
+            if hasattr(enc, "keys") and "input_ids" in enc:
+                inputs = enc
+            else:
+                inputs = {"input_ids": enc}
         except Exception:
             use_chat = False
     if not use_chat:
@@ -143,8 +158,11 @@ def generate_rewrites(
             out = _extract_rewrite(raw)
             if out:
                 outputs.append(out)
-    except Exception:
-        pass
+    except Exception as e:
+        if _truthy_env("HORACE_RAISE_REWRITE_ERRORS"):
+            raise
+        if _truthy_env("HORACE_LOG_REWRITE_ERRORS"):
+            print(f"generate_rewrites_failed: {type(e).__name__}: {e}", flush=True)
     # Deduplicate
     uniq = []
     seen = set()
@@ -267,8 +285,18 @@ def generate_span_rewrites(
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt},
             ]
-            input_ids = tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(dev)
-            inputs = {"input_ids": input_ids}
+            enc = tok.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+            if hasattr(enc, "to"):
+                enc = enc.to(dev)
+            if hasattr(enc, "keys") and "input_ids" in enc:
+                inputs = enc
+            else:
+                inputs = {"input_ids": enc}
         except Exception:
             use_chat = False
     if not use_chat:
@@ -303,8 +331,11 @@ def generate_span_rewrites(
             out = out.strip()
             if out:
                 outputs.append(out)
-    except Exception:
-        pass
+    except Exception as e:
+        if _truthy_env("HORACE_RAISE_REWRITE_ERRORS"):
+            raise
+        if _truthy_env("HORACE_LOG_REWRITE_ERRORS"):
+            print(f"generate_span_rewrites_failed: {type(e).__name__}: {e}", flush=True)
 
     uniq: List[str] = []
     seen: set[str] = set()
@@ -374,8 +405,18 @@ def generate_dulled_rewrites(
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt},
             ]
-            input_ids = tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(dev)
-            inputs = {"input_ids": input_ids}
+            enc = tok.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+            if hasattr(enc, "to"):
+                enc = enc.to(dev)
+            if hasattr(enc, "keys") and "input_ids" in enc:
+                inputs = enc
+            else:
+                inputs = {"input_ids": enc}
         except Exception:
             use_chat = False
     if not use_chat:
@@ -407,8 +448,11 @@ def generate_dulled_rewrites(
             out = _extract_rewrite(out)
             if out.strip():
                 outputs.append(out.strip())
-    except Exception:
-        pass
+    except Exception as e:
+        if _truthy_env("HORACE_RAISE_REWRITE_ERRORS"):
+            raise
+        if _truthy_env("HORACE_LOG_REWRITE_ERRORS"):
+            print(f"generate_dulled_rewrites_failed: {type(e).__name__}: {e}", flush=True)
 
     uniq: List[str] = []
     seen: set[str] = set()

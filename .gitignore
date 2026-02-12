@@ -18,6 +18,7 @@ data/benchmarks/
 data/cache/
 data/baselines_smoke*/
 data/corpora/
+data/antipattern/
 models/
 
 # GEPA run outputs (keep latest snapshot only)

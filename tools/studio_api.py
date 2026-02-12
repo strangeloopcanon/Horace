@@ -84,12 +84,23 @@ async def api_key_middleware(request, call_next):  # pragma: no cover
 
 
 class AnalyzeReq(BaseModel):
-    text: str = Field(min_length=1, max_length=50_000)
+    text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     # Optional: a single trained text→score model directory (HF save_pretrained).
     # If provided, the API will return `trained_score`; if fast_only=true it will skip token-level analysis.
     scorer_model_path: str = ""
     scorer_max_length: int = 384
+    antipattern_model_path: str = ""  # optional model trained on human vs LLM-imitation
+    antipattern_max_length: int = 384
+    antipattern_penalty_weight: float = 0.35
+    antipattern_penalty_threshold: float = 0.90
+    # Primary score selection:
+    # - auto: trained scorer (if provided) else rubric (or calibrated rubric)
+    # - rubric: rubric (or calibrated rubric)
+    # - trained: trained scorer (fallback to rubric on error)
+    # - blend: blend rubric + trained (fallback to rubric on error)
+    primary_score_mode: str = "auto"
+    primary_blend_weight: float = 0.35
     fast_only: bool = False
     scoring_model_id: str = DEFAULT_SCORING_MODEL
     baseline_model: str = DEFAULT_BASELINE_MODEL  # model id or baseline json path
@@ -107,7 +118,7 @@ class AnalyzeReq(BaseModel):
 
 
 class RewriteReq(BaseModel):
-    text: str = Field(min_length=1, max_length=50_000)
+    text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     rewrite_model_id: str = DEFAULT_SCORING_MODEL
     scoring_model_id: str = DEFAULT_SCORING_MODEL
@@ -126,7 +137,7 @@ class RewriteReq(BaseModel):
 
 
 class PatchSuggestReq(BaseModel):
-    text: str = Field(min_length=1, max_length=50_000)
+    text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     scoring_model_id: str = DEFAULT_SCORING_MODEL
     backend: str = "auto"
@@ -137,7 +148,7 @@ class PatchSuggestReq(BaseModel):
 
 
 class PatchSpanReq(BaseModel):
-    text: str = Field(min_length=1, max_length=50_000)
+    text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     start_char: int = 0
     end_char: int = 0
@@ -171,7 +182,7 @@ class PatchSpanReq(BaseModel):
 
 class WriteLikeReq(BaseModel):
     prompt: str = Field(default="", max_length=10_000)
-    reference_text: str = Field(min_length=1, max_length=50_000)
+    reference_text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     model_id: str = DEFAULT_SCORING_MODEL
     backend: str = "auto"
@@ -202,6 +213,8 @@ def api_docs():  # pragma: no cover
 def analyze(req: AnalyzeReq) -> Dict[str, Any]:
     trained_score = None
     trained_err = None
+    antipattern_score = None
+    antipattern_err = None
     if (req.scorer_model_path or "").strip():
         try:
             from tools.studio.scorer_model import score_with_scorer
@@ -234,6 +247,28 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
         if trained_err is not None:
             out["trained_score_error"] = trained_err
         return out
+
+    if (req.antipattern_model_path or "").strip():
+        try:
+            from tools.studio.scorer_model import score_with_scorer
+
+            aps = score_with_scorer(
+                req.text,
+                model_path_or_id=str(req.antipattern_model_path),
+                doc_type=req.doc_type,
+                normalize_text=bool(req.normalize_text),
+                max_length=int(req.antipattern_max_length),
+                device=None,
+            )
+            antipattern_score = {
+                "score_0_100": aps.score_0_100,
+                "prob_0_1": aps.prob_0_1,
+                "model_path_or_id": aps.model_path_or_id,
+                "device": aps.device,
+                "max_length": aps.max_length,
+            }
+        except Exception as e:
+            antipattern_err = f"{type(e).__name__}: {e}"
 
     analysis = analyze_text(
         req.text,
@@ -278,6 +313,10 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
         out["trained_score"] = trained_score
     if trained_err is not None:
         out["trained_score_error"] = trained_err
+    if antipattern_score is not None:
+        out["antipattern_score"] = antipattern_score
+    if antipattern_err is not None:
+        out["antipattern_score_error"] = antipattern_err
     if (req.calibrator_path or "").strip():
         try:
             from tools.studio.calibrator import featurize_from_report_row, load_logistic_calibrator
@@ -300,16 +339,75 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
         except Exception as e:
             out["calibrated_score_error"] = str(e)
 
-    if trained_score is not None:
-        out["primary_score"] = {"overall_0_100": float(trained_score["overall_0_100"]), "source": "trained_scorer"}
-    elif out.get("calibrated_score") is not None:
-        out["primary_score"] = {
-            "overall_0_100": float(out["calibrated_score"]["overall_0_100"]),
-            "source": "rubric_calibrated",
-            "calibrator_path": str(out["calibrated_score"]["calibrator_path"]),
-        }
+    rubric_score_0_100 = float(score.overall_0_100)
+    rubric_source = "rubric"
+    if out.get("calibrated_score") is not None:
+        rubric_score_0_100 = float(out["calibrated_score"]["overall_0_100"])
+        rubric_source = "rubric_calibrated"
+
+    trained_score_0_100 = float(trained_score["overall_0_100"]) if trained_score is not None else None
+    mode = str(getattr(req, "primary_score_mode", "auto") or "auto").strip().lower()
+    blend_w = float(getattr(req, "primary_blend_weight", 0.35) or 0.35)
+    blend_w = max(0.0, min(1.0, float(blend_w)))
+
+    base_score_0_100 = float(rubric_score_0_100)
+    base_source = str(rubric_source)
+    if mode == "auto":
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float(trained_score_0_100)
+            base_source = "trained_scorer"
+    elif mode == "rubric":
+        base_score_0_100 = float(rubric_score_0_100)
+        base_source = str(rubric_source)
+    elif mode == "trained":
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float(trained_score_0_100)
+            base_source = "trained_scorer"
+        else:
+            out["primary_score_warning"] = "primary_score_mode=trained but scorer_model_path missing/failed; falling back to rubric"
+    elif mode == "blend":
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float((1.0 - blend_w) * float(rubric_score_0_100) + blend_w * float(trained_score_0_100))
+            base_source = "blend"
+        else:
+            out["primary_score_warning"] = "primary_score_mode=blend but scorer_model_path missing/failed; falling back to rubric"
     else:
-        out["primary_score"] = {"overall_0_100": float(score.overall_0_100), "source": "rubric"}
+        out["primary_score_warning"] = f"unknown primary_score_mode={mode!r}; using auto"
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float(trained_score_0_100)
+            base_source = "trained_scorer"
+
+    adjusted_score_0_100 = float(base_score_0_100)
+    penalty_0_100 = 0.0
+    anti_prob = None
+    if antipattern_score is not None:
+        anti_prob = float(antipattern_score.get("prob_0_1") or 0.0)
+        threshold = max(0.0, min(1.0, float(req.antipattern_penalty_threshold)))
+        weight = max(0.0, min(2.0, float(req.antipattern_penalty_weight)))
+        if anti_prob > threshold and threshold < 1.0:
+            rel = (anti_prob - threshold) / max(1e-6, 1.0 - threshold)
+            penalty_0_100 = max(0.0, min(100.0, rel * weight * 100.0))
+            adjusted_score_0_100 = max(0.0, base_score_0_100 - penalty_0_100)
+
+    primary: Dict[str, Any] = {
+        "overall_0_100": float(adjusted_score_0_100),
+        "source": base_source,
+        "base_overall_0_100": float(base_score_0_100),
+        "mode": str(mode),
+        "rubric_overall_0_100": float(rubric_score_0_100),
+    }
+    if out.get("calibrated_score") is not None:
+        primary["calibrator_path"] = str(out["calibrated_score"]["calibrator_path"])
+    if trained_score_0_100 is not None:
+        primary["trained_overall_0_100"] = float(trained_score_0_100)
+        primary["trained_model_path_or_id"] = str(trained_score.get("model_path_or_id") or "")
+    if mode == "blend" and trained_score_0_100 is not None:
+        primary["blend_weight"] = float(blend_w)
+    if antipattern_score is not None:
+        primary["antipattern_prob_0_1"] = float(anti_prob or 0.0)
+        primary["antipattern_penalty_0_100"] = float(penalty_0_100)
+        primary["source"] = f"{base_source}_antipattern_adjusted"
+    out["primary_score"] = primary
 
     if bool(req.use_llm_critic):
         mid = (req.critic_model_id or "").strip()

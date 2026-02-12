@@ -34,10 +34,16 @@ from pydantic import BaseModel, Field
 
 # Request models defined at module level for FastAPI compatibility
 class AnalyzeReq(BaseModel):
-    text: str = Field(min_length=1, max_length=50_000)
+    text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     scorer_model_path: str = ""
     scorer_max_length: int = 384
+    antipattern_model_path: str = ""
+    antipattern_max_length: int = 384
+    antipattern_penalty_weight: float = 0.35
+    antipattern_penalty_threshold: float = 0.90
+    primary_score_mode: str = "auto"  # auto | rubric | trained | blend
+    primary_blend_weight: float = 0.35
     fast_only: bool = False
     scoring_model_id: str = "gpt2"
     baseline_model: str = "gpt2_gutenberg_512"
@@ -48,7 +54,7 @@ class AnalyzeReq(BaseModel):
 
 
 class RewriteReq(BaseModel):
-    text: str = Field(min_length=1, max_length=50_000)
+    text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     rewrite_model_id: str = "gpt2"
     scoring_model_id: str = "gpt2"
@@ -67,10 +73,44 @@ class RewriteReq(BaseModel):
 
 class WriteLikeReq(BaseModel):
     prompt: str = Field(default="", max_length=10_000)
-    reference_text: str = Field(min_length=1, max_length=50_000)
+    reference_text: str = Field(min_length=1, max_length=250_000)
     doc_type: str = "prose"
     model_id: str = "gpt2"
     max_new_tokens: int = 200
+    seed: Optional[int] = 7
+
+
+class PatchSuggestReq(BaseModel):
+    text: str = Field(min_length=1, max_length=250_000)
+    doc_type: str = "prose"
+    scoring_model_id: str = "gpt2"
+    max_input_tokens: int = 512
+    normalize_text: bool = True
+    window_sentences: int = 4
+    max_zones: int = 6
+
+
+class PatchSpanReq(BaseModel):
+    text: str = Field(min_length=1, max_length=250_000)
+    doc_type: str = "prose"
+    start_char: int = 0
+    end_char: int = 0
+    rewrite_mode: str = "strict"  # strict | creative
+    intensity: float = 0.5  # 0=clearer, 1=punchier
+    rewrite_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    scoring_model_id: str = "gpt2"
+    baseline_model: str = "gpt2_gutenberg_512"
+    baseline_model_id: Optional[str] = None
+    calibrator_path: str = ""
+    scorer_model_path: str = ""
+    scorer_max_length: int = 384
+    score_top_n: int = 3
+    max_input_tokens: int = 384
+    normalize_text: bool = True
+    n_candidates: int = 6
+    max_new_tokens: int = 260
+    temperature: float = 0.8
+    top_p: float = 0.92
     seed: Optional[int] = 7
 
 
@@ -151,6 +191,12 @@ def analyze_remote(
     doc_type: str = "prose",
     scorer_model_path: str = "",
     scorer_max_length: int = 384,
+    antipattern_model_path: str = "",
+    antipattern_max_length: int = 384,
+    antipattern_penalty_weight: float = 0.35,
+    antipattern_penalty_threshold: float = 0.90,
+    primary_score_mode: str = "auto",
+    primary_blend_weight: float = 0.35,
     fast_only: bool = False,
     scoring_model_id: str = "gpt2",
     baseline_model_id: str = "gpt2_gutenberg_512",
@@ -161,6 +207,8 @@ def analyze_remote(
     _bootstrap_repo()
     trained_score = None
     trained_err = None
+    antipattern_score = None
+    antipattern_err = None
     if (scorer_model_path or "").strip():
         try:
             from tools.studio.scorer_model import score_with_scorer
@@ -176,6 +224,22 @@ def analyze_remote(
             trained_score = ts.__dict__
         except Exception as e:
             trained_err = f"{type(e).__name__}: {e}"
+
+    if (antipattern_model_path or "").strip():
+        try:
+            from tools.studio.scorer_model import score_with_scorer
+
+            aps = score_with_scorer(
+                text,
+                model_path_or_id=str(antipattern_model_path),
+                doc_type=str(doc_type),
+                normalize_text=bool(normalize_text),
+                max_length=int(antipattern_max_length),
+                device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else None,
+            )
+            antipattern_score = aps.__dict__
+        except Exception as e:
+            antipattern_err = f"{type(e).__name__}: {e}"
 
     if bool(fast_only):
         if trained_score is None:
@@ -238,6 +302,16 @@ def analyze_remote(
             "overall_0_100": score.overall_0_100,
             "categories": score.categories,
             "metrics": {k: {"value": v.value, "percentile": v.percentile, "score_0_1": v.score_0_1, "mode": v.mode} for k, v in score.metrics.items()},
+            "top_improvements": [
+                {
+                    "category": h.category,
+                    "metric": h.metric,
+                    "current_score": h.current_score,
+                    "potential_gain": h.potential_gain,
+                    "direction": h.direction,
+                }
+                for h in (score.top_improvements or [])
+            ],
         },
         "critique": critique,
     }
@@ -245,20 +319,83 @@ def analyze_remote(
         out["trained_score"] = trained_score
     if trained_err is not None:
         out["trained_score_error"] = trained_err
+    if antipattern_score is not None:
+        out["antipattern_score"] = antipattern_score
+    if antipattern_err is not None:
+        out["antipattern_score_error"] = antipattern_err
     if calibrated is not None:
         out["calibrated_score"] = calibrated
     if cal_err is not None:
         out["calibrated_score_error"] = cal_err
-    if trained_score is not None:
-        out["primary_score"] = {"overall_0_100": float(trained_score["score_0_100"]), "source": "trained_scorer"}
-    elif calibrated is not None:
-        out["primary_score"] = {
-            "overall_0_100": float(calibrated["overall_0_100"]),
-            "source": "rubric_calibrated",
-            "calibrator_path": str(calibrated["calibrator_path"]),
-        }
+
+    rubric_score_0_100 = float(score.overall_0_100)
+    rubric_source = "rubric"
+    if calibrated is not None:
+        rubric_score_0_100 = float(calibrated["overall_0_100"])
+        rubric_source = "rubric_calibrated"
+
+    trained_score_0_100 = float(trained_score["score_0_100"]) if trained_score is not None else None
+    mode = str(primary_score_mode or "auto").strip().lower()
+    blend_w = max(0.0, min(1.0, float(primary_blend_weight or 0.35)))
+
+    base_score_0_100 = float(rubric_score_0_100)
+    base_source = str(rubric_source)
+    if mode == "auto":
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float(trained_score_0_100)
+            base_source = "trained_scorer"
+    elif mode == "rubric":
+        base_score_0_100 = float(rubric_score_0_100)
+        base_source = str(rubric_source)
+    elif mode == "trained":
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float(trained_score_0_100)
+            base_source = "trained_scorer"
+        else:
+            out["primary_score_warning"] = "primary_score_mode=trained but scorer_model_path missing/failed; falling back to rubric"
+    elif mode == "blend":
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float((1.0 - blend_w) * float(rubric_score_0_100) + blend_w * float(trained_score_0_100))
+            base_source = "blend"
+        else:
+            out["primary_score_warning"] = "primary_score_mode=blend but scorer_model_path missing/failed; falling back to rubric"
     else:
-        out["primary_score"] = {"overall_0_100": float(score.overall_0_100), "source": "rubric"}
+        out["primary_score_warning"] = f"unknown primary_score_mode={mode!r}; using auto"
+        if trained_score_0_100 is not None:
+            base_score_0_100 = float(trained_score_0_100)
+            base_source = "trained_scorer"
+
+    adjusted_score_0_100 = float(base_score_0_100)
+    penalty_0_100 = 0.0
+    anti_prob = None
+    if antipattern_score is not None:
+        anti_prob = float(antipattern_score.get("prob_0_1") or 0.0)
+        threshold = max(0.0, min(1.0, float(antipattern_penalty_threshold)))
+        weight = max(0.0, min(2.0, float(antipattern_penalty_weight)))
+        if anti_prob > threshold and threshold < 1.0:
+            rel = (anti_prob - threshold) / max(1e-6, 1.0 - threshold)
+            penalty_0_100 = max(0.0, min(100.0, rel * weight * 100.0))
+            adjusted_score_0_100 = max(0.0, base_score_0_100 - penalty_0_100)
+
+    primary: Dict[str, Any] = {
+        "overall_0_100": float(adjusted_score_0_100),
+        "source": base_source,
+        "base_overall_0_100": float(base_score_0_100),
+        "mode": str(mode),
+        "rubric_overall_0_100": float(rubric_score_0_100),
+    }
+    if calibrated is not None:
+        primary["calibrator_path"] = str(calibrated["calibrator_path"])
+    if trained_score_0_100 is not None:
+        primary["trained_overall_0_100"] = float(trained_score_0_100)
+        primary["trained_model_path_or_id"] = str(trained_score.get("model_path_or_id") or "")
+    if mode == "blend" and trained_score_0_100 is not None:
+        primary["blend_weight"] = float(blend_w)
+    if antipattern_score is not None:
+        primary["antipattern_prob_0_1"] = float(anti_prob or 0.0)
+        primary["antipattern_penalty_0_100"] = float(penalty_0_100)
+        primary["source"] = f"{base_source}_antipattern_adjusted"
+    out["primary_score"] = primary
     return out
 
 
@@ -330,13 +467,102 @@ def write_like_remote(
     return out.to_dict()
 
 
+@app.function(image=image, gpu="any", timeout=600, volumes={"/cache/hf": hf_cache_vol, "/vol": data_vol})
+def patch_suggest_remote(
+    text: str,
+    *,
+    doc_type: str = "prose",
+    scoring_model_id: str = "gpt2",
+    max_input_tokens: int = 512,
+    normalize_text: bool = True,
+    window_sentences: int = 4,
+    max_zones: int = 6,
+) -> Dict[str, Any]:
+    _bootstrap_repo()
+    from tools.studio.span_patcher import suggest_dead_zones
+
+    out = suggest_dead_zones(
+        text,
+        doc_type=str(doc_type),
+        scoring_model_id=str(scoring_model_id),
+        backend="hf",
+        max_input_tokens=int(max_input_tokens),
+        normalize_text=bool(normalize_text),
+        window_sentences=int(window_sentences),
+        max_zones=int(max_zones),
+    )
+    hf_cache_vol.commit()
+    return out
+
+
+@app.function(image=image, gpu="any", timeout=900, volumes={"/cache/hf": hf_cache_vol, "/vol": data_vol})
+def patch_span_remote(
+    text: str,
+    *,
+    doc_type: str = "prose",
+    start_char: int = 0,
+    end_char: int = 0,
+    rewrite_mode: str = "strict",
+    intensity: float = 0.5,
+    rewrite_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    scoring_model_id: str = "gpt2",
+    baseline_model_id: str = "gpt2_gutenberg_512",
+    calibrator_path: str = "",
+    scorer_model_path: str = "",
+    scorer_max_length: int = 384,
+    score_top_n: int = 3,
+    max_input_tokens: int = 384,
+    normalize_text: bool = True,
+    n_candidates: int = 6,
+    max_new_tokens: int = 260,
+    temperature: float = 0.8,
+    top_p: float = 0.92,
+    seed: Optional[int] = 7,
+) -> Dict[str, Any]:
+    _bootstrap_repo()
+    # Surface rewrite model failures (otherwise generation exceptions are swallowed
+    # and the UI only sees "no_rewrites_generated").
+    os.environ.setdefault("HORACE_RAISE_REWRITE_ERRORS", "1")
+    from tools.studio.meaning_lock import MeaningLockConfig
+    from tools.studio.span_patcher import patch_span
+
+    cfg = MeaningLockConfig()
+    out = patch_span(
+        text,
+        start_char=int(start_char),
+        end_char=int(end_char),
+        doc_type=str(doc_type),
+        rewrite_mode=str(rewrite_mode),
+        intensity=float(intensity),
+        rewrite_model_id=str(rewrite_model_id),
+        scoring_model_id=str(scoring_model_id),
+        baseline_model_id=str(baseline_model_id),
+        calibrator_path=str(calibrator_path or ""),
+        scorer_model_path=str(scorer_model_path or ""),
+        scorer_max_length=int(scorer_max_length),
+        score_top_n=int(score_top_n),
+        backend="hf",
+        max_input_tokens=int(max_input_tokens),
+        normalize_text=bool(normalize_text),
+        n_candidates=int(n_candidates),
+        max_new_tokens=int(max_new_tokens),
+        temperature=float(temperature),
+        top_p=float(top_p),
+        seed=int(seed) if seed is not None else None,
+        meaning_lock=cfg,
+    )
+    hf_cache_vol.commit()
+    return out
+
+
 @app.function(image=image, volumes={"/cache/hf": hf_cache_vol, "/vol": data_vol})
 @modal.asgi_app()
 def fastapi_app():  # pragma: no cover
     _bootstrap_repo()
     import time
     from collections import defaultdict
-    from fastapi import FastAPI, Body, Request
+    from fastapi import FastAPI, Request
+    from fastapi.exceptions import RequestValidationError
     from fastapi.responses import HTMLResponse, JSONResponse
     from typing import Dict, Any
 
@@ -346,6 +572,18 @@ def fastapi_app():  # pragma: no cover
     from tools.studio.site import API_HTML, STUDIO_HTML
 
     web = FastAPI(title="Horace")
+
+    @web.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        details = []
+        for err in exc.errors():
+            loc = ".".join(str(x) for x in (err.get("loc") or []) if x != "body")
+            msg = str(err.get("msg") or err.get("type") or "invalid input")
+            details.append(f"{loc}: {msg}" if loc else msg)
+        return JSONResponse(
+            {"error": "invalid_request", "details": "; ".join(details) or "Request validation failed"},
+            status_code=422,
+        )
 
     # Simple in-memory rate limiting (per container)
     _rate_limits: Dict[str, list] = defaultdict(list)
@@ -392,55 +630,126 @@ def fastapi_app():  # pragma: no cover
         return HTMLResponse(content=API_HTML)
 
     @web.post("/analyze")
-    async def analyze(body: Dict[str, Any] = Body(...)):
-        req = AnalyzeReq(**body)
+    async def analyze(req: AnalyzeReq):
         baseline = (req.baseline_model_id or req.baseline_model or "gpt2").strip()
-        return analyze_remote.remote(
-            req.text,
-            doc_type=req.doc_type,
-            scorer_model_path=str(req.scorer_model_path or ""),
-            scorer_max_length=int(req.scorer_max_length),
-            fast_only=bool(req.fast_only),
-            scoring_model_id=req.scoring_model_id,
-            baseline_model_id=baseline,
-            max_input_tokens=req.max_input_tokens,
-            normalize_text=bool(req.normalize_text),
-            calibrator_path=str(req.calibrator_path or ""),
-        )
+        try:
+            return analyze_remote.remote(
+                req.text,
+                doc_type=req.doc_type,
+                scorer_model_path=str(req.scorer_model_path or ""),
+                scorer_max_length=int(req.scorer_max_length),
+                antipattern_model_path=str(req.antipattern_model_path or ""),
+                antipattern_max_length=int(req.antipattern_max_length),
+                antipattern_penalty_weight=float(req.antipattern_penalty_weight),
+                antipattern_penalty_threshold=float(req.antipattern_penalty_threshold),
+                primary_score_mode=str(req.primary_score_mode or "auto"),
+                primary_blend_weight=float(req.primary_blend_weight),
+                fast_only=bool(req.fast_only),
+                scoring_model_id=req.scoring_model_id,
+                baseline_model_id=baseline,
+                max_input_tokens=req.max_input_tokens,
+                normalize_text=bool(req.normalize_text),
+                calibrator_path=str(req.calibrator_path or ""),
+            )
+        except Exception as e:
+            return JSONResponse(
+                {"error": "analyze_failed", "details": f"{type(e).__name__}: {e}"},
+                status_code=500,
+            )
 
     @web.post("/rewrite")
-    async def rewrite(body: Dict[str, Any] = Body(...)):
-        req = RewriteReq(**body)
+    async def rewrite(req: RewriteReq):
         baseline = (req.baseline_model_id or req.baseline_model or "gpt2").strip()
-        return rewrite_remote.remote(
-            req.text,
-            doc_type=req.doc_type,
-            rewrite_model_id=req.rewrite_model_id,
-            scoring_model_id=req.scoring_model_id,
-            baseline_model_id=baseline,
-            calibrator_path=str(req.calibrator_path or ""),
-            n_candidates=req.n_candidates,
-            keep_top=req.keep_top,
-            max_input_tokens=req.max_input_tokens,
-            max_new_tokens=req.max_new_tokens,
-            temperature=req.temperature,
-            top_p=req.top_p,
-            seed=req.seed,
-            normalize_text=bool(req.normalize_text),
-        )
+        try:
+            return rewrite_remote.remote(
+                req.text,
+                doc_type=req.doc_type,
+                rewrite_model_id=req.rewrite_model_id,
+                scoring_model_id=req.scoring_model_id,
+                baseline_model_id=baseline,
+                calibrator_path=str(req.calibrator_path or ""),
+                n_candidates=req.n_candidates,
+                keep_top=req.keep_top,
+                max_input_tokens=req.max_input_tokens,
+                max_new_tokens=req.max_new_tokens,
+                temperature=req.temperature,
+                top_p=req.top_p,
+                seed=req.seed,
+                normalize_text=bool(req.normalize_text),
+            )
+        except Exception as e:
+            return JSONResponse(
+                {"error": "rewrite_failed", "details": f"{type(e).__name__}: {e}"},
+                status_code=500,
+            )
 
     @web.post("/write-like")
     @web.post("/cadence-match")
-    async def cadence_match(body: Dict[str, Any] = Body(...)):
-        req = WriteLikeReq(**body)
-        return write_like_remote.remote(
-            req.prompt,
-            reference_text=req.reference_text,
-            doc_type=req.doc_type,
-            model_id=req.model_id,
-            max_new_tokens=req.max_new_tokens,
-            seed=req.seed,
-        )
+    async def cadence_match(req: WriteLikeReq):
+        try:
+            return write_like_remote.remote(
+                req.prompt,
+                reference_text=req.reference_text,
+                doc_type=req.doc_type,
+                model_id=req.model_id,
+                max_new_tokens=req.max_new_tokens,
+                seed=req.seed,
+            )
+        except Exception as e:
+            return JSONResponse(
+                {"error": "cadence_match_failed", "details": f"{type(e).__name__}: {e}"},
+                status_code=500,
+            )
+
+    @web.post("/patch/suggest")
+    async def patch_suggest(req: PatchSuggestReq):
+        try:
+            return patch_suggest_remote.remote(
+                req.text,
+                doc_type=req.doc_type,
+                scoring_model_id=req.scoring_model_id,
+                max_input_tokens=req.max_input_tokens,
+                normalize_text=bool(req.normalize_text),
+                window_sentences=req.window_sentences,
+                max_zones=req.max_zones,
+            )
+        except Exception as e:
+            return JSONResponse(
+                {"error": "patch_suggest_failed", "details": f"{type(e).__name__}: {e}"},
+                status_code=500,
+            )
+
+    @web.post("/patch/span")
+    async def patch_span(req: PatchSpanReq):
+        baseline = (req.baseline_model_id or req.baseline_model or "gpt2").strip()
+        try:
+            return patch_span_remote.remote(
+                req.text,
+                doc_type=req.doc_type,
+                start_char=int(req.start_char),
+                end_char=int(req.end_char),
+                rewrite_mode=str(req.rewrite_mode or "strict"),
+                intensity=float(req.intensity),
+                rewrite_model_id=str(req.rewrite_model_id or "Qwen/Qwen2.5-0.5B-Instruct"),
+                scoring_model_id=str(req.scoring_model_id or "gpt2"),
+                baseline_model_id=baseline,
+                calibrator_path=str(req.calibrator_path or ""),
+                scorer_model_path=str(req.scorer_model_path or ""),
+                scorer_max_length=int(req.scorer_max_length),
+                score_top_n=int(req.score_top_n),
+                max_input_tokens=int(req.max_input_tokens),
+                normalize_text=bool(req.normalize_text),
+                n_candidates=int(req.n_candidates),
+                max_new_tokens=int(req.max_new_tokens),
+                temperature=float(req.temperature),
+                top_p=float(req.top_p),
+                seed=req.seed,
+            )
+        except Exception as e:
+            return JSONResponse(
+                {"error": "patch_span_failed", "details": f"{type(e).__name__}: {e}"},
+                status_code=500,
+            )
 
     @web.get("/")
     async def root():

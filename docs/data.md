@@ -108,3 +108,41 @@ python -m tools.studio.build_mixed_windows_corpus \
   - Build preference pairs from Standard Ebooks splits: original > dulled rewrite (meaning preserved; cadence flattened) and > deterministic corruptions.
   - Fine-tune the scorer with a pairwise ranking loss.
   - End-to-end Modal wrapper: `make modal-train-scorer-hybrid`.
+
+## AI anti-pattern pipeline (human vs high-quality LLM imitation)
+
+So what: dull/corruption negatives teach cadence robustness, but they do not fully cover polished AI prose. Anti-pattern data adds *hard negatives* that are stylistically strong yet machine-generated.
+
+1) Curate originals (human passages):
+```bash
+make build-antipattern-originals
+```
+
+2) Generate anti-pattern pairs:
+- Multi-provider online generation (randomized provider/model per sample):
+```bash
+make build-antipattern-pairs
+```
+- OpenAI Batch request generation (cost-optimized path):
+```bash
+make build-antipattern-pairs-openai-batch
+```
+- Merge downloaded OpenAI Batch results:
+```bash
+make merge-antipattern-openai-batch ANTIPATTERN_OPENAI_BATCH_RES=data/antipattern/openai_batch_results_v1.jsonl
+```
+
+3) Build benchmark v5 (v4 + anti-pattern negatives):
+```bash
+make build-benchmark-v5
+```
+
+4) Train scorer with anti-pattern negatives:
+```bash
+make train-scorer-v5-antipattern
+```
+
+5) Build and evaluate held-out AI-overfit set:
+```bash
+make eval-ai-overfit AI_OVERFIT_MODEL=models/scorer_v5_antipattern
+```
