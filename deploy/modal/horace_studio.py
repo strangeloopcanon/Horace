@@ -209,7 +209,11 @@ def _scorer_model_warning(path: str) -> Optional[str]:
     s = str(path or "").strip().lower()
     if not s:
         return None
-    if ("antipattern" in s or "scorer_v5_antipattern" in s) and "authenticity" not in s:
+    if (
+        ("antipattern" in s or "scorer_v5_antipattern" in s)
+        and "authenticity" not in s
+        and "scorer_v5_antipattern_skywork" not in s
+    ):
         return (
             "scorer_model_path looks like an anti-pattern checkpoint; "
             "use it in antipattern_model_path for authenticity penalty, not as primary scorer"

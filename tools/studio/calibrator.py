@@ -58,6 +58,7 @@ def featurize_from_report_row(
     categories: Mapping[str, Any],
     rubric_metrics: Mapping[str, Any],
     doc_metrics: Optional[Mapping[str, Any]] = None,
+    report_row: Optional[Mapping[str, Any]] = None,
     max_input_tokens: Optional[int] = None,
     missing_value: float = 0.5,
 ) -> List[float]:
@@ -89,6 +90,21 @@ def featurize_from_report_row(
             v = None if doc_metrics is None else doc_metrics.get(dkey)
             if isinstance(v, (int, float)) and math.isfinite(float(v)):
                 out.append(float(v))
+            else:
+                out.append(float(missing_value))
+            continue
+        if name.startswith("s:"):
+            skey = name[2:]
+            sval = None if report_row is None else report_row.get(skey)
+            if isinstance(sval, Mapping):
+                score_candidate = sval.get("score_0_1")
+                if score_candidate is None:
+                    score_candidate = sval.get("score_0_100")
+                if score_candidate is None:
+                    score_candidate = sval.get("overall_0_1")
+                sval = score_candidate
+            if isinstance(sval, (int, float)) and math.isfinite(float(sval)):
+                out.append(float(sval))
             else:
                 out.append(float(missing_value))
             continue
@@ -143,4 +159,15 @@ def iter_default_feature_names(scored_rows: Iterable[Mapping[str, Any]]) -> List
             feats.append(f"d:{k}")
     feats.extend([f"c:{k}" for k in sorted(cat_keys)])
     feats.extend([f"m:{k}" for k in sorted(metric_keys)])
-    return feats
+
+    for r in scored_rows:
+        for k in sorted(r.keys()):
+            if not isinstance(r.get(k), (int, float)):
+                continue
+            if not str(k).endswith("_0_1"):
+                continue
+            if not str(k).startswith(("quality_", "antipattern_", "authenticity_", "trained_", "truncated_", "score_")):
+                continue
+            feats.append(f"s:{k}")
+    # Keep deterministic ordering and remove duplicates.
+    return list(dict.fromkeys(feats))

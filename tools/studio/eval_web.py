@@ -7,7 +7,7 @@ import random
 import re
 import time
 import urllib.request
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -15,7 +15,6 @@ from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.score import score_text
 from tools.studio.text_normalize import normalize_for_studio
-
 
 DEFAULT_UA = "HoraceStudioEval/0.1 (+https://example.invalid)"
 
@@ -355,6 +354,7 @@ def score_samples(
     *,
     model_id: str,
     baseline_model: str,
+    analysis_model: Optional[str] = None,
     doc_type: str,
     backend: str,
     max_input_tokens: int,
@@ -366,9 +366,10 @@ def score_samples(
     for s in samples:
         raw_stats = _text_stats(s.text)
         _, norm_meta = normalize_for_studio(s.text, doc_type=doc_type, enabled=bool(normalize_text))
+        analysis_model_id = str(analysis_model).strip() if analysis_model and str(analysis_model).strip() else str(model_id)
         analysis = analyze_text(
             s.text,
-            model_id=model_id,
+            model_id=analysis_model_id,
             doc_type=doc_type,
             backend=backend,
             max_input_tokens=int(max_input_tokens),
@@ -416,13 +417,14 @@ def run_eval(
     gutenberg_n: int,
     rfc_n: int,
     gibberish_n: int,
-    model_id: str,
-    baseline_model: str,
-    doc_type: str,
-    backend: str,
-    max_input_tokens: int,
-    normalize_text: bool,
-    compute_cohesion: bool,
+        model_id: str,
+        baseline_model: str,
+        analysis_model: Optional[str] = None,
+        doc_type: str,
+        backend: str,
+        max_input_tokens: int,
+        normalize_text: bool,
+        compute_cohesion: bool,
     excerpt_chars: int,
     samples_out: Path,
     report_out: Path,
@@ -441,6 +443,7 @@ def run_eval(
         samples,
         model_id=model_id,
         baseline_model=baseline_model,
+        analysis_model=analysis_model,
         doc_type=doc_type,
         backend=backend,
         max_input_tokens=max_input_tokens,
@@ -456,6 +459,7 @@ def run_eval(
         "run_meta": {
             "seed": int(seed),
             "model_id": model_id,
+            "analysis_model": str(analysis_model or ""),
             "baseline_model": baseline_model,
             "doc_type": doc_type,
             "backend": backend,
@@ -493,6 +497,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--model-id", default="gpt2")
     ap.add_argument("--baseline-model", default="gpt2_gutenberg_512", help="Baseline model id or baseline JSON path")
+    ap.add_argument(
+        "--analysis-model",
+        default=None,
+        help="Optional causal model used for cadence/rubric analysis. Defaults to --model-id.",
+    )
     ap.add_argument("--doc-type", default="prose")
     ap.add_argument("--backend", default="auto", choices=["auto", "mlx", "hf"])
     ap.add_argument("--max-input-tokens", type=int, default=512)
@@ -517,6 +526,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         gibberish_n=int(args.gibberish),
         model_id=str(args.model_id),
         baseline_model=str(args.baseline_model),
+        analysis_model=str(args.analysis_model) if args.analysis_model else None,
         doc_type=str(args.doc_type),
         backend=str(args.backend),
         max_input_tokens=int(args.max_input_tokens),

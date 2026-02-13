@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 def _lazy_import_modal():
@@ -97,6 +97,7 @@ def eval_remote(config_json: str) -> Dict[str, Any]:
         samples_path=samples_path,
         model_id=str(cfg["model_id"]),
         baseline_model=str(cfg["baseline_model"]),
+        analysis_model=str(cfg.get("analysis_model") or None),
         doc_type=str(cfg["doc_type"]),
         backend="hf",
         max_input_tokens=int(cfg["max_input_tokens"]),
@@ -119,6 +120,7 @@ def main(  # pragma: no cover
     calibrator: str = "",
     model_id: str = "gpt2",
     baseline_model: str = "gpt2_gutenberg_512",
+    analysis_model: str = "",
     doc_type: str = "prose",
     max_input_tokens: int = 512,
     normalize_text: bool = True,
@@ -134,6 +136,7 @@ def main(  # pragma: no cover
         "calibrator_json": calibrator_json,
         "model_id": str(model_id),
         "baseline_model": str(baseline_model),
+        "analysis_model": str(analysis_model or ""),
         "doc_type": str(doc_type),
         "max_input_tokens": int(max_input_tokens),
         "normalize_text": bool(normalize_text),

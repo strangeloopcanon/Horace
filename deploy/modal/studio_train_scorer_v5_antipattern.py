@@ -58,6 +58,8 @@ image = (
 )
 if (_LOCAL_REPO_ROOT / "tools").exists():
     image = image.add_local_dir(_LOCAL_REPO_ROOT / "tools", remote_path=f"{REPO_REMOTE_PATH}/tools")
+if (_LOCAL_REPO_ROOT / "data").exists():
+    image = image.add_local_dir(_LOCAL_REPO_ROOT / "data", remote_path=f"{REPO_REMOTE_PATH}/data")
 
 app = modal.App(APP_NAME)
 
@@ -127,8 +129,8 @@ def train_v5_remote(
     merge_lora: bool,
 ) -> str:
     _bootstrap_repo()
-    from tools.studio.train_scorer import train_scorer
     from tools.studio.eval_scorer import eval_scorer
+    from tools.studio.train_scorer import train_scorer
 
     bench_root = Path(str(bench_dir)).expanduser()
     if not bench_root.exists():
@@ -205,7 +207,7 @@ def train_v5_remote(
 @app.local_entrypoint()
 def main(
     out_dir: str,
-    bench_dir: str = "/vol/benchmarks/studio_benchmark_v5",
+    bench_dir: str = f"{REPO_REMOTE_PATH}/data/benchmarks/studio_benchmark_v5",
     base_model: str = "Skywork/Skywork-Reward-V2-Qwen3-1.7B",
     seed: int = 1337,
     max_length: int = 512,
