@@ -180,10 +180,10 @@ def score_with_scorer(
             raise ValueError(f"unexpected scorer logits shape: {tuple(logits.shape)}")
         head_dim = int(logits.shape[-1])
         if head_dim == 1:
-            probs_t = torch.sigmoid(logits[:, 0])
+            probs_t = torch.sigmoid(logits[:, 0].float())
         elif head_dim == 2:
             # Binary classifier with two logits: use positive class probability.
-            probs_t = torch.softmax(logits, dim=-1)[:, 1]
+            probs_t = torch.softmax(logits.float(), dim=-1)[:, 1]
         else:
             raise ValueError(
                 "score_with_scorer supports only binary classifier heads (1 or 2 logits); "

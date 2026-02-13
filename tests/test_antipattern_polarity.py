@@ -103,6 +103,7 @@ class TestAntipatternPolarity(unittest.TestCase):
 
     def test_no_scorer_warning_for_authenticity_or_empty(self) -> None:
         self.assertIsNone(studio_api._scorer_model_warning("models/scorer_v5_authenticity_v1"))
+        self.assertIsNone(studio_api._scorer_model_warning("models/scorer_v5_antipattern_skywork_v1"))
         self.assertIsNone(studio_api._scorer_model_warning(""))
 
     def test_adaptive_penalty_starts_before_hard_threshold(self) -> None:

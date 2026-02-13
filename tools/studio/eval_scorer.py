@@ -210,7 +210,7 @@ def eval_scorer(
             batch = {k: v.to(dev) for k, v in batch.items()}
             out = model(**batch)
             logits = out.logits.squeeze(-1)
-            p = torch.sigmoid(logits).detach().cpu().numpy()
+            p = torch.sigmoid(logits.float()).detach().cpu().numpy()
             all_p.extend([float(x) for x in p.tolist()])
             all_y.extend([int(x) for x in y.detach().cpu().numpy().tolist()])
             all_src.extend([str(x) for x in src])

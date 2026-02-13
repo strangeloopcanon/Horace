@@ -256,7 +256,7 @@ def _eval_loop(
             logits = out.logits.squeeze(-1)
             loss = bce(logits, labels)
             losses.append(float(loss.detach().cpu().item()))
-            p = torch.sigmoid(logits).detach().cpu().numpy()
+            p = torch.sigmoid(logits.float()).detach().cpu().numpy()
             all_p.extend([float(x) for x in p.tolist()])
             all_y.extend([float(x) for x in labels.detach().cpu().numpy().tolist()])
             all_src.extend([str(m.get("source") or "") for m in meta])

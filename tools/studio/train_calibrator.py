@@ -3,10 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import random
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -87,6 +86,7 @@ def train_from_eval_report(
     out_path: Path,
     positive_sources: Sequence[str],
     negative_sources: Sequence[str],
+    feature_names: Optional[Sequence[str]] = None,
     missing_value: float = 0.5,
     l2: float = 1e-2,
     lr: float = 0.5,
@@ -104,7 +104,7 @@ def train_from_eval_report(
     pos_set = {str(s) for s in positive_sources}
     neg_set = {str(s) for s in negative_sources}
 
-    feats = iter_default_feature_names(rows)
+    feats = [str(x) for x in (feature_names or iter_default_feature_names(rows))]
 
     X_list: List[List[float]] = []
     y_list: List[int] = []
@@ -126,6 +126,7 @@ def train_from_eval_report(
             categories=cats,
             rubric_metrics=rms,
             doc_metrics=dm,
+            report_row=r,
             max_input_tokens=max_input_tokens_i,
             missing_value=float(missing_value),
         )
@@ -187,6 +188,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=["wikipedia_random_summary", "rfc_excerpt", "gibberish_control"],
         help="Negative source label(s)",
     )
+    ap.add_argument(
+        "--feature",
+        action="append",
+        default=[],
+        help="Optional feature name(s) (repeatable). If omitted, uses report-derived defaults.",
+    )
     ap.add_argument("--missing", type=float, default=0.5, help="Fill value for missing features")
     ap.add_argument("--l2", type=float, default=1e-2)
     ap.add_argument("--lr", type=float, default=0.5)
@@ -199,6 +206,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         out_path=Path(str(args.out)),
         positive_sources=tuple(args.pos or []),
         negative_sources=tuple(args.neg or []),
+        feature_names=tuple(args.feature or []) if (args.feature or []) else None,
         missing_value=float(args.missing),
         l2=float(args.l2),
         lr=float(args.lr),

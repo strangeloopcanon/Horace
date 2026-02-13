@@ -882,13 +882,15 @@ STUDIO_HTML = """<!doctype html>
       const $ = id => document.getElementById(id);
       const $$ = sel => document.querySelectorAll(sel);
       const IS_MODAL_HOST = String(window.location.hostname || '').includes('.modal.run');
-      const DEFAULT_SCORER_MODEL_PATH = '';
+      const DEFAULT_SCORER_MODEL_PATH = IS_MODAL_HOST
+        ? '/vol/models/scorer_v5_antipattern_skywork_v1'
+        : '';
       const DEFAULT_ANTIPATTERN_MODEL_PATH = IS_MODAL_HOST
         ? '/vol/models/scorer_v5_authenticity_v1'
         : 'models/scorer_v5_authenticity_v1';
       const DEFAULT_ANTIPATTERN_COMBINER_MODE = 'adaptive';
       const DEFAULT_APPLY_ANTIPATTERN_PENALTY = false;
-      const DEFAULT_PRIMARY_SCORE_MODE = 'rubric';
+      const DEFAULT_PRIMARY_SCORE_MODE = IS_MODAL_HOST ? 'trained' : 'rubric';
       const DEFAULT_PRIMARY_BLEND_WEIGHT = '0.35';
 
       function safeStorageGet(key, fallback = null) {
@@ -920,9 +922,16 @@ STUDIO_HTML = """<!doctype html>
         return s.includes('v5_antipattern') && !s.includes('authenticity');
       }
 
+      function isKnownQualityAntipatternModel(path) {
+        const s = String(path || '').toLowerCase();
+        return s.includes('scorer_v5_antipattern_skywork');
+      }
+
       function looksLikeWrongScorerModel(path) {
         const s = String(path || '').toLowerCase();
-        return s.includes('antipattern') && !s.includes('authenticity');
+        return s.includes('antipattern')
+          && !s.includes('authenticity')
+          && !isKnownQualityAntipatternModel(s);
       }
 
       function bindPersistedInput(id, storageKey, defaultValue) {
