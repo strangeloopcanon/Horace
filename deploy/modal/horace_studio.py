@@ -40,8 +40,13 @@ class AnalyzeReq(BaseModel):
     scorer_max_length: int = 384
     antipattern_model_path: str = ""
     antipattern_max_length: int = 384
-    antipattern_penalty_weight: float = 0.35
-    antipattern_penalty_threshold: float = 0.90
+    # Anti-pattern is a likelihood-of-LLM-imitation score for this text.
+    # Lowering threshold makes AI-text penalties kick in earlier; raising it makes
+    # penalties rarer and more selective.
+    antipattern_penalty_weight: float = 0.85
+    antipattern_penalty_threshold: float = 0.85
+    antipattern_combiner_mode: str = "adaptive"  # adaptive | legacy
+    apply_antipattern_penalty: bool = False
     primary_score_mode: str = "auto"  # auto | rubric | trained | blend
     primary_blend_weight: float = 0.35
     fast_only: bool = False
@@ -184,6 +189,144 @@ def _ensure_baseline(model_id: str):
         ) from e
 
 
+def _antipattern_model_warning(path: str, anti_prob: Optional[float]) -> Optional[str]:
+    s = str(path or "").strip().lower()
+    if not s:
+        return None
+    if anti_prob is None:
+        return None
+    if "authenticity" in s:
+        return None
+    if "v5_antipattern" in s and anti_prob < 0.20:
+        return (
+            "antipattern model looks like quality-style training (not authenticity-focused); "
+            "expected model like scorer_v5_authenticity_v1"
+        )
+    return None
+
+
+def _scorer_model_warning(path: str) -> Optional[str]:
+    s = str(path or "").strip().lower()
+    if not s:
+        return None
+    if ("antipattern" in s or "scorer_v5_antipattern" in s) and "authenticity" not in s:
+        return (
+            "scorer_model_path looks like an anti-pattern checkpoint; "
+            "use it in antipattern_model_path for authenticity penalty, not as primary scorer"
+        )
+    return None
+
+
+def _antipattern_prob_is_inverted(path: str) -> Optional[bool]:
+    model_path = str(path or "").strip()
+    if not model_path:
+        return None
+
+    base = Path(model_path)
+    if base.exists() and base.is_dir():
+        report_path = base / "train_report.json"
+        if report_path.exists():
+            try:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                pos_sources = [str(x).strip().lower() for x in (report.get("run_meta", {}).get("positive_sources") or [])]
+                if "human_original" in pos_sources:
+                    return True
+                if any(s.startswith("llm_antipattern") for s in pos_sources):
+                    return False
+            except Exception:
+                pass
+
+    lowered = model_path.lower()
+    if "v5_antipattern_mix_plusfull" in lowered or "v5_antipattern_mix_" in lowered or "v5_antipattern_pilot" in lowered:
+        return True
+    if "authenticity" in lowered:
+        return False
+    return None
+
+
+def _resolve_antipattern_prob(path: str, anti_prob: Optional[float]) -> tuple[float, bool, Optional[str]]:
+    if anti_prob is None:
+        return 0.0, False, None
+    p = float(anti_prob)
+    p = min(1.0, max(0.0, p))
+    mode = _antipattern_prob_is_inverted(path)
+    if mode is None:
+        return p, False, None
+    if mode:
+        return (1.0 - p), True, "antipattern model appears to be trained with human-positive labels; score was inverted for AI-likelihood."
+    return p, False, None
+
+
+def _compute_antipattern_adjustment(
+    *,
+    base_score_0_100: float,
+    anti_prob_0_1: float,
+    threshold_0_1: float,
+    weight: float,
+    mode: str = "adaptive",
+) -> dict:
+    base = max(0.0, min(100.0, float(base_score_0_100)))
+    p = max(0.0, min(1.0, float(anti_prob_0_1)))
+    hard_t = max(0.05, min(0.98, float(threshold_0_1)))
+    w = max(0.0, min(2.0, float(weight)))
+    selected_mode = str(mode or "adaptive").strip().lower()
+    if selected_mode not in ("adaptive", "legacy"):
+        selected_mode = "adaptive"
+
+    if selected_mode == "legacy":
+        penalty_0_100 = 0.0
+        if p > hard_t and hard_t < 1.0:
+            rel = (p - hard_t) / max(1e-6, 1.0 - hard_t)
+            penalty_0_100 = max(0.0, min(100.0, rel * w * 100.0))
+        adjusted = max(0.0, base - penalty_0_100)
+        return {
+            "mode": selected_mode,
+            "adjusted_score_0_100": adjusted,
+            "penalty_0_100": max(0.0, min(base, penalty_0_100)),
+            "soft_threshold_0_1": None,
+            "hard_threshold_0_1": hard_t,
+            "authenticity_cap_0_100": None,
+            "risk_soft_0_1": None,
+            "risk_hard_0_1": None,
+        }
+
+    soft_t = max(0.45, min(0.65, hard_t - 0.30))
+    soft_rel = 0.0
+    if p > soft_t:
+        soft_rel = (p - soft_t) / max(1e-6, hard_t - soft_t)
+    soft_rel = max(0.0, min(1.0, soft_rel))
+
+    hard_rel = 0.0
+    if p > hard_t:
+        hard_rel = (p - hard_t) / max(1e-6, 1.0 - hard_t)
+    hard_rel = max(0.0, min(1.0, hard_rel))
+
+    soft_penalty = (20.0 * w) * (soft_rel**1.6)
+    hard_penalty = (80.0 * w) * (hard_rel**1.1)
+    pre_cap = max(0.0, base - soft_penalty - hard_penalty)
+
+    cap_floor = max(20.0, 100.0 - (70.0 * w))
+    cap_rel = 0.0
+    if p > soft_t:
+        cap_rel = (p - soft_t) / max(1e-6, 1.0 - soft_t)
+    cap_rel = max(0.0, min(1.0, cap_rel))
+    authenticity_cap = 100.0 - (100.0 - cap_floor) * (cap_rel**1.35)
+
+    adjusted = min(pre_cap, authenticity_cap)
+    adjusted = max(0.0, min(100.0, adjusted))
+    penalty = max(0.0, min(base, base - adjusted))
+    return {
+        "mode": selected_mode,
+        "adjusted_score_0_100": adjusted,
+        "penalty_0_100": penalty,
+        "soft_threshold_0_1": float(soft_t),
+        "hard_threshold_0_1": float(hard_t),
+        "authenticity_cap_0_100": float(authenticity_cap),
+        "risk_soft_0_1": float(soft_rel),
+        "risk_hard_0_1": float(hard_rel),
+    }
+
+
 @app.function(image=image, gpu="any", timeout=600, volumes={"/cache/hf": hf_cache_vol, "/vol": data_vol})
 def analyze_remote(
     text: str,
@@ -193,8 +336,10 @@ def analyze_remote(
     scorer_max_length: int = 384,
     antipattern_model_path: str = "",
     antipattern_max_length: int = 384,
-    antipattern_penalty_weight: float = 0.35,
-    antipattern_penalty_threshold: float = 0.90,
+    antipattern_penalty_weight: float = 0.85,
+    antipattern_penalty_threshold: float = 0.85,
+    antipattern_combiner_mode: str = "adaptive",
+    apply_antipattern_penalty: bool = False,
     primary_score_mode: str = "auto",
     primary_blend_weight: float = 0.35,
     fast_only: bool = False,
@@ -365,17 +510,87 @@ def analyze_remote(
             base_score_0_100 = float(trained_score_0_100)
             base_source = "trained_scorer"
 
+    apply_antipattern_penalty = bool(apply_antipattern_penalty)
     adjusted_score_0_100 = float(base_score_0_100)
     penalty_0_100 = 0.0
+    suggested_penalty_0_100 = 0.0
+    combined_preview_0_100 = float(base_score_0_100)
+    anti_soft_threshold = None
+    anti_hard_threshold = None
+    anti_cap_0_100 = None
+    anti_risk_soft = None
+    anti_risk_hard = None
+    anti_combiner_mode = str(antipattern_combiner_mode or "adaptive").strip().lower()
     anti_prob = None
+    anti_prob_raw = None
+    anti_prob_inverted = False
     if antipattern_score is not None:
         anti_prob = float(antipattern_score.get("prob_0_1") or 0.0)
-        threshold = max(0.0, min(1.0, float(antipattern_penalty_threshold)))
-        weight = max(0.0, min(2.0, float(antipattern_penalty_weight)))
-        if anti_prob > threshold and threshold < 1.0:
-            rel = (anti_prob - threshold) / max(1e-6, 1.0 - threshold)
-            penalty_0_100 = max(0.0, min(100.0, rel * weight * 100.0))
-            adjusted_score_0_100 = max(0.0, base_score_0_100 - penalty_0_100)
+        anti_prob_raw = anti_prob
+        anti_prob, anti_prob_inverted, anti_prob_inversion_msg = _resolve_antipattern_prob(
+            antipattern_model_path,
+            anti_prob_raw,
+        )
+        if anti_prob_inversion_msg is not None:
+            out.setdefault("primary_score_warning", "antipattern score polarity corrected for AI-likelihood.")
+            prev = str(out.get("primary_score_warning") or "").strip()
+            if prev and anti_prob_inversion_msg not in prev:
+                out["primary_score_warning"] = f"{prev}; {anti_prob_inversion_msg}"
+            else:
+                out["primary_score_warning"] = anti_prob_inversion_msg
+        anti_adj = _compute_antipattern_adjustment(
+            base_score_0_100=base_score_0_100,
+            anti_prob_0_1=float(anti_prob),
+            threshold_0_1=float(antipattern_penalty_threshold),
+            weight=float(antipattern_penalty_weight),
+            mode=anti_combiner_mode,
+        )
+        combined_preview_0_100 = float(anti_adj["adjusted_score_0_100"])
+        suggested_penalty_0_100 = float(anti_adj["penalty_0_100"])
+        if apply_antipattern_penalty:
+            adjusted_score_0_100 = float(combined_preview_0_100)
+            penalty_0_100 = float(suggested_penalty_0_100)
+        else:
+            adjusted_score_0_100 = float(base_score_0_100)
+            penalty_0_100 = 0.0
+        anti_soft_threshold = anti_adj["soft_threshold_0_1"]
+        anti_hard_threshold = anti_adj["hard_threshold_0_1"]
+        anti_cap_0_100 = anti_adj["authenticity_cap_0_100"]
+        anti_risk_soft = anti_adj["risk_soft_0_1"]
+        anti_risk_hard = anti_adj["risk_hard_0_1"]
+        anti_combiner_mode = str(anti_adj["mode"])
+    if antipattern_err is not None:
+        warning = (
+            "anti-pattern scorer failed; authenticity penalty disabled for this request"
+        )
+        prev_warning = str(out.get("primary_score_warning") or "").strip()
+        out["primary_score_warning"] = (
+            warning if not prev_warning else f"{prev_warning}; {warning}"
+        )
+    anti_warning = _antipattern_model_warning(antipattern_model_path, anti_prob)
+    if anti_warning is not None:
+        prev_warning = str(out.get("primary_score_warning") or "").strip()
+        out["primary_score_warning"] = (
+            anti_warning if not prev_warning else f"{prev_warning}; {anti_warning}"
+        )
+    scorer_warning = _scorer_model_warning(scorer_model_path)
+    if scorer_warning is not None:
+        prev_warning = str(out.get("primary_score_warning") or "").strip()
+        out["primary_score_warning"] = (
+            scorer_warning if not prev_warning else f"{prev_warning}; {scorer_warning}"
+        )
+    if antipattern_score is not None and not apply_antipattern_penalty:
+        prev_warning = str(out.get("primary_score_warning") or "").strip()
+        dual_warning = "dual-score mode active: authenticity risk reported separately (no penalty applied to primary score)"
+        out["primary_score_warning"] = (
+            dual_warning if not prev_warning else f"{prev_warning}; {dual_warning}"
+        )
+    if antipattern_score is not None and anti_combiner_mode == "legacy":
+        prev_warning = str(out.get("primary_score_warning") or "").strip()
+        legacy_warning = "using legacy anti-pattern combiner (threshold-only); prefer adaptive mode for stricter AI-risk handling"
+        out["primary_score_warning"] = (
+            legacy_warning if not prev_warning else f"{prev_warning}; {legacy_warning}"
+        )
 
     primary: Dict[str, Any] = {
         "overall_0_100": float(adjusted_score_0_100),
@@ -391,11 +606,54 @@ def analyze_remote(
         primary["trained_model_path_or_id"] = str(trained_score.get("model_path_or_id") or "")
     if mode == "blend" and trained_score_0_100 is not None:
         primary["blend_weight"] = float(blend_w)
+    primary["apply_antipattern_penalty"] = bool(apply_antipattern_penalty)
     if antipattern_score is not None:
         primary["antipattern_prob_0_1"] = float(anti_prob or 0.0)
         primary["antipattern_penalty_0_100"] = float(penalty_0_100)
-        primary["source"] = f"{base_source}_antipattern_adjusted"
+        primary["antipattern_suggested_penalty_0_100"] = float(suggested_penalty_0_100)
+        primary["combined_preview_overall_0_100"] = float(combined_preview_0_100)
+        primary["antipattern_prob_raw_0_1"] = float(anti_prob_raw or 0.0)
+        primary["antipattern_prob_inverted"] = bool(anti_prob_inverted)
+        primary["antipattern_penalty_mode"] = str(anti_combiner_mode)
+        if anti_soft_threshold is not None:
+            primary["antipattern_soft_threshold_0_1"] = float(anti_soft_threshold)
+        if anti_hard_threshold is not None:
+            primary["antipattern_hard_threshold_0_1"] = float(anti_hard_threshold)
+        if anti_cap_0_100 is not None:
+            primary["antipattern_authenticity_cap_0_100"] = float(anti_cap_0_100)
+        if anti_risk_soft is not None:
+            primary["antipattern_risk_soft_0_1"] = float(anti_risk_soft)
+        if anti_risk_hard is not None:
+            primary["antipattern_risk_hard_0_1"] = float(anti_risk_hard)
+        if apply_antipattern_penalty:
+            primary["source"] = f"{base_source}_antipattern_adjusted"
+        else:
+            primary["source"] = f"{base_source}_dual_scores"
     out["primary_score"] = primary
+    out["quality_score"] = {
+        "overall_0_100": float(base_score_0_100),
+        "source": str(base_source),
+        "mode": str(mode),
+        "rubric_overall_0_100": float(rubric_score_0_100),
+        "trained_overall_0_100": (float(trained_score_0_100) if trained_score_0_100 is not None else None),
+    }
+    out["authenticity_score"] = {
+        "enabled": bool((antipattern_model_path or "").strip()),
+        "available": bool(antipattern_score is not None),
+        "llm_likelihood_0_1": (float(anti_prob) if anti_prob is not None else None),
+        "llm_likelihood_raw_0_1": (float(anti_prob_raw) if anti_prob_raw is not None else None),
+        "llm_likelihood_inverted": bool(anti_prob_inverted),
+        "combiner_mode": str(anti_combiner_mode),
+        "soft_threshold_0_1": (float(anti_soft_threshold) if anti_soft_threshold is not None else None),
+        "hard_threshold_0_1": (float(anti_hard_threshold) if anti_hard_threshold is not None else None),
+        "authenticity_cap_0_100": (float(anti_cap_0_100) if anti_cap_0_100 is not None else None),
+        "risk_soft_0_1": (float(anti_risk_soft) if anti_risk_soft is not None else None),
+        "risk_hard_0_1": (float(anti_risk_hard) if anti_risk_hard is not None else None),
+        "suggested_penalty_0_100": float(suggested_penalty_0_100),
+        "combined_preview_overall_0_100": float(combined_preview_0_100),
+        "penalty_applied": bool(apply_antipattern_penalty and antipattern_score is not None),
+        "error": (str(antipattern_err) if antipattern_err is not None else None),
+    }
     return out
 
 
@@ -642,6 +900,8 @@ def fastapi_app():  # pragma: no cover
                 antipattern_max_length=int(req.antipattern_max_length),
                 antipattern_penalty_weight=float(req.antipattern_penalty_weight),
                 antipattern_penalty_threshold=float(req.antipattern_penalty_threshold),
+                antipattern_combiner_mode=str(req.antipattern_combiner_mode or "adaptive"),
+                apply_antipattern_penalty=bool(req.apply_antipattern_penalty),
                 primary_score_mode=str(req.primary_score_mode or "auto"),
                 primary_blend_weight=float(req.primary_blend_weight),
                 fast_only=bool(req.fast_only),

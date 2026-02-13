@@ -761,6 +761,13 @@ STUDIO_HTML = """<!doctype html>
               <label class="input-label">Anti-Pattern Model Path (Optional)</label>
               <input type="text" id="antipattern-model-path" value="" placeholder="models/..." />
             </div>
+            <div class="settings-full">
+              <label class="input-label">
+                <input type="checkbox" id="apply-antipattern-penalty" />
+                Apply authenticity penalty to overall score
+              </label>
+              <div class="settings-hint">Off by default: shows quality and authenticity as separate scores.</div>
+            </div>
             <div>
               <label class="input-label">Primary Score Mode</label>
               <select id="primary-score-mode">
@@ -787,11 +794,18 @@ STUDIO_HTML = """<!doctype html>
             </div>
             <div>
               <label class="input-label">Anti-Pattern Threshold</label>
-              <input type="number" id="antipattern-threshold" value="0.90" step="0.01" min="0" max="1" />
+              <input type="number" id="antipattern-threshold" value="0.85" step="0.01" min="0" max="1" />
             </div>
             <div>
               <label class="input-label">Anti-Pattern Weight</label>
-              <input type="number" id="antipattern-weight" value="0.35" step="0.01" min="0" max="2" />
+              <input type="number" id="antipattern-weight" value="0.85" step="0.01" min="0" max="2" />
+            </div>
+            <div>
+              <label class="input-label">Anti-Pattern Combiner</label>
+              <select id="antipattern-combiner-mode">
+                <option value="adaptive">Adaptive (Recommended)</option>
+                <option value="legacy">Legacy Threshold</option>
+              </select>
             </div>
           </div>
         </div>
@@ -872,6 +886,8 @@ STUDIO_HTML = """<!doctype html>
       const DEFAULT_ANTIPATTERN_MODEL_PATH = IS_MODAL_HOST
         ? '/vol/models/scorer_v5_authenticity_v1'
         : 'models/scorer_v5_authenticity_v1';
+      const DEFAULT_ANTIPATTERN_COMBINER_MODE = 'adaptive';
+      const DEFAULT_APPLY_ANTIPATTERN_PENALTY = false;
       const DEFAULT_PRIMARY_SCORE_MODE = 'rubric';
       const DEFAULT_PRIMARY_BLEND_WEIGHT = '0.35';
 
@@ -890,6 +906,25 @@ STUDIO_HTML = """<!doctype html>
         } catch (e) {}
       }
 
+      function parseNumberInput(value, fallback) {
+        const raw = String(value || '').trim();
+        if (!raw) {
+          return fallback;
+        }
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      function looksLikeWrongAntipatternModel(path) {
+        const s = String(path || '').toLowerCase();
+        return s.includes('v5_antipattern') && !s.includes('authenticity');
+      }
+
+      function looksLikeWrongScorerModel(path) {
+        const s = String(path || '').toLowerCase();
+        return s.includes('antipattern') && !s.includes('authenticity');
+      }
+
       function bindPersistedInput(id, storageKey, defaultValue) {
         const el = $(id);
         if (!el) return;
@@ -903,8 +938,24 @@ STUDIO_HTML = """<!doctype html>
         el.addEventListener('blur', () => safeStorageSet(storageKey, String(el.value || '').trim()));
       }
 
+      function bindPersistedCheckbox(id, storageKey, defaultValue) {
+        const el = $(id);
+        if (!el) return;
+        const stored = safeStorageGet(storageKey, null);
+        if (stored === null) {
+          el.checked = Boolean(defaultValue);
+        } else {
+          el.checked = String(stored) === '1';
+        }
+        const persist = () => safeStorageSet(storageKey, el.checked ? '1' : '0');
+        el.addEventListener('change', persist);
+        el.addEventListener('blur', persist);
+      }
+
       bindPersistedInput('scorer-model-path', 'horace-scorer-model-path', DEFAULT_SCORER_MODEL_PATH);
       bindPersistedInput('antipattern-model-path', 'horace-antipattern-model-path', DEFAULT_ANTIPATTERN_MODEL_PATH);
+      bindPersistedInput('antipattern-combiner-mode', 'horace-antipattern-combiner-mode', DEFAULT_ANTIPATTERN_COMBINER_MODE);
+      bindPersistedCheckbox('apply-antipattern-penalty', 'horace-apply-antipattern-penalty', DEFAULT_APPLY_ANTIPATTERN_PENALTY);
       bindPersistedInput('primary-score-mode', 'horace-primary-score-mode', DEFAULT_PRIMARY_SCORE_MODE);
       bindPersistedInput('primary-blend-weight', 'horace-primary-blend-weight', DEFAULT_PRIMARY_BLEND_WEIGHT);
 
@@ -1111,8 +1162,10 @@ STUDIO_HTML = """<!doctype html>
           const text = $('score-text').value;
           const scorerModelPath = String(($('scorer-model-path').value || '')).trim();
           const antipatternModelPath = String(($('antipattern-model-path').value || '')).trim();
+          const antipatternCombinerMode = String(($('antipattern-combiner-mode').value || '')).trim().toLowerCase();
+          const applyAntipatternPenalty = Boolean($('apply-antipattern-penalty')?.checked);
           const primaryMode = String(($('primary-score-mode').value || '')).trim();
-          const primaryBlendWeight = parseFloat(($('primary-blend-weight').value || '0.35'));
+          const primaryBlendWeight = parseNumberInput($('primary-blend-weight').value, 0.35);
           const data = await api('/analyze', {
             text,
             doc_type: $('doc-type').value,
@@ -1120,22 +1173,88 @@ STUDIO_HTML = """<!doctype html>
             normalize_text: true,
             scorer_model_path: scorerModelPath,
             antipattern_model_path: antipatternModelPath,
-            antipattern_penalty_threshold: parseFloat($('antipattern-threshold').value) || 0.90,
-            antipattern_penalty_weight: parseFloat($('antipattern-weight').value) || 0.35,
+            antipattern_penalty_threshold: parseNumberInput($('antipattern-threshold').value, 0.85),
+            antipattern_penalty_weight: parseNumberInput($('antipattern-weight').value, 0.85),
+            antipattern_combiner_mode: antipatternCombinerMode || 'adaptive',
+            apply_antipattern_penalty: applyAntipatternPenalty,
             primary_score_mode: primaryMode || 'auto',
-            primary_blend_weight: Number.isFinite(primaryBlendWeight) ? primaryBlendWeight : 0.35
+            primary_blend_weight: Number.isFinite(primaryBlendWeight) ? primaryBlendWeight : 0.35,
           });
-          
-          const primary = data.primary_score || {};
-          const shownScore = primary.overall_0_100 ?? data.score?.overall_0_100 ?? 0;
-          const scoreSource = String(primary.source || '');
-          const antiPenalty = Number(primary.antipattern_penalty_0_100 || 0);
+
+        const quality = data.quality_score || {};
+        const authenticity = data.authenticity_score || {};
+        const primary = data.primary_score || {};
+        const qualityScore = Number(
+          quality.overall_0_100
+          ?? primary.base_overall_0_100
+          ?? primary.overall_0_100
+          ?? data.score?.overall_0_100
+          ?? 0
+        );
+        const qualitySource = String(quality.source || primary.source || '');
+        const authProb = Number(authenticity.llm_likelihood_0_1 ?? primary.antipattern_prob_0_1 ?? 0);
+        const authProbRaw = Number(authenticity.llm_likelihood_raw_0_1 ?? primary.antipattern_prob_raw_0_1 ?? 0);
+        const authInverted = Boolean(authenticity.llm_likelihood_inverted ?? primary.antipattern_prob_inverted);
+        const authMode = String(authenticity.combiner_mode || primary.antipattern_penalty_mode || '').trim();
+        const authSoftThreshold = Number(authenticity.soft_threshold_0_1 ?? primary.antipattern_soft_threshold_0_1);
+        const authHardThreshold = Number(authenticity.hard_threshold_0_1 ?? primary.antipattern_hard_threshold_0_1);
+        const authCap = Number(authenticity.authenticity_cap_0_100 ?? primary.antipattern_authenticity_cap_0_100);
+        const suggestedPenalty = Number(authenticity.suggested_penalty_0_100 ?? primary.antipattern_suggested_penalty_0_100 ?? 0);
+        const combinedPreview = Number(authenticity.combined_preview_overall_0_100 ?? primary.combined_preview_overall_0_100 ?? qualityScore);
+        const appliedPenalty = Boolean(authenticity.penalty_applied ?? primary.apply_antipattern_penalty ?? false);
+
+        const detailLines = [];
+        const authRiskLabel = (() => {
+          if (!Number.isFinite(authProb)) return 'Unknown';
+          if (authProb < 0.35) return 'Low';
+          if (authProb < 0.65) return 'Moderate';
+          return 'High';
+        })();
+        detailLines.push(`Quality score: ${qualityScore.toFixed(1)}/100.`);
+        if (Number.isFinite(authProb) && authProb > 0) {
+          detailLines.push(`Authenticity risk: ${authRiskLabel} (${(authProb * 100).toFixed(1)}% AI-like style).`);
+        }
+        if (appliedPenalty) {
+          const applied = Math.round((Number(primary.antipattern_penalty_0_100 || 0)) * 10) / 10;
+          detailLines.push(`Combined score mode is on. Authenticity penalty applied: -${applied} points.`);
+        } else if (suggestedPenalty > 0.05) {
+          const sp = Math.round(suggestedPenalty * 10) / 10;
+          detailLines.push(`If you enable combined mode, this would become ${combinedPreview.toFixed(1)}/100 (about -${sp} points).`);
+        }
+        if (Number.isFinite(authSoftThreshold) && Number.isFinite(authHardThreshold)) {
+          detailLines.push(`Risk thresholds: soft ${(authSoftThreshold * 100).toFixed(0)}%, hard ${(authHardThreshold * 100).toFixed(0)}%.`);
+        }
+        if (authMode) {
+          detailLines.push(`Risk model: ${authMode}.`);
+        }
+        if (authInverted) {
+          detailLines.push(`Note: authenticity score was polarity-corrected for this model.`);
+        }
+        if (Number.isFinite(authCap) && authCap > 0 && authCap < 100) {
+          detailLines.push(`Authenticity cap at this risk: ${Math.round(authCap * 10) / 10}/100.`);
+        }
+          const antiError = String(data.antipattern_score_error || '').trim();
+          const antiModelMissing = String($('antipattern-model-path').value || '').trim() === '';
+          if (antiError) {
+            detailLines.push(`Authenticity model error: ${antiError}`);
+          } else if (antiModelMissing) {
+            detailLines.push('Authenticity model is not configured.');
+          }
+          if (String(data.primary_score_warning || '').trim()) {
+            detailLines.push(`Note: ${String(data.primary_score_warning)}`);
+          }
+          if (scorerModelPath && looksLikeWrongScorerModel(scorerModelPath)) {
+            detailLines.push('Warning: scorer model path looks like an anti-pattern model. Move it to the authenticity field.');
+          }
+          if (antipatternModelPath && looksLikeWrongAntipatternModel(antipatternModelPath)) {
+            detailLines.push('Warning: authenticity model path looks like a quality model. Use an authenticity-oriented checkpoint.');
+          }
           result.classList.add('visible');
-          $('score-value').innerHTML = Math.round(shownScore || 0) + '<sup>/100</sup>';
+          $('score-value').innerHTML = Math.round(qualityScore || 0) + '<sup>/100</sup>';
           const summary = String(data.critique?.summary || '');
-          const sourceLine = scoreSource ? `\n\nSource: ${scoreSource}` : '';
-          const penaltyLine = antiPenalty > 0 ? `\nAnti-pattern penalty: -${Math.round(antiPenalty * 10) / 10}` : '';
-          $('score-summary').innerText = summary + sourceLine + penaltyLine;
+          const sourceLine = qualitySource ? `\n\nQuality source: ${qualitySource}` : '';
+          const debugLine = detailLines.length ? `\n\n${detailLines.join('\n')}` : '';
+          $('score-summary').innerText = summary + sourceLine + debugLine;
           $('text-highlighted').innerHTML = highlightText(text, data.analysis?.spikes || []);
           drawCadence(data.analysis?.series?.surprisal);
           
