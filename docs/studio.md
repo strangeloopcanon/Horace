@@ -89,6 +89,7 @@ curl -s http://127.0.0.1:8000/analyze \
 ```
 
 `apply_antipattern_penalty=false` (default) returns dual scores: quality + authenticity risk without blending them into one number.
+`scorer_model_path` is reserved for quality scorers; anti-pattern/authenticity checkpoints are rejected there and must go in `antipattern_model_path`.
 
 Span patching (dead zones → MeaningLock → diffs):
 
@@ -357,7 +358,7 @@ make train-scorer-v5-antipattern-distilbert  # legacy baseline
 
 Held-out AI-overfit eval:
 ```bash
-make eval-ai-overfit AI_OVERFIT_MODEL=models/scorer_v5_antipattern
+make eval-ai-overfit
 ```
 
 ## Web evals (random + curated)

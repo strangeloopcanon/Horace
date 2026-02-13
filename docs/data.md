@@ -144,5 +144,5 @@ make train-scorer-v5-antipattern
 
 5) Build and evaluate held-out AI-overfit set:
 ```bash
-make eval-ai-overfit AI_OVERFIT_MODEL=models/scorer_v5_antipattern
+make eval-ai-overfit
 ```
