@@ -81,6 +81,13 @@ curl -s http://127.0.0.1:8000/analyze \
   -d '{"text":"At dawn, the city leans into light.","scorer_model_path":"models/scorer_v4_distill_smoke","fast_only":true}'
 ```
 
+Optional anti-pattern guardrail (same API shape, adjusted primary score):
+```bash
+curl -s http://127.0.0.1:8000/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"At dawn, the city leans into light.","primary_score_mode":"rubric","antipattern_model_path":"models/scorer_v5_authenticity_v1","antipattern_penalty_weight":0.35,"antipattern_penalty_threshold":0.90}'
+```
+
 Span patching (dead zones → MeaningLock → diffs):
 
 Suggest dead zones:
@@ -281,6 +288,40 @@ make modal-train-scorer-hybrid
 ```
 
 Tip: Modal pins `torch==2.5.1+cu121`; if your `base_model` only ships `pytorch_model.bin` (no `model.safetensors`), Transformers will refuse to load it. `roberta-base` and `distilbert-base-uncased` work.
+
+### Anti-pattern training (human originals vs LLM imitations)
+
+So what: this adds hard negatives from high-quality AI imitation, reducing false highs on AI-like prose while keeping the existing Studio UX and API shape.
+
+Build originals:
+```bash
+make build-antipattern-originals
+```
+
+Generate pairs (randomized provider/model across OpenAI, Gemini, Anthropic):
+```bash
+make build-antipattern-pairs
+```
+
+Batch-first OpenAI path (cost control):
+```bash
+make build-antipattern-pairs-openai-batch
+```
+
+After downloading OpenAI Batch results:
+```bash
+make merge-antipattern-openai-batch ANTIPATTERN_OPENAI_BATCH_RES=data/antipattern/openai_batch_results_v1.jsonl
+```
+
+Train with anti-pattern negatives:
+```bash
+make train-scorer-v5-antipattern
+```
+
+Held-out AI-overfit eval:
+```bash
+make eval-ai-overfit AI_OVERFIT_MODEL=models/scorer_v5_antipattern
+```
 
 ## Web evals (random + curated)
 

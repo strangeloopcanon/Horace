@@ -151,6 +151,19 @@ More detail (splits, leakage rules, mixing sources): `docs/data.md`.
 
 ---
 
+## Cadence Isn’t Authenticity
+
+Horace’s rubric measures literary signals (cadence, focus, alignment, distinctiveness). It is **not** an “AI detector”.
+
+To reduce false highs on polished model-written prose, Studio supports an optional **anti-pattern penalty**:
+
+- Train a small text classifier on contrastive data: `human_original` vs `llm_antipattern_*` (see `docs/data.md`).
+- At runtime, compute `antipattern_score.prob_0_1` (higher = more LLM-like) and subtract a penalty only above a threshold.
+
+This keeps cadence central (and actionable), while adding an orthogonal authenticity guardrail.
+
+---
+
 ## Project Structure
 
 ```

@@ -1,4 +1,4 @@
-.PHONY: setup setup-modal modal-token check lint typecheck security test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid
+.PHONY: setup setup-modal modal-token check lint typecheck security test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-benchmark-v5 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus build-antipattern-originals build-antipattern-pairs build-antipattern-pairs-openai-batch merge-antipattern-openai-batch build-ai-overfit-eval eval-ai-overfit eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 train-scorer-v5-antipattern label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid
 .PHONY: modal-score-urls
 
 VENV ?= .venv
@@ -11,6 +11,8 @@ URL_SCORE_ARGS ?=
 MODEL ?= gpt2
 BENCH_DIR ?= data/benchmarks/studio_benchmark_v3
 BENCH_DIR_V4 ?= data/benchmarks/studio_benchmark_v4
+BENCH_DIR_V5 ?= data/benchmarks/studio_benchmark_v5
+AI_OVERFIT_EVAL_DIR ?= data/eval_sets/ai_overfit_v1
 STD_EBOOKS_DIR ?= data/corpora/standardebooks_corpus_v1
 STD_EBOOKS_MAX_PAGES ?= 30
 STD_EBOOKS_START_PAGE ?= 1
@@ -42,6 +44,23 @@ RSS_SLEEP_S ?= 0.0
 TRAINED_SCORER_MODEL ?= /vol/models/scorer_standardebooks_distilled
 REBUILD ?= 0
 DISTILL_DIR_V4_SMOKE ?= data/benchmarks/studio_benchmark_v4_distill_smoke
+ANTIPATTERN_DIR ?= data/antipattern
+ANTIPATTERN_ORIGINALS ?= $(ANTIPATTERN_DIR)/originals_v1.jsonl
+ANTIPATTERN_PAIRS ?= $(ANTIPATTERN_DIR)/pairs_v1.jsonl
+ANTIPATTERN_NEGATIVES ?= $(ANTIPATTERN_DIR)/negatives_v1.jsonl
+ANTIPATTERN_OPENAI_BATCH_REQ ?= $(ANTIPATTERN_DIR)/openai_batch_requests_v1.jsonl
+ANTIPATTERN_OPENAI_BATCH_RES ?= $(ANTIPATTERN_DIR)/openai_batch_results_v1.jsonl
+ANTIPATTERN_UNRESOLVED ?= $(ANTIPATTERN_DIR)/unresolved_jobs_v1.jsonl
+ANTIPATTERN_INPUT_JSONL ?= data/corpora/standardebooks_corpus_v1/splits/train.jsonl data/corpora/gutenberg_great_windows_v1/splits/train.jsonl
+ANTIPATTERN_INPUT_TEXT_DIRS ?= data/poem data/shortstory
+ANTIPATTERN_PROVIDER_MODELS ?= openai:gpt-5 google:gemini-3-flash anthropic:claude-haiku-4.5
+ANTIPATTERN_VARIANTS_PER_TIER ?= 1
+ANTIPATTERN_MAX_ORIGINALS ?= 1000
+ANTIPATTERN_MIN_GENERATED_CHARS ?= 220
+ANTIPATTERN_MAX_GENERATED_CHARS ?= 4200
+ANTIPATTERN_TEMPERATURE ?= 0.9
+ANTIPATTERN_MAX_OUTPUT_TOKENS ?= 700
+AI_OVERFIT_MODEL ?= models/scorer_v5_antipattern
 LINT_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/rewrite.py tools/studio/scorer_model.py tools/studio/analyze.py tools/studio/score.py tools/studio/baselines.py tools/studio/calibrator.py tools/studio/cadence_profile.py tools/studio/write_like.py tools/studio/critique.py tools/studio/meaning_lock.py tools/studio/span_patcher.py tools/studio/paragraph_cadence.py tools/reward.py tools/cli.py tools/train.py deploy/modal/score_urls_qwen3.py tests/test_rss.py tests/test_url_safety.py tests/test_model_security.py
 TYPECHECK_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/score.py tools/studio/baselines.py tools/studio/calibrator.py tools/cli.py
 SECURITY_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py deploy/modal/score_urls_qwen3.py
@@ -108,6 +127,11 @@ build-benchmark-v4: setup
 		$(PYTHON) -m tools.studio.build_benchmark_v4 --out-dir $(BENCH_DIR_V4); \
 	fi
 
+build-benchmark-v5: setup
+	@if [ "$(REBUILD)" = "1" ] || [ ! -f "$(BENCH_DIR_V5)/samples.jsonl" ]; then \
+		$(PYTHON) -m tools.studio.build_benchmark_v5 --out-dir $(BENCH_DIR_V5) --antipattern-negatives $(ANTIPATTERN_NEGATIVES); \
+	fi
+
 build-standardebooks-corpus: setup
 	@if [ "$(REBUILD)" = "1" ] || [ ! -f "$(STD_EBOOKS_DIR)/samples.jsonl" ]; then \
 		$(PYTHON) -m tools.studio.build_standardebooks_corpus --out-dir $(STD_EBOOKS_DIR) --start-page $(STD_EBOOKS_START_PAGE) --max-pages $(STD_EBOOKS_MAX_PAGES) --max-books $(STD_EBOOKS_MAX_BOOKS) --excerpts-per-book $(STD_EBOOKS_EXCERPTS_PER_BOOK) --max-chars $(STD_EBOOKS_MAX_CHARS) --min-chars $(STD_EBOOKS_MIN_CHARS) --sleep-s $(STD_EBOOKS_SLEEP_S) --normalize-text; \
@@ -172,6 +196,27 @@ train-calibrator-eval-set-tainted: eval-set
 # Single scorer model (text → score), trained within-domain on Gutenberg top vs long-tail (+ corruptions).
 train-scorer-v4: build-benchmark-v4
 	$(PYTHON) -m tools.studio.train_scorer --train $(BENCH_DIR_V4)/splits/train.jsonl --val $(BENCH_DIR_V4)/splits/val.jsonl --test $(BENCH_DIR_V4)/splits/test.jsonl --out-dir models/scorer_v4 --base-model distilbert-base-uncased --doc-type prose --normalize-text --pos gutenberg_top_excerpt --neg gutenberg_random_excerpt --neg gutenberg_corrupt_shuffle_sentences_global --neg gutenberg_corrupt_shuffle_paragraphs --neg gutenberg_corrupt_repeat_sentences --neg gutenberg_corrupt_flatten
+
+train-scorer-v5-antipattern: build-benchmark-v5
+	$(PYTHON) -m tools.studio.train_scorer --train $(BENCH_DIR_V5)/splits/train.jsonl --val $(BENCH_DIR_V5)/splits/val.jsonl --test $(BENCH_DIR_V5)/splits/test.jsonl --out-dir models/scorer_v5_antipattern --base-model distilbert-base-uncased --doc-type prose --normalize-text --pos gutenberg_top_excerpt --neg gutenberg_random_excerpt --neg gutenberg_corrupt_shuffle_sentences_global --neg gutenberg_corrupt_shuffle_paragraphs --neg gutenberg_corrupt_repeat_sentences --neg gutenberg_corrupt_flatten --neg llm_antipattern_write_like --neg llm_antipattern_continue_from --neg llm_antipattern_rewrite_from_memory
+
+build-antipattern-originals: setup
+	$(PYTHON) -m tools.studio.build_antipattern_originals $(foreach p,$(ANTIPATTERN_INPUT_JSONL),--input-jsonl $(p)) $(foreach d,$(ANTIPATTERN_INPUT_TEXT_DIRS),--input-text-dir $(d)) --out $(ANTIPATTERN_ORIGINALS) --max-samples $(ANTIPATTERN_MAX_ORIGINALS) --min-chars 800 --max-chars 3800 --windows-per-text-file 1 --normalize-text --skip-missing
+
+build-antipattern-pairs: build-antipattern-originals
+	$(PYTHON) -m tools.studio.build_antipattern_pairs --originals $(ANTIPATTERN_ORIGINALS) --out-pairs $(ANTIPATTERN_PAIRS) --out-negatives $(ANTIPATTERN_NEGATIVES) --out-unresolved-jobs $(ANTIPATTERN_UNRESOLVED) $(foreach pm,$(ANTIPATTERN_PROVIDER_MODELS),--provider-model $(pm)) --tier write_like --tier continue_from --tier rewrite_from_memory --variants-per-tier $(ANTIPATTERN_VARIANTS_PER_TIER) --temperature $(ANTIPATTERN_TEMPERATURE) --max-output-tokens $(ANTIPATTERN_MAX_OUTPUT_TOKENS) --min-generated-chars $(ANTIPATTERN_MIN_GENERATED_CHARS) --max-generated-chars $(ANTIPATTERN_MAX_GENERATED_CHARS) --run-online
+
+build-antipattern-pairs-openai-batch: build-antipattern-originals
+	$(PYTHON) -m tools.studio.build_antipattern_pairs --originals $(ANTIPATTERN_ORIGINALS) --out-pairs $(ANTIPATTERN_PAIRS) --out-negatives $(ANTIPATTERN_NEGATIVES) --openai-batch-requests-out $(ANTIPATTERN_OPENAI_BATCH_REQ) --out-unresolved-jobs $(ANTIPATTERN_UNRESOLVED) --provider-model openai:gpt-5 --tier write_like --tier continue_from --tier rewrite_from_memory --variants-per-tier $(ANTIPATTERN_VARIANTS_PER_TIER) --temperature $(ANTIPATTERN_TEMPERATURE) --max-output-tokens $(ANTIPATTERN_MAX_OUTPUT_TOKENS) --min-generated-chars $(ANTIPATTERN_MIN_GENERATED_CHARS) --max-generated-chars $(ANTIPATTERN_MAX_GENERATED_CHARS)
+
+merge-antipattern-openai-batch: build-antipattern-originals
+	$(PYTHON) -m tools.studio.build_antipattern_pairs --originals $(ANTIPATTERN_ORIGINALS) --out-pairs $(ANTIPATTERN_PAIRS) --out-negatives $(ANTIPATTERN_NEGATIVES) --openai-batch-results $(ANTIPATTERN_OPENAI_BATCH_RES) --provider-model openai:gpt-5 --tier write_like --tier continue_from --tier rewrite_from_memory --variants-per-tier $(ANTIPATTERN_VARIANTS_PER_TIER) --temperature $(ANTIPATTERN_TEMPERATURE) --max-output-tokens $(ANTIPATTERN_MAX_OUTPUT_TOKENS) --min-generated-chars $(ANTIPATTERN_MIN_GENERATED_CHARS) --max-generated-chars $(ANTIPATTERN_MAX_GENERATED_CHARS)
+
+build-ai-overfit-eval: build-antipattern-pairs
+	$(PYTHON) -m tools.studio.build_ai_overfit_eval --originals $(ANTIPATTERN_ORIGINALS) --negatives $(ANTIPATTERN_NEGATIVES) --out-dir $(AI_OVERFIT_EVAL_DIR) --author-holdout
+
+eval-ai-overfit: build-ai-overfit-eval
+	$(PYTHON) -m tools.studio.eval_scorer --model $(AI_OVERFIT_MODEL) --samples $(AI_OVERFIT_EVAL_DIR)/splits/test.jsonl --out reports/ai_overfit_eval_report.json --pos human_original --neg llm_antipattern_write_like --neg llm_antipattern_continue_from --neg llm_antipattern_rewrite_from_memory
 
 # Distill the slow rubric score into a fast encoder (smoke-sized subset).
 label-benchmark-v4-smoke: build-benchmark-v4
