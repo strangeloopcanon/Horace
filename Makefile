@@ -60,7 +60,9 @@ ANTIPATTERN_MIN_GENERATED_CHARS ?= 220
 ANTIPATTERN_MAX_GENERATED_CHARS ?= 4200
 ANTIPATTERN_TEMPERATURE ?= 0.9
 ANTIPATTERN_MAX_OUTPUT_TOKENS ?= 700
-AI_OVERFIT_MODEL ?= models/scorer_v5_antipattern
+AI_OVERFIT_MODEL ?= models/scorer_v5_authenticity_v1
+AI_OVERFIT_POS_SOURCES ?= llm_antipattern_write_like llm_antipattern_continue_from llm_antipattern_rewrite_from_memory
+AI_OVERFIT_NEG_SOURCES ?= human_original
 V5_SCORER_BASE_MODEL ?= Skywork/Skywork-Reward-V2-Qwen3-1.7B
 V5_SCORER_MAX_LENGTH ?= 512
 V5_SCORER_BATCH_SIZE ?= 1
@@ -253,7 +255,7 @@ build-ai-overfit-eval: build-antipattern-pairs
 	$(PYTHON) -m tools.studio.build_ai_overfit_eval --originals $(ANTIPATTERN_ORIGINALS) --negatives $(ANTIPATTERN_NEGATIVES) --out-dir $(AI_OVERFIT_EVAL_DIR) --author-holdout
 
 eval-ai-overfit: build-ai-overfit-eval
-	$(PYTHON) -m tools.studio.eval_scorer --model $(AI_OVERFIT_MODEL) --samples $(AI_OVERFIT_EVAL_DIR)/splits/test.jsonl --out reports/ai_overfit_eval_report.json --pos human_original --neg llm_antipattern_write_like --neg llm_antipattern_continue_from --neg llm_antipattern_rewrite_from_memory
+	$(PYTHON) -m tools.studio.eval_scorer --model $(AI_OVERFIT_MODEL) --samples $(AI_OVERFIT_EVAL_DIR)/splits/test.jsonl --out reports/ai_overfit_eval_report.json $(foreach s,$(AI_OVERFIT_POS_SOURCES),--pos $(s)) $(foreach s,$(AI_OVERFIT_NEG_SOURCES),--neg $(s))
 
 # Distill the slow rubric score into a fast encoder (smoke-sized subset).
 label-benchmark-v4-smoke: build-benchmark-v4

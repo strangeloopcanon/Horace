@@ -755,7 +755,7 @@ STUDIO_HTML = """<!doctype html>
             <div class="settings-full">
               <label class="input-label">Trained Scorer Model Path</label>
               <input type="text" id="scorer-model-path" value="" />
-              <div class="settings-hint">Uses <code>primary_score</code> from the trained scorer.</div>
+              <div class="settings-hint">For quality scorers only. Do not use anti-pattern/authenticity checkpoints here.</div>
             </div>
             <div class="settings-full">
               <label class="input-label">Anti-Pattern Model Path (Optional)</label>
@@ -921,27 +921,30 @@ STUDIO_HTML = """<!doctype html>
         return s.includes('v5_antipattern') && !s.includes('authenticity');
       }
 
-      function isKnownQualityAntipatternModel(path) {
+      function isAuthenticityScorerPath(path) {
         const s = String(path || '').toLowerCase();
-        return s.includes('scorer_v5_antipattern_skywork');
+        return s.includes('authenticity') || s.includes('scorer_v5_antipattern_skywork');
       }
 
       function looksLikeWrongScorerModel(path) {
         const s = String(path || '').toLowerCase();
-        return s.includes('antipattern')
-          && !s.includes('authenticity')
-          && !isKnownQualityAntipatternModel(s);
+        return s.includes('antipattern') || isAuthenticityScorerPath(s);
       }
 
       function sanitizeScorerSettingsStorage() {
         const scorerPathKey = 'horace-scorer-model-path';
         const primaryModeKey = 'horace-primary-score-mode';
-        const storedScorerPath = String(safeStorageGet(scorerPathKey, '') || '').trim();
+        let storedScorerPath = String(safeStorageGet(scorerPathKey, '') || '').trim();
+        let storedPrimaryMode = String(safeStorageGet(primaryModeKey, '') || '').trim().toLowerCase();
         if (storedScorerPath && looksLikeWrongScorerModel(storedScorerPath)) {
           safeStorageSet(scorerPathKey, '');
+          if (storedPrimaryMode === 'trained' || storedPrimaryMode === 'blend') {
+            storedPrimaryMode = 'rubric';
+            safeStorageSet(primaryModeKey, 'rubric');
+          }
+          storedScorerPath = '';
         }
 
-        const storedPrimaryMode = String(safeStorageGet(primaryModeKey, '') || '').trim().toLowerCase();
         const activeScorerPath = String(safeStorageGet(scorerPathKey, '') || '').trim();
         if (storedPrimaryMode && (storedPrimaryMode === 'trained' || storedPrimaryMode === 'blend') && !activeScorerPath) {
           safeStorageSet(primaryModeKey, 'rubric');
@@ -1185,6 +1188,8 @@ STUDIO_HTML = """<!doctype html>
         try {
           const text = $('score-text').value;
           const scorerModelPath = String(($('scorer-model-path').value || '')).trim();
+          const scorerModelPathInvalid = Boolean(scorerModelPath && looksLikeWrongScorerModel(scorerModelPath));
+          const scorerModelPathSafe = scorerModelPathInvalid ? '' : scorerModelPath;
           const antipatternModelPath = String(($('antipattern-model-path').value || '')).trim();
           const antipatternCombinerMode = String(($('antipattern-combiner-mode').value || '')).trim().toLowerCase();
           const applyAntipatternPenalty = Boolean($('apply-antipattern-penalty')?.checked);
@@ -1195,7 +1200,7 @@ STUDIO_HTML = """<!doctype html>
             doc_type: $('doc-type').value,
             max_input_tokens: parseInt($('max-tokens').value) || 512,
             normalize_text: true,
-            scorer_model_path: scorerModelPath,
+            scorer_model_path: scorerModelPathSafe,
             antipattern_model_path: antipatternModelPath,
             antipattern_penalty_threshold: parseNumberInput($('antipattern-threshold').value, 0.85),
             antipattern_penalty_weight: parseNumberInput($('antipattern-weight').value, 0.85),
@@ -1267,7 +1272,7 @@ STUDIO_HTML = """<!doctype html>
           if (String(data.primary_score_warning || '').trim()) {
             detailLines.push(`Note: ${String(data.primary_score_warning)}`);
           }
-          if (scorerModelPath && looksLikeWrongScorerModel(scorerModelPath)) {
+          if (scorerModelPathInvalid) {
             detailLines.push('Warning: scorer model path looks like an anti-pattern model. Move it to the authenticity field.');
           }
           if (antipatternModelPath && looksLikeWrongAntipatternModel(antipatternModelPath)) {
@@ -1276,8 +1281,9 @@ STUDIO_HTML = """<!doctype html>
           result.classList.add('visible');
           $('score-value').innerHTML = Math.round(qualityScore || 0) + '<sup>/100</sup>';
           const summary = String(data.critique?.summary || '');
-          const sourceLine = qualitySource ? `\n\nQuality source: ${qualitySource}` : '';
-          const debugLine = detailLines.length ? `\n\n${detailLines.join('\n')}` : '';
+          const lineBreak = String.fromCharCode(10);
+          const sourceLine = qualitySource ? `${lineBreak}${lineBreak}Quality source: ${qualitySource}` : '';
+          const debugLine = detailLines.length ? `${lineBreak}${lineBreak}${detailLines.join(lineBreak)}` : '';
           $('score-summary').innerText = summary + sourceLine + debugLine;
           $('text-highlighted').innerHTML = highlightText(text, data.analysis?.spikes || []);
           drawCadence(data.analysis?.series?.surprisal);

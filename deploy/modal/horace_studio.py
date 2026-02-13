@@ -30,7 +30,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-# Force rebuild version: 2026-01-30-theme-toggle-v1
+# Force rebuild version: 2026-02-13-scorer-authenticity-guard-v2
 
 # Request models defined at module level for FastAPI compatibility
 class AnalyzeReq(BaseModel):
@@ -209,13 +209,9 @@ def _scorer_model_warning(path: str) -> Optional[str]:
     s = str(path or "").strip().lower()
     if not s:
         return None
-    if (
-        ("antipattern" in s or "scorer_v5_antipattern" in s)
-        and "authenticity" not in s
-        and "scorer_v5_antipattern_skywork" not in s
-    ):
+    if "antipattern" in s or "authenticity" in s:
         return (
-            "scorer_model_path looks like an anti-pattern checkpoint; "
+            "scorer_model_path looks like an authenticity/anti-pattern checkpoint; "
             "use it in antipattern_model_path for authenticity penalty, not as primary scorer"
         )
     return None
@@ -358,7 +354,10 @@ def analyze_remote(
     trained_err = None
     antipattern_score = None
     antipattern_err = None
-    if (scorer_model_path or "").strip():
+    scorer_warning = _scorer_model_warning(scorer_model_path)
+    if scorer_warning is not None:
+        trained_err = scorer_warning
+    elif (scorer_model_path or "").strip():
         try:
             from tools.studio.scorer_model import score_with_scorer
 
@@ -577,12 +576,12 @@ def analyze_remote(
         out["primary_score_warning"] = (
             anti_warning if not prev_warning else f"{prev_warning}; {anti_warning}"
         )
-    scorer_warning = _scorer_model_warning(scorer_model_path)
     if scorer_warning is not None:
         prev_warning = str(out.get("primary_score_warning") or "").strip()
-        out["primary_score_warning"] = (
-            scorer_warning if not prev_warning else f"{prev_warning}; {scorer_warning}"
-        )
+        if scorer_warning not in prev_warning:
+            out["primary_score_warning"] = (
+                scorer_warning if not prev_warning else f"{prev_warning}; {scorer_warning}"
+            )
     if antipattern_score is not None and not apply_antipattern_penalty:
         prev_warning = str(out.get("primary_score_warning") or "").strip()
         dual_warning = "dual-score mode active: authenticity risk reported separately (no penalty applied to primary score)"

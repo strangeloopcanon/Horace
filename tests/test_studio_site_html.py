@@ -22,6 +22,16 @@ class TestStudioSiteHtml(unittest.TestCase):
         self.assertIn("out = prompt.trimEnd() + '\\n\\n' + continuation.trimStart();", STUDIO_HTML)
         self.assertNotIn("out = prompt.trimEnd() + '\n\n' + continuation.trimStart();", STUDIO_HTML)
 
+    def test_score_summary_join_uses_runtime_newline(self) -> None:
+        self.assertIn("const lineBreak = String.fromCharCode(10);", STUDIO_HTML)
+        self.assertIn("detailLines.join(lineBreak)", STUDIO_HTML)
+        self.assertNotIn("detailLines.join('\\n')", STUDIO_HTML)
+
+    def test_wrong_scorer_path_is_blocked_client_side(self) -> None:
+        self.assertIn("const scorerModelPathInvalid = Boolean(scorerModelPath && looksLikeWrongScorerModel(scorerModelPath));", STUDIO_HTML)
+        self.assertIn("const scorerModelPathSafe = scorerModelPathInvalid ? '' : scorerModelPath;", STUDIO_HTML)
+        self.assertIn("scorer_model_path: scorerModelPathSafe", STUDIO_HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
