@@ -766,7 +766,7 @@ STUDIO_HTML = """<!doctype html>
                 <input type="checkbox" id="apply-antipattern-penalty" />
                 Apply authenticity penalty to overall score
               </label>
-              <div class="settings-hint">Off by default: shows quality and authenticity as separate scores.</div>
+              <div class="settings-hint">On by default: headline score includes authenticity adjustment.</div>
             </div>
             <div>
               <label class="input-label">Primary Score Mode</label>
@@ -888,7 +888,7 @@ STUDIO_HTML = """<!doctype html>
         ? '/vol/models/scorer_v5_authenticity_v1'
         : 'models/scorer_v5_authenticity_v1';
       const DEFAULT_ANTIPATTERN_COMBINER_MODE = 'adaptive';
-      const DEFAULT_APPLY_ANTIPATTERN_PENALTY = false;
+      const DEFAULT_APPLY_ANTIPATTERN_PENALTY = true;
       const DEFAULT_PRIMARY_SCORE_MODE = 'rubric';
       const DEFAULT_PRIMARY_BLEND_WEIGHT = '0.35';
 
@@ -978,6 +978,19 @@ STUDIO_HTML = """<!doctype html>
         el.addEventListener('blur', persist);
       }
 
+      function migrateScoringDefaults() {
+        const versionKey = 'horace-scoring-defaults-version';
+        const targetVersion = '2026-02-13-v3';
+        const currentVersion = String(safeStorageGet(versionKey, '') || '');
+        if (currentVersion === targetVersion) {
+          return;
+        }
+        // Apply safer scoring defaults once for existing browser state.
+        safeStorageSet('horace-apply-antipattern-penalty', '1');
+        safeStorageSet(versionKey, targetVersion);
+      }
+
+      migrateScoringDefaults();
       sanitizeScorerSettingsStorage();
       bindPersistedInput('scorer-model-path', 'horace-scorer-model-path', DEFAULT_SCORER_MODEL_PATH);
       bindPersistedInput('antipattern-model-path', 'horace-antipattern-model-path', DEFAULT_ANTIPATTERN_MODEL_PATH);
@@ -1213,14 +1226,19 @@ STUDIO_HTML = """<!doctype html>
         const quality = data.quality_score || {};
         const authenticity = data.authenticity_score || {};
         const primary = data.primary_score || {};
-        const qualityScore = Number(
-          quality.overall_0_100
-          ?? primary.base_overall_0_100
-          ?? primary.overall_0_100
+        const overallScore = Number(
+          primary.overall_0_100
+          ?? quality.overall_0_100
           ?? data.score?.overall_0_100
           ?? 0
         );
-        const qualitySource = String(quality.source || primary.source || '');
+        const qualityScore = Number(
+          quality.overall_0_100
+          ?? primary.base_overall_0_100
+          ?? overallScore
+          ?? 0
+        );
+        const overallSource = String(primary.source || quality.source || '');
         const authProb = Number(authenticity.llm_likelihood_0_1 ?? primary.antipattern_prob_0_1 ?? 0);
         const authProbRaw = Number(authenticity.llm_likelihood_raw_0_1 ?? primary.antipattern_prob_raw_0_1 ?? 0);
         const authInverted = Boolean(authenticity.llm_likelihood_inverted ?? primary.antipattern_prob_inverted);
@@ -1229,7 +1247,7 @@ STUDIO_HTML = """<!doctype html>
         const authHardThreshold = Number(authenticity.hard_threshold_0_1 ?? primary.antipattern_hard_threshold_0_1);
         const authCap = Number(authenticity.authenticity_cap_0_100 ?? primary.antipattern_authenticity_cap_0_100);
         const suggestedPenalty = Number(authenticity.suggested_penalty_0_100 ?? primary.antipattern_suggested_penalty_0_100 ?? 0);
-        const combinedPreview = Number(authenticity.combined_preview_overall_0_100 ?? primary.combined_preview_overall_0_100 ?? qualityScore);
+        const combinedPreview = Number(authenticity.combined_preview_overall_0_100 ?? primary.combined_preview_overall_0_100 ?? overallScore);
         const appliedPenalty = Boolean(authenticity.penalty_applied ?? primary.apply_antipattern_penalty ?? false);
 
         const detailLines = [];
@@ -1239,7 +1257,10 @@ STUDIO_HTML = """<!doctype html>
           if (authProb < 0.65) return 'Moderate';
           return 'High';
         })();
-        detailLines.push(`Quality score: ${qualityScore.toFixed(1)}/100.`);
+        detailLines.push(`Overall score: ${overallScore.toFixed(1)}/100.`);
+        if (Math.abs(overallScore - qualityScore) >= 0.05) {
+          detailLines.push(`Quality score (before authenticity): ${qualityScore.toFixed(1)}/100.`);
+        }
         if (Number.isFinite(authProb) && authProb > 0) {
           detailLines.push(`Authenticity risk: ${authRiskLabel} (${(authProb * 100).toFixed(1)}% AI-like style).`);
         }
@@ -1279,10 +1300,10 @@ STUDIO_HTML = """<!doctype html>
             detailLines.push('Warning: authenticity model path looks like a quality model. Use an authenticity-oriented checkpoint.');
           }
           result.classList.add('visible');
-          $('score-value').innerHTML = Math.round(qualityScore || 0) + '<sup>/100</sup>';
+          $('score-value').innerHTML = Math.round(overallScore || 0) + '<sup>/100</sup>';
           const summary = String(data.critique?.summary || '');
           const lineBreak = String.fromCharCode(10);
-          const sourceLine = qualitySource ? `${lineBreak}${lineBreak}Quality source: ${qualitySource}` : '';
+          const sourceLine = overallSource ? `${lineBreak}${lineBreak}Score source: ${overallSource}` : '';
           const debugLine = detailLines.length ? `${lineBreak}${lineBreak}${detailLines.join(lineBreak)}` : '';
           $('score-summary').innerText = summary + sourceLine + debugLine;
           $('text-highlighted').innerHTML = highlightText(text, data.analysis?.spikes || []);
