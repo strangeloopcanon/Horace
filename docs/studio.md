@@ -88,7 +88,7 @@ curl -s http://127.0.0.1:8000/analyze \
   -d '{"text":"At dawn, the city leans into light.","primary_score_mode":"rubric","antipattern_model_path":"models/scorer_v5_authenticity_v1","antipattern_penalty_weight":0.85,"antipattern_penalty_threshold":0.85,"antipattern_combiner_mode":"adaptive","apply_antipattern_penalty":false}'
 ```
 
-`apply_antipattern_penalty=false` (default) returns dual scores: quality + authenticity risk without blending them into one number.
+`apply_antipattern_penalty=true` is the Studio UI default, so the headline score includes authenticity adjustment. Set it to `false` if you want strict dual-score mode (quality + authenticity reported separately).
 `scorer_model_path` is reserved for quality scorers; anti-pattern/authenticity checkpoints are rejected there and must go in `antipattern_model_path`.
 
 Span patching (dead zones → MeaningLock → diffs):

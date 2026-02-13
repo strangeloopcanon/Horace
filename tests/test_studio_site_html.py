@@ -32,6 +32,16 @@ class TestStudioSiteHtml(unittest.TestCase):
         self.assertIn("const scorerModelPathSafe = scorerModelPathInvalid ? '' : scorerModelPath;", STUDIO_HTML)
         self.assertIn("scorer_model_path: scorerModelPathSafe", STUDIO_HTML)
 
+    def test_authenticity_penalty_defaults_on(self) -> None:
+        self.assertIn("const DEFAULT_APPLY_ANTIPATTERN_PENALTY = true;", STUDIO_HTML)
+        self.assertIn("headline score includes authenticity adjustment", STUDIO_HTML)
+
+    def test_headline_score_uses_primary_overall(self) -> None:
+        self.assertIn("const overallScore = Number(", STUDIO_HTML)
+        self.assertIn("primary.overall_0_100", STUDIO_HTML)
+        self.assertIn("Math.round(overallScore || 0)", STUDIO_HTML)
+        self.assertIn("Quality score (before authenticity)", STUDIO_HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
