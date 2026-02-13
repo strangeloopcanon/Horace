@@ -206,7 +206,7 @@ def train_v5_remote(
 def main(
     out_dir: str,
     bench_dir: str = "/vol/benchmarks/studio_benchmark_v5",
-    base_model: str = "Qwen/Qwen3-1.7B",
+    base_model: str = "Skywork/Skywork-Reward-V2-Qwen3-1.7B",
     seed: int = 1337,
     max_length: int = 512,
     batch_size: int = 1,

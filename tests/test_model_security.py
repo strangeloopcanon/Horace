@@ -34,6 +34,12 @@ class TestModelSecurity(unittest.TestCase):
         self.assertEqual(source.source_id, "gpt2")
         self.assertIsNone(source.revision)
 
+    def test_allows_skywork_reward_model(self) -> None:
+        source = resolve_model_source("Skywork/Skywork-Reward-V2-Qwen3-1.7B", purpose="test model")
+        self.assertFalse(source.is_local)
+        self.assertEqual(source.source_id, "Skywork/Skywork-Reward-V2-Qwen3-1.7B")
+        self.assertIsNone(source.revision)
+
     def test_allows_pinned_remote_model(self) -> None:
         source = resolve_model_source("org/custom-model@abc123def", purpose="test model")
         self.assertFalse(source.is_local)

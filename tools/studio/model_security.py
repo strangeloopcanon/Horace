@@ -13,6 +13,9 @@ _DEFAULT_REMOTE_MODEL_ALLOWLIST: Set[str] = {
     "Qwen/Qwen3-1.7B",
     "Qwen/Qwen3-4B",
     "Qwen/Qwen3-4B-Instruct",
+    "Skywork/Skywork-Reward-V2-Qwen3-1.7B",
+    "Skywork/Skywork-Reward-V2-Qwen3-4B",
+    "Skywork/Skywork-Reward-V2-Qwen3-8B",
 }
 
 

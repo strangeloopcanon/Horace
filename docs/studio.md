@@ -269,24 +269,33 @@ make modal-train-scorer-v4
 
 ### Modal training for the anti-pattern scorer (v5)
 
-To retrain the anti-pattern-aware model on the same dataset used by
-`make train-scorer-v5-antipattern`, use Qwen3 on Modal:
+The v5 anti-pattern scorer is now optimized around a reward-model style base.
+To retrain the model on the same dataset used by `make train-scorer-v5-antipattern`,
+use Skywork Reward V2 on Modal:
 
 ```bash
-make modal-train-scorer-v5-antipattern-qwen3
+make modal-train-scorer-v5-antipattern-skywork
 ```
 
 Useful overrides:
-- `V5_SCORER_BASE_MODEL` (default `Qwen/Qwen3-1.7B`)
+- `V5_SCORER_BASE_MODEL` (default `Skywork/Skywork-Reward-V2-Qwen3-1.7B`)
 - `V5_SCORER_BATCH_SIZE` (default `1`)
 - `V5_SCORER_LORA_R` (default `16`)
 - `V5_SCORER_LORA_ALPHA` (default `32`)
 - `V5_SCORER_EPOCHS` (default `1`)
 
-Example (try a larger model):
+Example (legacy Qwen alternative):
 ```bash
 make modal-train-scorer-v5-antipattern-qwen3 \
   V5_SCORER_BASE_MODEL=Qwen/Qwen3-4B \
+  V5_SCORER_MAX_LENGTH=512 \
+  V5_SCORER_BATCH_SIZE=1
+```
+Example (larger reward model):
+```bash
+make modal-train-scorer-v5-antipattern-skywork \
+  V5_SCORER_BASE_MODEL=Skywork/Skywork-Reward-V2-Qwen3-4B \
+  V5_SCORER_OUT_DIR_SKYWORK=/vol/models/scorer_v5_antipattern_skywork_v2 \
   V5_SCORER_MAX_LENGTH=512 \
   V5_SCORER_BATCH_SIZE=1
 ```
@@ -342,6 +351,7 @@ make merge-antipattern-openai-batch ANTIPATTERN_OPENAI_BATCH_RES=data/antipatter
 Train with anti-pattern negatives:
 ```bash
 make train-scorer-v5-antipattern
+make train-scorer-v5-antipattern-skywork   # explicit alias (same as default now)
 make train-scorer-v5-antipattern-distilbert  # legacy baseline
 ```
 
