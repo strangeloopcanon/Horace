@@ -267,6 +267,30 @@ Build the within-domain benchmark + train a single text→score model on Modal (
 make modal-train-scorer-v4
 ```
 
+### Modal training for the anti-pattern scorer (v5)
+
+To retrain the anti-pattern-aware model on the same dataset used by
+`make train-scorer-v5-antipattern`, use Qwen3 on Modal:
+
+```bash
+make modal-train-scorer-v5-antipattern-qwen3
+```
+
+Useful overrides:
+- `V5_SCORER_BASE_MODEL` (default `Qwen/Qwen3-1.7B`)
+- `V5_SCORER_BATCH_SIZE` (default `1`)
+- `V5_SCORER_LORA_R` (default `16`)
+- `V5_SCORER_LORA_ALPHA` (default `32`)
+- `V5_SCORER_EPOCHS` (default `1`)
+
+Example (try a larger model):
+```bash
+make modal-train-scorer-v5-antipattern-qwen3 \
+  V5_SCORER_BASE_MODEL=Qwen/Qwen3-4B \
+  V5_SCORER_MAX_LENGTH=512 \
+  V5_SCORER_BATCH_SIZE=1
+```
+
 ### Modal distillation for the scorer (recommended)
 
 So what: distill the **slow** rubric score into a **fast** scorer (teacher = rubric; student = encoder).
@@ -318,6 +342,7 @@ make merge-antipattern-openai-batch ANTIPATTERN_OPENAI_BATCH_RES=data/antipatter
 Train with anti-pattern negatives:
 ```bash
 make train-scorer-v5-antipattern
+make train-scorer-v5-antipattern-distilbert  # legacy baseline
 ```
 
 Held-out AI-overfit eval:

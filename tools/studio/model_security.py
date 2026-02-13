@@ -11,6 +11,8 @@ _DEFAULT_REMOTE_MODEL_ALLOWLIST: Set[str] = {
     "Qwen/Qwen2.5-0.5B-Instruct",
     "Qwen/Qwen3-0.6B",
     "Qwen/Qwen3-1.7B",
+    "Qwen/Qwen3-4B",
+    "Qwen/Qwen3-4B-Instruct",
 }
 
 

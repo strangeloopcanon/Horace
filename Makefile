@@ -1,4 +1,4 @@
-.PHONY: setup setup-modal modal-token check lint typecheck security test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-benchmark-v5 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus build-antipattern-originals build-antipattern-pairs build-antipattern-pairs-openai-batch merge-antipattern-openai-batch build-ai-overfit-eval eval-ai-overfit eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 train-scorer-v5-antipattern label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid
+.PHONY: setup setup-modal modal-token check lint typecheck security test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-benchmark-v5 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus build-antipattern-originals build-antipattern-pairs build-antipattern-pairs-openai-batch merge-antipattern-openai-batch build-ai-overfit-eval eval-ai-overfit eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 train-scorer-v5-antipattern train-scorer-v5-antipattern-qwen3 train-scorer-v5-antipattern-distilbert label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-v5-antipattern-qwen3 modal-train-scorer-qwen3-great-other
 .PHONY: modal-score-urls
 
 VENV ?= .venv
@@ -61,6 +61,27 @@ ANTIPATTERN_MAX_GENERATED_CHARS ?= 4200
 ANTIPATTERN_TEMPERATURE ?= 0.9
 ANTIPATTERN_MAX_OUTPUT_TOKENS ?= 700
 AI_OVERFIT_MODEL ?= models/scorer_v5_antipattern
+V5_SCORER_BASE_MODEL ?= Qwen/Qwen3-1.7B
+V5_SCORER_MAX_LENGTH ?= 512
+V5_SCORER_BATCH_SIZE ?= 1
+V5_SCORER_LR ?= 1e-4
+V5_SCORER_WEIGHT_DECAY ?= 0.01
+V5_SCORER_EPOCHS ?= 1
+V5_SCORER_SEED ?= 1337
+V5_SCORER_LORA_R ?= 16
+V5_SCORER_LORA_ALPHA ?= 32
+V5_SCORER_LORA_DROPOUT ?= 0.05
+V5_SCORER_GRAD_ACCUM_STEPS ?= 16
+V5_SCORER_GRADIENT_CHECKPOINTING ?= 1
+V5_SCORER_BF16 ?= 1
+V5_SCORER_MERGE_LORA ?= 1
+V5_SCORER_TRUST_REMOTE_CODE ?= 1
+V5_SCORER_EVAL_BATCH_SIZE ?= 2
+V5_SCORER_OUT_DIR_QWEN3 ?= /vol/models/scorer_v5_antipattern_qwen3_v1
+V5_SCORER_OUT_DIR_QWEN3_LOCAL ?= models/scorer_v5_antipattern_qwen3
+V5_SCORER_OUT_DIR_DISTILBERT ?= models/scorer_v5_antipattern_distilbert
+V5_SCORER_NEGATIVE_SOURCES ?= gutenberg_random_excerpt gutenberg_corrupt_shuffle_sentences_global gutenberg_corrupt_shuffle_paragraphs gutenberg_corrupt_repeat_sentences gutenberg_corrupt_flatten llm_antipattern_write_like llm_antipattern_continue_from llm_antipattern_rewrite_from_memory
+V5_SCORER_POS_SOURCE ?= gutenberg_top_excerpt
 LINT_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/rewrite.py tools/studio/scorer_model.py tools/studio/analyze.py tools/studio/score.py tools/studio/baselines.py tools/studio/calibrator.py tools/studio/cadence_profile.py tools/studio/write_like.py tools/studio/critique.py tools/studio/meaning_lock.py tools/studio/span_patcher.py tools/studio/paragraph_cadence.py tools/reward.py tools/cli.py tools/train.py deploy/modal/score_urls_qwen3.py tests/test_rss.py tests/test_url_safety.py tests/test_model_security.py
 TYPECHECK_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py tools/studio/score.py tools/studio/baselines.py tools/studio/calibrator.py tools/cli.py
 SECURITY_FILES ?= tools/studio/rss.py tools/studio/url_safety.py tools/studio/model_security.py deploy/modal/score_urls_qwen3.py
@@ -198,7 +219,16 @@ train-scorer-v4: build-benchmark-v4
 	$(PYTHON) -m tools.studio.train_scorer --train $(BENCH_DIR_V4)/splits/train.jsonl --val $(BENCH_DIR_V4)/splits/val.jsonl --test $(BENCH_DIR_V4)/splits/test.jsonl --out-dir models/scorer_v4 --base-model distilbert-base-uncased --doc-type prose --normalize-text --pos gutenberg_top_excerpt --neg gutenberg_random_excerpt --neg gutenberg_corrupt_shuffle_sentences_global --neg gutenberg_corrupt_shuffle_paragraphs --neg gutenberg_corrupt_repeat_sentences --neg gutenberg_corrupt_flatten
 
 train-scorer-v5-antipattern: build-benchmark-v5
-	$(PYTHON) -m tools.studio.train_scorer --train $(BENCH_DIR_V5)/splits/train.jsonl --val $(BENCH_DIR_V5)/splits/val.jsonl --test $(BENCH_DIR_V5)/splits/test.jsonl --out-dir models/scorer_v5_antipattern --base-model distilbert-base-uncased --doc-type prose --normalize-text --pos gutenberg_top_excerpt --neg gutenberg_random_excerpt --neg gutenberg_corrupt_shuffle_sentences_global --neg gutenberg_corrupt_shuffle_paragraphs --neg gutenberg_corrupt_repeat_sentences --neg gutenberg_corrupt_flatten --neg llm_antipattern_write_like --neg llm_antipattern_continue_from --neg llm_antipattern_rewrite_from_memory
+	$(PYTHON) -m tools.studio.train_scorer --train $(BENCH_DIR_V5)/splits/train.jsonl --val $(BENCH_DIR_V5)/splits/val.jsonl --test $(BENCH_DIR_V5)/splits/test.jsonl --out-dir models/scorer_v5_antipattern --base-model $(V5_SCORER_BASE_MODEL) --doc-type prose --normalize-text --pos $(V5_SCORER_POS_SOURCE) $(foreach s,$(V5_SCORER_NEGATIVE_SOURCES),--neg $(s)) --max-length $(V5_SCORER_MAX_LENGTH) --batch-size $(V5_SCORER_BATCH_SIZE) --lr $(V5_SCORER_LR) --weight-decay $(V5_SCORER_WEIGHT_DECAY) --epochs $(V5_SCORER_EPOCHS) --seed $(V5_SCORER_SEED) --lora-r $(V5_SCORER_LORA_R) --lora-alpha $(V5_SCORER_LORA_ALPHA) --lora-dropout $(V5_SCORER_LORA_DROPOUT) --grad-accum-steps $(V5_SCORER_GRAD_ACCUM_STEPS) --label-key label $(if $(filter 1,$(V5_SCORER_GRADIENT_CHECKPOINTING)),--gradient-checkpointing) $(if $(filter 1,$(V5_SCORER_BF16)),--bf16) $(if $(filter 1,$(V5_SCORER_MERGE_LORA)),--merge-lora)
+
+train-scorer-v5-antipattern-qwen3: train-scorer-v5-antipattern
+
+
+train-scorer-v5-antipattern-distilbert: build-benchmark-v5
+	$(PYTHON) -m tools.studio.train_scorer --train $(BENCH_DIR_V5)/splits/train.jsonl --val $(BENCH_DIR_V5)/splits/val.jsonl --test $(BENCH_DIR_V5)/splits/test.jsonl --out-dir $(V5_SCORER_OUT_DIR_DISTILBERT) --base-model distilbert-base-uncased --doc-type prose --normalize-text --pos $(V5_SCORER_POS_SOURCE) $(foreach s,$(V5_SCORER_NEGATIVE_SOURCES),--neg $(s)) --label-key label
+
+modal-train-scorer-v5-antipattern-qwen3: setup-modal
+	$(MODAL) run deploy/modal/studio_train_scorer_v5_antipattern.py --out-dir $(V5_SCORER_OUT_DIR_QWEN3) --bench-dir /vol/benchmarks/studio_benchmark_v5 --base-model $(V5_SCORER_BASE_MODEL) --seed $(V5_SCORER_SEED) --max-length $(V5_SCORER_MAX_LENGTH) --batch-size $(V5_SCORER_BATCH_SIZE) --lr $(V5_SCORER_LR) --weight-decay $(V5_SCORER_WEIGHT_DECAY) --epochs $(V5_SCORER_EPOCHS) --lora-r $(V5_SCORER_LORA_R) --lora-alpha $(V5_SCORER_LORA_ALPHA) --lora-dropout $(V5_SCORER_LORA_DROPOUT) --grad-accum-steps $(V5_SCORER_GRAD_ACCUM_STEPS) --eval-batch-size $(V5_SCORER_EVAL_BATCH_SIZE) $(if $(filter 1,$(V5_SCORER_GRADIENT_CHECKPOINTING)),--gradient-checkpointing) $(if $(filter 1,$(V5_SCORER_BF16)),--bf16) $(if $(filter 1,$(V5_SCORER_MERGE_LORA)),--merge-lora) $(if $(filter 1,$(V5_SCORER_TRUST_REMOTE_CODE)),--trust-remote-code)
 
 build-antipattern-originals: setup
 	$(PYTHON) -m tools.studio.build_antipattern_originals $(foreach p,$(ANTIPATTERN_INPUT_JSONL),--input-jsonl $(p)) $(foreach d,$(ANTIPATTERN_INPUT_TEXT_DIRS),--input-text-dir $(d)) --out $(ANTIPATTERN_ORIGINALS) --max-samples $(ANTIPATTERN_MAX_ORIGINALS) --min-chars 800 --max-chars 3800 --windows-per-text-file 1 --normalize-text --skip-missing
