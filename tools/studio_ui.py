@@ -38,6 +38,11 @@ import io
 
 from tools.studio.analyze import analyze_text
 from tools.studio.baselines import build_baseline, load_baseline_cached
+from tools.studio.preference_features import (
+    FeaturePreferenceModel,
+    extract_features,
+    generate_feedback,
+)
 from tools.studio.score import score_text
 from tools.studio.critique import suggest_edits
 from tools.studio.llm_critic import llm_critique
@@ -243,6 +248,7 @@ def run_analyze(
     scoring_model: str,
     baseline_model: str,
     calibrator_path: str,
+    preference_model_path: str,
     max_input_tokens: int,
     normalize_text: bool,
     compute_cohesion: bool,
@@ -331,6 +337,45 @@ def run_analyze(
             score_md += f"\n\nCalibrated score: **{cal_score:.1f}/100** (from `{calibrator_path}`)"
         except Exception as e:
             score_md += f"\n\n_Calibrator failed: {type(e).__name__}: {e}_"
+    # v6 preference scorer (feature-based)
+    pref_feedback_md = ""
+    if (preference_model_path or "").strip():
+        try:
+            pref_model = FeaturePreferenceModel.load(Path(str(preference_model_path)))
+            pref_features = extract_features(analysis.get("doc_metrics") or {}, text)
+            pref_score_val = pref_model.score_0_100(pref_features)
+            pref_raw = pref_model.score(pref_features)
+            pref_feedback_items = generate_feedback(pref_model, pref_features, max_suggestions=5)
+            pref_gaps = pref_model.feature_gaps(pref_features)
+
+            score_md = (
+                f"### Preference score: **{pref_score_val}/100** (v6 feature model)\n"
+                f"- raw: `{pref_raw:.2f}`\n\n"
+                + score_md
+            )
+
+            # Build feedback markdown
+            if pref_feedback_items:
+                pref_feedback_md = "### Writing Feedback (v6)\n"
+                for fb in pref_feedback_items:
+                    direction = fb.get("direction", "")
+                    arrow = "\u2191" if direction == "increase" else "\u2193"
+                    pref_feedback_md += f"- {arrow} **{fb['feature']}**: {fb['message']}\n"
+
+            # Top gaps
+            top_gaps = [g for g in pref_gaps[:5] if g["direction"] != "on_track"]
+            if top_gaps:
+                pref_feedback_md += "\n**Top gaps (by leverage)**\n"
+                for g in top_gaps:
+                    pref_feedback_md += (
+                        f"- `{g['feature']}`: {g['value']:.3f} (ref median: {g['reference_median']:.3f}, "
+                        f"leverage: {g['leverage']:.2f})\n"
+                    )
+
+            out_json = out_json if "out_json" in dir() else {}  # safety
+        except Exception as e:
+            pref_feedback_md = f"_Preference scorer failed: {type(e).__name__}: {e}_"
+
     if trained_score is not None:
         score_md = (
             f"### Primary score: **{trained_score.score_0_100:.1f}/100** (trained scorer)\n"
@@ -425,7 +470,10 @@ def run_analyze(
                 llm_md = f"_LLM critic failed: {type(e).__name__}: {e}_"
 
     # Put suggestions into markdown for readability
-    suggestions_md = "### Suggestions\n"
+    suggestions_md = ""
+    if pref_feedback_md:
+        suggestions_md += pref_feedback_md + "\n\n---\n\n"
+    suggestions_md += "### Suggestions (rubric)\n"
     suggestions_md += critique.get("summary", "") + "\n\n"
     for s in critique.get("suggestions") or []:
         suggestions_md += f"- **{s.get('title','')}** — {s.get('why','')}\n  - Try: {s.get('what_to_try','')}\n"
@@ -918,6 +966,12 @@ def build_ui() -> gr.Blocks:
             scorer_max_length = gr.Slider(64, 1024, value=384, step=32, label="Trained scorer max length")
             fast_only = gr.Checkbox(value=False, label="Fast mode (trained scorer only)")
 
+        with gr.Row():
+            preference_model_path = gr.Textbox(
+                value="models/preference_v6/preference_model.json",
+                label="Preference model (v6, JSON)",
+            )
+
         text = gr.Textbox(lines=14, label="Your text", value="At dawn, the city leans into light:\n")
 
         with gr.Tab("Analyze"):
@@ -955,6 +1009,7 @@ def build_ui() -> gr.Blocks:
                     scoring_model,
                     baseline_model,
                     calibrator_path,
+                    preference_model_path,
                     max_input_tokens,
                     normalize_text,
                     compute_cohesion,

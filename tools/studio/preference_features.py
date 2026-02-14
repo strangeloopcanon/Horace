@@ -9,9 +9,9 @@ from __future__ import annotations
 import json
 import math
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -248,6 +248,11 @@ class FeaturePreferenceModel:
         self.bias: float = 0.0
         self.feature_names: List[str] = list(FEATURE_SCHEMA)
         self.reference_stats: Dict[str, Dict[str, float]] = {}
+        # Score calibration: raw scores are mapped via sigmoid((raw - center) / scale) * 100.
+        # center/scale are learned from the training distribution so that
+        # typical rejected text ≈ 25, median ≈ 50, typical chosen text ≈ 75.
+        self.score_center: float = 0.0
+        self.score_scale: float = 1.0
         self._fitted = False
 
     def train(
@@ -312,6 +317,20 @@ class FeaturePreferenceModel:
                     "p75": float(np.percentile(finite, 75)),
                 }
 
+        # Compute score calibration from the raw score distribution.
+        # Center on overall median; scale so that the typical chosen/rejected
+        # range spans the sensitive region of the sigmoid.
+        chosen_raw = np.array([float(np.dot(self.weights, c) + self.bias) for c, _ in train_features])
+        rejected_raw = np.array([float(np.dot(self.weights, r) + self.bias) for _, r in train_features])
+        all_raw = np.concatenate([chosen_raw, rejected_raw])
+        self.score_center = float(np.median(all_raw))
+        # Scale so p10-p90 of all scores maps roughly to sigmoid 0.1-0.9
+        # (sigmoid(±2.2) ≈ 0.1/0.9), so scale = (p90 - p10) / 4.4
+        p10 = float(np.percentile(all_raw, 10))
+        p90 = float(np.percentile(all_raw, 90))
+        spread = max(p90 - p10, 0.1)
+        self.score_scale = spread / 4.4
+
         return TrainReport(
             n_train=len(train_features),
             n_val=len(val_features) if val_features else 0,
@@ -337,9 +356,14 @@ class FeaturePreferenceModel:
         return float(np.dot(self.weights, features) + self.bias)
 
     def score_0_100(self, features: np.ndarray) -> int:
-        """Map raw score to 0-100 via sigmoid scaling."""
+        """Map raw score to 0-100 via calibrated sigmoid.
+
+        Uses center/scale learned from training distribution so scores
+        spread naturally: typical rejected ≈ 25, median ≈ 50, typical chosen ≈ 75.
+        """
         raw = self.score(features)
-        prob = 1.0 / (1.0 + math.exp(-raw))
+        scaled = (raw - self.score_center) / max(self.score_scale, 1e-6)
+        prob = 1.0 / (1.0 + math.exp(-scaled))
         return max(0, min(100, int(round(prob * 100))))
 
     def feature_contributions(self, features: np.ndarray) -> Dict[str, float]:
@@ -393,6 +417,10 @@ class FeaturePreferenceModel:
             "weights": [float(w) for w in self.weights],
             "bias": float(self.bias),
             "reference_stats": self.reference_stats,
+            "score_calibration": {
+                "center": float(self.score_center),
+                "scale": float(self.score_scale),
+            },
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -406,6 +434,9 @@ class FeaturePreferenceModel:
         model.weights = np.array(data["weights"], dtype=np.float64)
         model.bias = float(data["bias"])
         model.reference_stats = data.get("reference_stats") or {}
+        cal = data.get("score_calibration") or {}
+        model.score_center = float(cal.get("center", 0.0))
+        model.score_scale = float(cal.get("scale", 1.0))
         model._fitted = True
         return model
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -21,7 +20,6 @@ from tools.studio.dataset_utils import iter_jsonl
 from tools.studio.preference_features import (
     FEATURE_SCHEMA,
     FeaturePreferenceModel,
-    TrainReport,
 )
 
 logger = logging.getLogger(__name__)

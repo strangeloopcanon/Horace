@@ -1,6 +1,6 @@
 .PHONY: setup setup-modal modal-token check lint typecheck security test all clean run-ui run-api build-baseline build-baseline-web build-eval-set split-eval-set build-benchmark-set build-benchmark-v4 build-benchmark-v5 build-standardebooks-corpus download-standardebooks-raw download-gutenberg-raw sample-windows-great sample-windows-other build-rss-corpus build-antipattern-originals build-antipattern-pairs build-antipattern-pairs-openai-batch merge-antipattern-openai-batch build-ai-overfit-eval eval-ai-overfit eval-web eval-set eval-set-train eval-set-val eval-set-test eval-benchmark-train eval-benchmark-val eval-benchmark-test train-calibrator-benchmark train-calibrator-eval-set train-calibrator-eval-set-tainted train-scorer-v4 train-scorer-v5-antipattern train-scorer-v5-antipattern-qwen3 train-scorer-v5-antipattern-skywork train-scorer-v5-antipattern-distilbert label-benchmark-v4-smoke train-scorer-distill-v4-smoke modal-eval-web modal-eval-set modal-eval-trained-scorer modal-build-baseline-web modal-train-calibrator-web modal-train-calibrator-eval-set modal-train-scorer-v4 modal-distill-scorer-v4 modal-build-standardebooks-corpus modal-distill-scorer-standardebooks modal-build-rss-corpus modal-distill-scorer-mixed modal-train-scorer-hybrid modal-train-scorer-v5-antipattern-qwen3 modal-train-scorer-v5-antipattern-skywork modal-train-scorer-qwen3-great-other
 .PHONY: modal-score-urls
-.PHONY: v6-consolidate-pairs v6-featurize-train v6-featurize-val v6-featurize-test v6-train v6-all modal-v6-featurize
+.PHONY: v6-consolidate-pairs v6-featurize-train v6-featurize-val v6-featurize-test v6-train v6-eval v6-all modal-v6-featurize
 
 VENV ?= .venv
 PYTHON ?= $(VENV)/bin/python
@@ -337,7 +337,10 @@ v6-train: v6-featurize-train v6-featurize-val v6-featurize-test
 modal-v6-featurize: setup-modal v6-consolidate-pairs
 	$(MODAL) run deploy/modal/studio_featurize_pairs_v6.py --model-id $(V6_FEATURE_MODEL_ID)
 
-v6-all: v6-train
+v6-eval: v6-train
+	$(PYTHON) -m tools.studio.eval_preference_v6 --test $(V6_PAIRS_DIR)/test_featurized.jsonl --val $(V6_PAIRS_DIR)/val_featurized.jsonl --model $(V6_MODEL_DIR)/preference_model.json --report-out reports/preference_v6_eval.json
+
+v6-all: v6-eval
 
 clean:
 	rm -rf $(VENV) .pytest_cache __pycache__
