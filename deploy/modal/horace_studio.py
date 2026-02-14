@@ -165,8 +165,8 @@ if (_LOCAL_REPO_ROOT / "tools").exists():
     image = image.add_local_dir(_LOCAL_REPO_ROOT / "tools", remote_path=f"{REPO_REMOTE_PATH}/tools")
 if (_LOCAL_REPO_ROOT / "data" / "baselines").exists():
     image = image.add_local_dir(_LOCAL_REPO_ROOT / "data" / "baselines", remote_path=f"{REPO_REMOTE_PATH}/data/baselines")
-if (_LOCAL_REPO_ROOT / "models").exists():
-    image = image.add_local_dir(_LOCAL_REPO_ROOT / "models", remote_path=f"{REPO_REMOTE_PATH}/models")
+if (_LOCAL_REPO_ROOT / "models" / "preference_v6").exists():
+    image = image.add_local_dir(_LOCAL_REPO_ROOT / "models" / "preference_v6", remote_path=f"{REPO_REMOTE_PATH}/models/preference_v6")
 
 app = modal.App(APP_NAME)
 
