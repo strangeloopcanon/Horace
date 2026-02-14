@@ -141,7 +141,10 @@ def main(
     model_id: str = "Qwen/Qwen3-1.7B",
     max_input_tokens: int = 1024,
 ) -> None:
-    local_pairs_dir = _LOCAL_REPO_ROOT / "data" / "pairs_v6"
+    # Support explicit --pairs-dir or default to data/pairs_v6
+    local_pairs_dir = Path(pairs_dir) if pairs_dir.strip() else _LOCAL_REPO_ROOT / "data" / "pairs_v6"
+    if not local_pairs_dir.is_absolute():
+        local_pairs_dir = _LOCAL_REPO_ROOT / local_pairs_dir
 
     for split in ("train", "val", "test"):
         split_path = local_pairs_dir / f"{split}.jsonl"
