@@ -37,6 +37,11 @@ from tools.studio.baselines import build_baseline, load_baseline_cached
 from tools.studio.critique import suggest_edits
 from tools.studio.llm_critic import llm_critique
 from tools.studio.meaning_lock import MeaningLockConfig
+from tools.studio.preference_features import (
+    FeaturePreferenceModel,
+    extract_features,
+    generate_feedback,
+)
 from tools.studio.rewrite import rewrite_and_rerank
 from tools.studio.score import score_text
 from tools.studio.span_patcher import patch_span as patch_one_span
@@ -231,6 +236,9 @@ class AnalyzeReq(BaseModel):
     # If provided, the API will return `trained_score`; if fast_only=true it will skip token-level analysis.
     scorer_model_path: str = ""
     scorer_max_length: int = 384
+    # v6 preference scorer: path to preference_model.json (feature-based Bradley-Terry).
+    # Returns preference_score, feature_gaps, and actionable feedback.
+    preference_model_path: str = ""
     antipattern_model_path: str = ""  # optional model trained on human vs LLM-imitation
     antipattern_max_length: int = 384
     # Anti-pattern is a likelihood-of-LLM-imitation score for this text.
@@ -490,6 +498,26 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
         except Exception as e:
             out["calibrated_score_error"] = str(e)
 
+    # v6 preference scorer (feature-based)
+    if (req.preference_model_path or "").strip():
+        try:
+            pref_model = FeaturePreferenceModel.load(Path(str(req.preference_model_path)))
+            pref_features = extract_features(analysis.get("doc_metrics") or {}, req.text)
+            pref_score_val = pref_model.score_0_100(pref_features)
+            pref_raw = pref_model.score(pref_features)
+            pref_gaps = pref_model.feature_gaps(pref_features)
+            pref_feedback = generate_feedback(pref_model, pref_features, max_suggestions=5)
+            out["preference_score"] = {
+                "overall_0_100": int(pref_score_val),
+                "raw_score": round(float(pref_raw), 3),
+                "source": "preference_v6",
+                "model_path": str(req.preference_model_path),
+            }
+            out["preference_feature_gaps"] = pref_gaps[:10]
+            out["preference_feedback"] = pref_feedback
+        except Exception as e:
+            out["preference_score_error"] = f"{type(e).__name__}: {e}"
+
     rubric_score_0_100 = float(score.overall_0_100)
     rubric_source = "rubric"
     if out.get("calibrated_score") is not None:
@@ -497,6 +525,7 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
         rubric_source = "rubric_calibrated"
 
     trained_score_0_100 = float(trained_score["overall_0_100"]) if trained_score is not None else None
+    preference_score_0_100 = float(out["preference_score"]["overall_0_100"]) if out.get("preference_score") else None
     mode = str(getattr(req, "primary_score_mode", "auto") or "auto").strip().lower()
     blend_w = float(getattr(req, "primary_blend_weight", 0.35) or 0.35)
     blend_w = max(0.0, min(1.0, float(blend_w)))
@@ -504,9 +533,18 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
     base_score_0_100 = float(rubric_score_0_100)
     base_source = str(rubric_source)
     if mode == "auto":
-        if trained_score_0_100 is not None:
+        if preference_score_0_100 is not None:
+            base_score_0_100 = float(preference_score_0_100)
+            base_source = "preference_v6"
+        elif trained_score_0_100 is not None:
             base_score_0_100 = float(trained_score_0_100)
             base_source = "trained_scorer"
+    elif mode == "preference":
+        if preference_score_0_100 is not None:
+            base_score_0_100 = float(preference_score_0_100)
+            base_source = "preference_v6"
+        else:
+            out["primary_score_warning"] = "primary_score_mode=preference but preference_model_path missing/failed; falling back to rubric"
     elif mode == "rubric":
         base_score_0_100 = float(rubric_score_0_100)
         base_source = str(rubric_source)
@@ -524,7 +562,10 @@ def analyze(req: AnalyzeReq) -> Dict[str, Any]:
             out["primary_score_warning"] = "primary_score_mode=blend but scorer_model_path missing/failed; falling back to rubric"
     else:
         out["primary_score_warning"] = f"unknown primary_score_mode={mode!r}; using auto"
-        if trained_score_0_100 is not None:
+        if preference_score_0_100 is not None:
+            base_score_0_100 = float(preference_score_0_100)
+            base_source = "preference_v6"
+        elif trained_score_0_100 is not None:
             base_score_0_100 = float(trained_score_0_100)
             base_source = "trained_scorer"
 
