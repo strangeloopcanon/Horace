@@ -30,7 +30,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-# Force rebuild version: 2026-02-13-scorer-authenticity-guard-v2
+# Force rebuild version: 2026-02-14-v6-preference-scorer
 
 # Request models defined at module level for FastAPI compatibility
 class AnalyzeReq(BaseModel):
@@ -38,6 +38,7 @@ class AnalyzeReq(BaseModel):
     doc_type: str = "prose"
     scorer_model_path: str = ""
     scorer_max_length: int = 384
+    preference_model_path: str = ""  # v6 preference model JSON path
     antipattern_model_path: str = ""
     antipattern_max_length: int = 384
     # Anti-pattern is a likelihood-of-LLM-imitation score for this text.
@@ -47,7 +48,7 @@ class AnalyzeReq(BaseModel):
     antipattern_penalty_threshold: float = 0.85
     antipattern_combiner_mode: str = "adaptive"  # adaptive | legacy
     apply_antipattern_penalty: bool = False
-    primary_score_mode: str = "auto"  # auto | rubric | trained | blend
+    primary_score_mode: str = "auto"  # auto | rubric | trained | preference | blend
     primary_blend_weight: float = 0.35
     fast_only: bool = False
     scoring_model_id: str = "gpt2"
@@ -155,6 +156,7 @@ image = (
         "numpy>=1.24.0",
         "transformers>=4.40.0",
         "safetensors>=0.4.0",
+        "scikit-learn>=1.3.0",
         "fastapi==0.115.6",
         "pydantic>=2.6.0",
     )
@@ -163,6 +165,8 @@ if (_LOCAL_REPO_ROOT / "tools").exists():
     image = image.add_local_dir(_LOCAL_REPO_ROOT / "tools", remote_path=f"{REPO_REMOTE_PATH}/tools")
 if (_LOCAL_REPO_ROOT / "data" / "baselines").exists():
     image = image.add_local_dir(_LOCAL_REPO_ROOT / "data" / "baselines", remote_path=f"{REPO_REMOTE_PATH}/data/baselines")
+if (_LOCAL_REPO_ROOT / "models").exists():
+    image = image.add_local_dir(_LOCAL_REPO_ROOT / "models", remote_path=f"{REPO_REMOTE_PATH}/models")
 
 app = modal.App(APP_NAME)
 
@@ -334,6 +338,7 @@ def analyze_remote(
     doc_type: str = "prose",
     scorer_model_path: str = "",
     scorer_max_length: int = 384,
+    preference_model_path: str = "",
     antipattern_model_path: str = "",
     antipattern_max_length: int = 384,
     antipattern_penalty_weight: float = 0.85,
@@ -476,6 +481,32 @@ def analyze_remote(
     if cal_err is not None:
         out["calibrated_score_error"] = cal_err
 
+    # v6 preference scorer (feature-based)
+    if (preference_model_path or "").strip():
+        try:
+            from tools.studio.preference_features import (
+                FeaturePreferenceModel,
+                extract_features,
+                generate_feedback,
+            )
+
+            pref_model = FeaturePreferenceModel.load(Path(str(preference_model_path)))
+            pref_features = extract_features(analysis.get("doc_metrics") or {}, text)
+            pref_score_val = pref_model.score_0_100(pref_features)
+            pref_raw = pref_model.score(pref_features)
+            pref_gaps = pref_model.feature_gaps(pref_features)
+            pref_feedback = generate_feedback(pref_model, pref_features, max_suggestions=5)
+            out["preference_score"] = {
+                "overall_0_100": int(pref_score_val),
+                "raw_score": round(float(pref_raw), 3),
+                "source": "preference_v6",
+                "model_path": str(preference_model_path),
+            }
+            out["preference_feature_gaps"] = pref_gaps[:10]
+            out["preference_feedback"] = pref_feedback
+        except Exception as e:
+            out["preference_score_error"] = f"{type(e).__name__}: {e}"
+
     rubric_score_0_100 = float(score.overall_0_100)
     rubric_source = "rubric"
     if calibrated is not None:
@@ -483,15 +514,25 @@ def analyze_remote(
         rubric_source = "rubric_calibrated"
 
     trained_score_0_100 = float(trained_score["score_0_100"]) if trained_score is not None else None
+    preference_score_0_100 = float(out["preference_score"]["overall_0_100"]) if out.get("preference_score") else None
     mode = str(primary_score_mode or "auto").strip().lower()
     blend_w = max(0.0, min(1.0, float(primary_blend_weight or 0.35)))
 
     base_score_0_100 = float(rubric_score_0_100)
     base_source = str(rubric_source)
     if mode == "auto":
-        if trained_score_0_100 is not None:
+        if preference_score_0_100 is not None:
+            base_score_0_100 = float(preference_score_0_100)
+            base_source = "preference_v6"
+        elif trained_score_0_100 is not None:
             base_score_0_100 = float(trained_score_0_100)
             base_source = "trained_scorer"
+    elif mode == "preference":
+        if preference_score_0_100 is not None:
+            base_score_0_100 = float(preference_score_0_100)
+            base_source = "preference_v6"
+        else:
+            out["primary_score_warning"] = "primary_score_mode=preference but preference_model_path missing/failed; falling back to rubric"
     elif mode == "rubric":
         base_score_0_100 = float(rubric_score_0_100)
         base_source = str(rubric_source)
@@ -509,7 +550,10 @@ def analyze_remote(
             out["primary_score_warning"] = "primary_score_mode=blend but scorer_model_path missing/failed; falling back to rubric"
     else:
         out["primary_score_warning"] = f"unknown primary_score_mode={mode!r}; using auto"
-        if trained_score_0_100 is not None:
+        if preference_score_0_100 is not None:
+            base_score_0_100 = float(preference_score_0_100)
+            base_source = "preference_v6"
+        elif trained_score_0_100 is not None:
             base_score_0_100 = float(trained_score_0_100)
             base_source = "trained_scorer"
 
@@ -899,6 +943,7 @@ def fastapi_app():  # pragma: no cover
                 doc_type=req.doc_type,
                 scorer_model_path=str(req.scorer_model_path or ""),
                 scorer_max_length=int(req.scorer_max_length),
+                preference_model_path=str(req.preference_model_path or ""),
                 antipattern_model_path=str(req.antipattern_model_path or ""),
                 antipattern_max_length=int(req.antipattern_max_length),
                 antipattern_penalty_weight=float(req.antipattern_penalty_weight),
