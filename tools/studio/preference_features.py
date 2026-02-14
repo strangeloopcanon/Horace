@@ -31,6 +31,10 @@ _CADENCE_FEATURES = [
     "surprisal_peak_period_tokens",
     "run_low_mean_len",
     "run_high_mean_len",
+    # Distributional shape (v7: LLM text is unnaturally uniform)
+    "surprisal_kurtosis",
+    "surprisal_skewness",
+    "surprisal_iqr",
 ]
 
 # Entropy / focus features
@@ -38,7 +42,11 @@ _ENTROPY_FEATURES = [
     "entropy_mean",
     "entropy_sd",
     "nucleus_w_mean",
-    "rank_percentile_mean",
+    # rank_percentile_mean removed: dominated at 588x, directly rewards LLM text.
+    # Replaced with distribution-shape variants that capture human irregularity.
+    "rank_percentile_cv",
+    "rank_percentile_p10",
+    "entropy_range_ratio",
     "perm_entropy",
 ]
 
@@ -84,6 +92,11 @@ _TAXONOMY_FEATURES = [
     "function_word_rate",
     "discourse_marker_rate",
     "parenthetical_rate",
+    # LLM-slop detection features (v7)
+    "slop_phrase_density",
+    "hedging_phrase_rate",
+    "sentence_opener_entropy",
+    "paragraph_metric_cv",
 ]
 
 FEATURE_SCHEMA: List[str] = (
@@ -116,6 +129,57 @@ _DISCOURSE_MARKERS = frozenset(
     "specifically particularly notably importantly significantly alternatively "
     "conversely similarly likewise regardless otherwise finally ultimately".split()
 )
+
+# Known LLM slop phrases (overused by chatbot-style models)
+_SLOP_PHRASES = [
+    "it's important to note", "it's worth noting", "it is important to note",
+    "it is worth noting", "it should be noted", "it bears mentioning",
+    "in today's world", "in this day and age", "at the end of the day",
+    "when it comes to", "on the other hand", "in other words",
+    "needless to say", "it goes without saying",
+    "dive into", "dive deep", "diving into", "deep dive",
+    "delve into", "delving into",
+    "the landscape of", "the realm of", "the world of",
+    "leverage", "leveraging", "leveraged",
+    "tapestry", "tapestries",
+    "multifaceted", "nuanced",
+    "paradigm", "paradigm shift",
+    "in conclusion", "to summarize", "to sum up",
+    "let's explore", "let us explore", "we'll explore",
+    "it's crucial", "it is crucial", "it's essential", "it is essential",
+    "plays a crucial role", "plays a vital role", "plays a key role",
+    "a testament to", "stands as a testament",
+    "the importance of", "the significance of",
+    "it's fascinating", "it is fascinating",
+    "a myriad of", "a plethora of",
+    "navigate the", "navigating the",
+    "foster", "fostering", "fostered",
+    "unlock", "unlocking", "unlocked",
+    "empower", "empowering", "empowered",
+    "in the realm of", "in the landscape of",
+    "resonate with", "resonates with", "resonating with",
+    "holistic", "holistic approach",
+    "ever-evolving", "ever-changing", "ever-growing",
+    "robust", "cutting-edge", "game-changer",
+    "transformative", "groundbreaking",
+]
+_SLOP_PATTERNS = [re.compile(re.escape(p), re.IGNORECASE) for p in _SLOP_PHRASES]
+
+# Hedging phrases (uncertainty markers overused by LLMs)
+_HEDGING_PHRASES = [
+    "to some extent", "to a certain extent", "to a degree",
+    "it could be argued", "one could argue", "one might argue",
+    "generally speaking", "broadly speaking", "loosely speaking",
+    "in many ways", "in some ways", "in a sense",
+    "more or less", "arguably", "presumably", "supposedly",
+    "it seems", "it appears", "it would seem",
+    "perhaps", "possibly", "potentially",
+    "tends to", "tend to", "tended to",
+    "in some cases", "in certain cases", "in many cases",
+    "somewhat", "relatively", "fairly", "rather",
+    "to varying degrees", "a certain degree of",
+]
+_HEDGING_PATTERNS = [re.compile(re.escape(p), re.IGNORECASE) for p in _HEDGING_PHRASES]
 
 _WORD_RE = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
 _SENT_END_RE = re.compile(r"[.!?]+")
@@ -156,6 +220,45 @@ def compute_taxonomy_features(text: str) -> Dict[str, float]:
     func_count = sum(1 for w in words if w in _FUNCTION_WORDS)
     disc_count = sum(1 for w in words if w in _DISCOURSE_MARKERS)
 
+    # Slop phrase density: known LLM catchphrases per 100 words
+    slop_count = sum(len(pat.findall(t)) for pat in _SLOP_PATTERNS)
+
+    # Hedging phrase rate: uncertainty markers per 100 words
+    hedge_count = sum(len(pat.findall(t)) for pat in _HEDGING_PATTERNS)
+
+    # Sentence opener entropy: diversity of how sentences begin
+    openers: list[str] = []
+    for s in sentences:
+        opener_words = _WORD_RE.findall(s.strip())[:3]
+        if opener_words:
+            openers.append(" ".join(w.lower() for w in opener_words))
+    opener_entropy = 0.0
+    if len(openers) >= 2:
+        freq: dict[str, int] = {}
+        for o in openers:
+            freq[o] = freq.get(o, 0) + 1
+        total = float(len(openers))
+        opener_entropy = -sum(
+            (c / total) * math.log(c / total) for c in freq.values() if c > 0
+        )
+
+    # Paragraph metric CV: uniformity of paragraph structure.
+    # For each paragraph, compute average sentence word count.
+    # Then CV of those averages across paragraphs. LLM paragraphs are more uniform.
+    para_avg_sent_lens: list[float] = []
+    for para in paragraphs:
+        para_sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", para) if s.strip()]
+        if para_sents:
+            sent_wcs = [len(_WORD_RE.findall(s)) for s in para_sents]
+            avg = float(sum(sent_wcs)) / max(1, len(sent_wcs))
+            para_avg_sent_lens.append(avg)
+    para_metric_cv = 0.0
+    if len(para_avg_sent_lens) >= 2:
+        _pm_mean = sum(para_avg_sent_lens) / len(para_avg_sent_lens)
+        _pm_var = sum((x - _pm_mean) ** 2 for x in para_avg_sent_lens) / len(para_avg_sent_lens)
+        _pm_std = _pm_var ** 0.5
+        para_metric_cv = _pm_std / max(_pm_mean, 1e-12)
+
     per_100w = 100.0 / float(n_words)
     return {
         "comma_per_100w": float(comma_count) * per_100w,
@@ -168,6 +271,11 @@ def compute_taxonomy_features(text: str) -> Dict[str, float]:
         "function_word_rate": float(func_count) / float(n_words),
         "discourse_marker_rate": float(disc_count) / float(n_words),
         "parenthetical_rate": float(paren_count) * per_100w,
+        # LLM-slop detection
+        "slop_phrase_density": float(slop_count) * per_100w,
+        "hedging_phrase_rate": float(hedge_count) * per_100w,
+        "sentence_opener_entropy": opener_entropy,
+        "paragraph_metric_cv": para_metric_cv,
     }
 
 
@@ -237,10 +345,14 @@ class TrainReport:
 class FeaturePreferenceModel:
     """Linear Bradley-Terry model over cadence features.
 
-    P(A > B) = sigmoid(w . features_A + bias - w . features_B - bias)
-             = sigmoid(w . (features_A - features_B))
+    P(A > B) = sigmoid(w . z(features_A) + bias - w . z(features_B) - bias)
+             = sigmoid(w . (z(features_A) - z(features_B)))
 
-    Trained via logistic regression on feature diffs with L2 regularization.
+    where z() is per-feature standardization (z-score).
+
+    Trained via logistic regression on standardized feature diffs with L2
+    regularization. Feature standardization prevents any single feature from
+    dominating purely due to scale differences.
     """
 
     def __init__(self) -> None:
@@ -248,12 +360,20 @@ class FeaturePreferenceModel:
         self.bias: float = 0.0
         self.feature_names: List[str] = list(FEATURE_SCHEMA)
         self.reference_stats: Dict[str, Dict[str, float]] = {}
+        # Per-feature standardization: z = (x - feat_mean) / feat_std
+        # Learned from training data (all chosen + rejected features).
+        self.feat_mean = np.zeros(len(FEATURE_SCHEMA), dtype=np.float64)
+        self.feat_std = np.ones(len(FEATURE_SCHEMA), dtype=np.float64)
         # Score calibration: raw scores are mapped via sigmoid((raw - center) / scale) * 100.
         # center/scale are learned from the training distribution so that
         # typical rejected text ≈ 25, median ≈ 50, typical chosen text ≈ 75.
         self.score_center: float = 0.0
         self.score_scale: float = 1.0
         self._fitted = False
+
+    def _standardize(self, features: np.ndarray) -> np.ndarray:
+        """Apply per-feature z-score standardization."""
+        return (features - self.feat_mean) / self.feat_std
 
     def train(
         self,
@@ -264,25 +384,34 @@ class FeaturePreferenceModel:
     ) -> TrainReport:
         """Train from lists of (chosen_features, rejected_features) tuples.
 
-        Uses sklearn LogisticRegression on feature diffs.
+        Uses sklearn LogisticRegression on standardized feature diffs.
+        Features are z-scored using statistics from all training texts
+        (both chosen and rejected) so that no feature dominates by scale.
         """
         from sklearn.linear_model import LogisticRegression
 
+        # Learn per-feature standardization from ALL training texts
+        all_features = np.array(
+            [f for pair in train_features for f in pair], dtype=np.float64
+        )
+        self.feat_mean = np.mean(all_features, axis=0)
+        self.feat_std = np.std(all_features, axis=0)
+        self.feat_std[self.feat_std < 1e-12] = 1.0
+
+        # Standardize all features first
+        train_std = [
+            (self._standardize(c), self._standardize(r))
+            for c, r in train_features
+        ]
+
         # Build diff matrix with both orientations for valid 2-class logistic regression.
         # chosen - rejected -> label 1, rejected - chosen -> label 0.
-        pos_diffs = [c - r for c, r in train_features]
-        neg_diffs = [r - c for c, r in train_features]
+        pos_diffs = [c - r for c, r in train_std]
+        neg_diffs = [r - c for c, r in train_std]
         diffs = np.array(pos_diffs + neg_diffs, dtype=np.float64)
         labels = np.array(
             [1] * len(pos_diffs) + [0] * len(neg_diffs), dtype=np.int32
         )
-
-        # Standardize features for stable training
-        self._train_mean = np.mean(diffs, axis=0)
-        self._train_std = np.std(diffs, axis=0)
-        self._train_std[self._train_std < 1e-12] = 1.0
-
-        diffs_norm = (diffs - self._train_mean) / self._train_std
 
         clf = LogisticRegression(
             C=float(l2_reg),
@@ -290,19 +419,21 @@ class FeaturePreferenceModel:
             max_iter=1000,
             solver="lbfgs",
         )
-        clf.fit(diffs_norm, labels)
+        clf.fit(diffs, labels)
 
-        # Store weights in original feature space
-        self.weights = (clf.coef_[0] / self._train_std).astype(np.float64)
-        self.bias = float(clf.intercept_[0]) - float(np.sum(clf.coef_[0] * self._train_mean / self._train_std))
+        # Weights are in standardized feature space (by design — this is what
+        # prevents scale-driven dominance). We keep them in this space and
+        # always standardize inputs before scoring.
+        self.weights = clf.coef_[0].astype(np.float64)
+        self.bias = float(clf.intercept_[0])
         self.feature_names = list(FEATURE_SCHEMA)
         self._fitted = True
 
-        # Compute accuracies
+        # Compute accuracies (using original features — score() handles standardization)
         train_acc = self._pairwise_accuracy(train_features)
         val_acc = self._pairwise_accuracy(val_features) if val_features else None
 
-        # Compute reference stats from "chosen" side
+        # Compute reference stats from "chosen" side (in original space for feedback)
         chosen_features = np.array([c for c, _ in train_features], dtype=np.float64)
         self.reference_stats = {}
         for i, name in enumerate(FEATURE_SCHEMA):
@@ -320,8 +451,8 @@ class FeaturePreferenceModel:
         # Compute score calibration from the raw score distribution.
         # Center on overall median; scale so that the typical chosen/rejected
         # range spans the sensitive region of the sigmoid.
-        chosen_raw = np.array([float(np.dot(self.weights, c) + self.bias) for c, _ in train_features])
-        rejected_raw = np.array([float(np.dot(self.weights, r) + self.bias) for _, r in train_features])
+        chosen_raw = np.array([self.score(c) for c, _ in train_features])
+        rejected_raw = np.array([self.score(r) for _, r in train_features])
         all_raw = np.concatenate([chosen_raw, rejected_raw])
         self.score_center = float(np.median(all_raw))
         # Scale so p10-p90 of all scores maps roughly to sigmoid 0.1-0.9
@@ -345,15 +476,19 @@ class FeaturePreferenceModel:
     def _pairwise_accuracy(self, pairs: List[Tuple[np.ndarray, np.ndarray]]) -> float:
         correct = 0
         for chosen, rejected in pairs:
-            s_c = float(np.dot(self.weights, chosen) + self.bias)
-            s_r = float(np.dot(self.weights, rejected) + self.bias)
+            s_c = self.score(chosen)
+            s_r = self.score(rejected)
             if s_c > s_r:
                 correct += 1
         return float(correct) / max(1, len(pairs))
 
     def score(self, features: np.ndarray) -> float:
-        """Raw score (unbounded). Higher = better writing."""
-        return float(np.dot(self.weights, features) + self.bias)
+        """Raw score (unbounded). Higher = better writing.
+
+        Input features are in original space; standardization is applied internally.
+        """
+        z = self._standardize(features)
+        return float(np.dot(self.weights, z) + self.bias)
 
     def score_0_100(self, features: np.ndarray) -> int:
         """Map raw score to 0-100 via calibrated sigmoid.
@@ -417,6 +552,10 @@ class FeaturePreferenceModel:
             "weights": [float(w) for w in self.weights],
             "bias": float(self.bias),
             "reference_stats": self.reference_stats,
+            "feature_standardization": {
+                "mean": [float(m) for m in self.feat_mean],
+                "std": [float(s) for s in self.feat_std],
+            },
             "score_calibration": {
                 "center": float(self.score_center),
                 "scale": float(self.score_scale),
@@ -434,6 +573,17 @@ class FeaturePreferenceModel:
         model.weights = np.array(data["weights"], dtype=np.float64)
         model.bias = float(data["bias"])
         model.reference_stats = data.get("reference_stats") or {}
+        # Feature standardization (v7+). Defaults to identity (mean=0, std=1)
+        # for backward compatibility with v6 models.
+        std_data = data.get("feature_standardization") or {}
+        n_feats = len(model.feature_names)
+        model.feat_mean = np.array(
+            std_data.get("mean", [0.0] * n_feats), dtype=np.float64
+        )
+        model.feat_std = np.array(
+            std_data.get("std", [1.0] * n_feats), dtype=np.float64
+        )
+        model.feat_std[model.feat_std < 1e-12] = 1.0
         cal = data.get("score_calibration") or {}
         model.score_center = float(cal.get("center", 0.0))
         model.score_scale = float(cal.get("scale", 1.0))
@@ -459,6 +609,12 @@ _FEATURE_TEMPLATES: Dict[str, str] = {
     "comma_per_100w": "Comma density is {value:.1f} per 100 words. Reference: {p25:.1f}\u2013{p75:.1f}.",
     "semicolon_per_100w": "Semicolon usage is {value:.2f} per 100 words. Reference: {p25:.2f}\u2013{p75:.2f}.",
     "dash_per_100w": "Dash usage is {value:.1f} per 100 words. Reference: {p25:.1f}\u2013{p75:.1f}.",
+    "slop_phrase_density": "Slop/clich\u00e9 phrase density is {value:.1f} per 100 words. Strong prose stays under {p75:.1f}.",
+    "hedging_phrase_rate": "Hedging phrases at {value:.1f} per 100 words. Strong prose stays under {p75:.1f}.",
+    "sentence_opener_entropy": "Sentence opener diversity is {value:.2f}. More variety ({p25:.2f}\u2013{p75:.2f}) reads more naturally.",
+    "surprisal_kurtosis": "Surprisal tail weight (kurtosis) is {value:.2f}. Human writing typically shows {p25:.2f}\u2013{p75:.2f}.",
+    "surprisal_skewness": "Surprisal skewness is {value:.2f}. Reference: {p25:.2f}\u2013{p75:.2f}.",
+    "rank_percentile_cv": "Token predictability variation is {value:.3f}. Human writing shows more variation ({p25:.3f}\u2013{p75:.3f}).",
 }
 
 

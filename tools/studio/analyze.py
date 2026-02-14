@@ -671,6 +671,33 @@ def analyze_text(
     pe = permutation_entropy(surprisal, m=3, tau=1)
     hurst = hurst_rs(surprisal)
 
+    # Distributional shape features (v7 slop-resistance)
+    _n_tok = int(surprisal.shape[0])
+    _s_mean = float(np.mean(surprisal))
+    _s_std = float(np.std(surprisal))
+    _z_surp = surprisal - _s_mean
+    surprisal_kurtosis: Optional[float] = None
+    surprisal_skewness: Optional[float] = None
+    surprisal_iqr: Optional[float] = None
+    if _n_tok >= 4 and _s_std > 1e-12:
+        surprisal_kurtosis = float(np.mean(_z_surp ** 4) / (_s_std ** 4) - 3.0)
+        surprisal_skewness = float(np.mean(_z_surp ** 3) / (_s_std ** 3))
+        surprisal_iqr = float(np.percentile(surprisal, 75) - np.percentile(surprisal, 25))
+
+    rk_pct = rk_arr / max(float(model.vocab_size()), 1.0)
+    rk_pct_mean = float(np.mean(rk_pct))
+    rk_pct_std = float(np.std(rk_pct))
+    rank_percentile_cv: Optional[float] = None
+    rank_percentile_p10: Optional[float] = None
+    if rk_pct.size >= 2:
+        rank_percentile_cv = float(rk_pct_std / max(rk_pct_mean, 1e-12))
+        rank_percentile_p10 = float(np.percentile(rk_pct, 10))
+
+    _e_mean = float(np.mean(H_arr))
+    entropy_range_ratio: Optional[float] = None
+    if H_arr.size >= 4 and _e_mean > 1e-12:
+        entropy_range_ratio = float((entropy_p90 - entropy_p10) / _e_mean)
+
     # Spikes and neighborhoods (threshold = mean + std)
     mu_s = float(np.mean(surprisal))
     sd_s = float(np.std(surprisal))
@@ -719,7 +746,9 @@ def analyze_text(
         "entropy_mean": float(np.mean(H_arr)),
         "entropy_median": float(np.median(H_arr)),
         "eff_support_mean": float(np.mean(eff_arr)),
-        "rank_percentile_mean": float(np.mean(rk_arr / float(model.vocab_size()))),
+        "rank_percentile_mean": rk_pct_mean,
+        "rank_percentile_cv": rank_percentile_cv,
+        "rank_percentile_p10": rank_percentile_p10,
         "nucleus_w_mean": float(np.mean(w_arr)),
         "norm_surprisal_mean": float(np.mean(norm_surprisal)),
         "norm_surprisal_mean_clipped": float(np.mean(norm_surprisal_clipped)),
@@ -729,8 +758,12 @@ def analyze_text(
         "entropy_bits_mean": entropy_bits_mean,
         **cad,
         "surprisal_p10": surprisal_p10,
+        "surprisal_kurtosis": surprisal_kurtosis,
+        "surprisal_skewness": surprisal_skewness,
+        "surprisal_iqr": surprisal_iqr,
         "entropy_p10": entropy_p10,
         "entropy_p90": entropy_p90,
+        "entropy_range_ratio": entropy_range_ratio,
         "perm_entropy": pe,
         "hurst_rs": hurst,
         "content_fraction": content_fraction,
