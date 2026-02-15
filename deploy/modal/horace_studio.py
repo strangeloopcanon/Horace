@@ -30,7 +30,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-# Force rebuild version: 2026-02-14-v6-preference-scorer
+# Force rebuild version: 2026-02-15-v8-quality-scorer
 
 # Request models defined at module level for FastAPI compatibility
 class AnalyzeReq(BaseModel):
@@ -38,7 +38,7 @@ class AnalyzeReq(BaseModel):
     doc_type: str = "prose"
     scorer_model_path: str = ""
     scorer_max_length: int = 384
-    preference_model_path: str = ""  # v7 preference model JSON path
+    preference_model_path: str = "models/preference_v8/preference_model.json"
     antipattern_model_path: str = ""
     antipattern_max_length: int = 384
     # Anti-pattern is a likelihood-of-LLM-imitation score for this text.
@@ -51,7 +51,7 @@ class AnalyzeReq(BaseModel):
     primary_score_mode: str = "auto"  # auto | rubric | trained | preference | blend
     primary_blend_weight: float = 0.35
     fast_only: bool = False
-    scoring_model_id: str = "gpt2"
+    scoring_model_id: str = "Qwen/Qwen3-1.7B"  # must match featurization model
     baseline_model: str = "gpt2_gutenberg_512"
     baseline_model_id: Optional[str] = None
     max_input_tokens: int = 512
@@ -165,8 +165,8 @@ if (_LOCAL_REPO_ROOT / "tools").exists():
     image = image.add_local_dir(_LOCAL_REPO_ROOT / "tools", remote_path=f"{REPO_REMOTE_PATH}/tools")
 if (_LOCAL_REPO_ROOT / "data" / "baselines").exists():
     image = image.add_local_dir(_LOCAL_REPO_ROOT / "data" / "baselines", remote_path=f"{REPO_REMOTE_PATH}/data/baselines")
-if (_LOCAL_REPO_ROOT / "models" / "preference_v7").exists():
-    image = image.add_local_dir(_LOCAL_REPO_ROOT / "models" / "preference_v7", remote_path=f"{REPO_REMOTE_PATH}/models/preference_v7")
+if (_LOCAL_REPO_ROOT / "models" / "preference_v8").exists():
+    image = image.add_local_dir(_LOCAL_REPO_ROOT / "models" / "preference_v8", remote_path=f"{REPO_REMOTE_PATH}/models/preference_v8")
 
 app = modal.App(APP_NAME)
 
@@ -338,7 +338,7 @@ def analyze_remote(
     doc_type: str = "prose",
     scorer_model_path: str = "",
     scorer_max_length: int = 384,
-    preference_model_path: str = "",
+    preference_model_path: str = "models/preference_v8/preference_model.json",
     antipattern_model_path: str = "",
     antipattern_max_length: int = 384,
     antipattern_penalty_weight: float = 0.85,
@@ -348,7 +348,7 @@ def analyze_remote(
     primary_score_mode: str = "auto",
     primary_blend_weight: float = 0.35,
     fast_only: bool = False,
-    scoring_model_id: str = "gpt2",
+    scoring_model_id: str = "Qwen/Qwen3-1.7B",
     baseline_model_id: str = "gpt2_gutenberg_512",
     max_input_tokens: int = 512,
     normalize_text: bool = True,
@@ -481,7 +481,7 @@ def analyze_remote(
     if cal_err is not None:
         out["calibrated_score_error"] = cal_err
 
-    # v7 preference scorer (feature-based)
+    # v8 quality scorer (direct logistic classifier)
     if (preference_model_path or "").strip():
         try:
             from tools.studio.preference_features import (
@@ -499,7 +499,7 @@ def analyze_remote(
             out["preference_score"] = {
                 "overall_0_100": int(pref_score_val),
                 "raw_score": round(float(pref_raw), 3),
-                "source": "preference_v7",
+                "source": "preference_v8",
                 "model_path": str(preference_model_path),
             }
             out["preference_feature_gaps"] = pref_gaps[:10]
@@ -523,14 +523,14 @@ def analyze_remote(
     if mode == "auto":
         if preference_score_0_100 is not None:
             base_score_0_100 = float(preference_score_0_100)
-            base_source = "preference_v7"
+            base_source = "preference_v8"
         elif trained_score_0_100 is not None:
             base_score_0_100 = float(trained_score_0_100)
             base_source = "trained_scorer"
     elif mode == "preference":
         if preference_score_0_100 is not None:
             base_score_0_100 = float(preference_score_0_100)
-            base_source = "preference_v7"
+            base_source = "preference_v8"
         else:
             out["primary_score_warning"] = "primary_score_mode=preference but preference_model_path missing/failed; falling back to rubric"
     elif mode == "rubric":
@@ -552,7 +552,7 @@ def analyze_remote(
         out["primary_score_warning"] = f"unknown primary_score_mode={mode!r}; using auto"
         if preference_score_0_100 is not None:
             base_score_0_100 = float(preference_score_0_100)
-            base_source = "preference_v7"
+            base_source = "preference_v8"
         elif trained_score_0_100 is not None:
             base_score_0_100 = float(trained_score_0_100)
             base_source = "trained_scorer"

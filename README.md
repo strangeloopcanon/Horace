@@ -151,16 +151,13 @@ More detail (splits, leakage rules, mixing sources): `docs/data.md`.
 
 ---
 
-## Cadence Isn’t Authenticity
+## Quality Model (v8)
 
-Horace’s rubric measures literary signals (cadence, focus, alignment, distinctiveness). It is **not** an “AI detector”.
+Horace scores writing quality using a 33-feature logistic classifier trained on 2,494 texts (human originals vs LLM imitations). The model outputs P(good | features) directly as a 0–100 score.
 
-To reduce false highs on polished model-written prose, Studio supports an optional **anti-pattern penalty**:
+The feature set was selected empirically by measuring Cohen’s d effect sizes across human and LLM text distributions. Structural variety turned out to be the strongest signal: paragraph length variation (d=1.65) and sentence length variation (d=1.46) far outperform any individual vocabulary or cadence metric. LLM text is also measurably fancier than human prose — higher vocabulary diversity, longer words, more content words — which the model learns to penalise rather than reward.
 
-- Train a small text classifier on contrastive data: `human_original` vs `llm_antipattern_*` (see `docs/data.md`).
-- At runtime, compute `antipattern_score.prob_0_1` (higher = more LLM-like) and subtract a penalty only above a threshold.
-
-This keeps cadence central (and actionable), while adding an orthogonal authenticity guardrail.
+Of the original 52 candidate features, 19 were dropped: 2 dead (zero variance), 12 negligible (|d| < 0.2), 3 redundant with stronger alternatives, 1 data artifact (`dash_per_100w`, where Gutenberg encoding produced a spurious zero mean), and 1 LLM-detection feature (`hedging_phrase_rate`) that didn’t discriminate in our training corpus. The surviving features span cadence (9), entropy (3), texture (4), structure (5), surface (4), and taxonomy (8). Full results are in `reports/feature_separation_v7.json`.
 
 ---
 
