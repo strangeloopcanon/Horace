@@ -402,6 +402,20 @@ STUDIO_HTML = """<!doctype html>
         margin-bottom: 48px;
       }
       
+      .score-col {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .score-label {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
       .score-number {
         font-family: var(--font-display);
         font-size: 72px;
@@ -417,6 +431,13 @@ STUDIO_HTML = """<!doctype html>
         vertical-align: top;
         margin-left: 4px;
       }
+      .score-ai { color: var(--text-muted); }
+      .score-ai.ai-low { color: #5a9a6b; }
+      .score-ai.ai-moderate { color: #c9952a; }
+      .score-ai.ai-high { color: #c45a5a; }
+      [data-theme="light"] .score-ai.ai-low { color: #3a7a4b; }
+      [data-theme="light"] .score-ai.ai-moderate { color: #a87a10; }
+      [data-theme="light"] .score-ai.ai-high { color: #a83a3a; }
       
       [data-theme="light"] .score-number {
         font-family: var(--font-ui);
@@ -425,13 +446,12 @@ STUDIO_HTML = """<!doctype html>
       }
       
       .score-summary {
-        flex: 1;
         font-size: 17px;
         line-height: 1.6;
         color: var(--text);
-        padding-top: 8px;
-        border-left: 2px solid var(--border);
-        padding-left: 24px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        margin-top: 24px;
       }
       
       [data-theme="light"] .score-summary {
@@ -669,7 +689,7 @@ STUDIO_HTML = """<!doctype html>
         h1 { font-size: 32px; }
         [data-theme="light"] h1 { font-size: 40px; }
         .score-row { flex-direction: column; gap: 20px; }
-        .score-summary { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 16px; }
+        .score-summary { margin-top: 16px; }
         .metrics-grid { grid-template-columns: 1fr 1fr; }
         .tabs { gap: 16px; }
       }
@@ -726,9 +746,16 @@ STUDIO_HTML = """<!doctype html>
         
         <div id="score-result" class="result-area">
           <div class="score-row">
-            <div class="score-number" id="score-value">--<sup>/100</sup></div>
-            <div class="score-summary" id="score-summary"></div>
+            <div class="score-col">
+              <div class="score-label">Writing Quality</div>
+              <div class="score-number" id="score-value">--<sup>/100</sup></div>
+            </div>
+            <div class="score-col">
+              <div class="score-label">AI Likelihood</div>
+              <div class="score-number score-ai" id="ai-value">--<sup>%</sup></div>
+            </div>
           </div>
+          <div class="score-summary" id="score-summary"></div>
           
           <div class="section-label">Text Analysis</div>
           <div class="text-display" id="text-highlighted"></div>
@@ -888,7 +915,7 @@ STUDIO_HTML = """<!doctype html>
         ? '/vol/models/scorer_v5_authenticity_v1'
         : 'models/scorer_v5_authenticity_v1';
       const DEFAULT_ANTIPATTERN_COMBINER_MODE = 'adaptive';
-      const DEFAULT_APPLY_ANTIPATTERN_PENALTY = true;
+      const DEFAULT_APPLY_ANTIPATTERN_PENALTY = false;
       const DEFAULT_PRIMARY_SCORE_MODE = 'rubric';
       const DEFAULT_PRIMARY_BLEND_WEIGHT = '0.35';
 
@@ -980,13 +1007,14 @@ STUDIO_HTML = """<!doctype html>
 
       function migrateScoringDefaults() {
         const versionKey = 'horace-scoring-defaults-version';
-        const targetVersion = '2026-02-13-v3';
+        const targetVersion = '2026-02-15-v4';
         const currentVersion = String(safeStorageGet(versionKey, '') || '');
         if (currentVersion === targetVersion) {
           return;
         }
-        // Apply safer scoring defaults once for existing browser state.
-        safeStorageSet('horace-apply-antipattern-penalty', '1');
+        // Two-axis mode: show quality + AI likelihood separately, no combined penalty.
+        safeStorageSet('horace-apply-antipattern-penalty', '0');
+        safeStorageSet('horace-primary-score-mode', 'rubric');
         safeStorageSet(versionKey, targetVersion);
       }
 
@@ -1226,90 +1254,68 @@ STUDIO_HTML = """<!doctype html>
         const quality = data.quality_score || {};
         const authenticity = data.authenticity_score || {};
         const primary = data.primary_score || {};
-        const overallScore = Number(
-          primary.overall_0_100
-          ?? quality.overall_0_100
-          ?? data.score?.overall_0_100
-          ?? 0
-        );
-        const qualityScore = Number(
-          quality.overall_0_100
-          ?? primary.base_overall_0_100
-          ?? overallScore
-          ?? 0
-        );
-        const overallSource = String(primary.source || quality.source || '');
-        const authProb = Number(authenticity.llm_likelihood_0_1 ?? primary.antipattern_prob_0_1 ?? 0);
-        const authProbRaw = Number(authenticity.llm_likelihood_raw_0_1 ?? primary.antipattern_prob_raw_0_1 ?? 0);
-        const authInverted = Boolean(authenticity.llm_likelihood_inverted ?? primary.antipattern_prob_inverted);
-        const authMode = String(authenticity.combiner_mode || primary.antipattern_penalty_mode || '').trim();
-        const authSoftThreshold = Number(authenticity.soft_threshold_0_1 ?? primary.antipattern_soft_threshold_0_1);
-        const authHardThreshold = Number(authenticity.hard_threshold_0_1 ?? primary.antipattern_hard_threshold_0_1);
-        const authCap = Number(authenticity.authenticity_cap_0_100 ?? primary.antipattern_authenticity_cap_0_100);
-        const suggestedPenalty = Number(authenticity.suggested_penalty_0_100 ?? primary.antipattern_suggested_penalty_0_100 ?? 0);
-        const combinedPreview = Number(authenticity.combined_preview_overall_0_100 ?? primary.combined_preview_overall_0_100 ?? overallScore);
-        const appliedPenalty = Boolean(authenticity.penalty_applied ?? primary.apply_antipattern_penalty ?? false);
+
+        // Rubric score for the Writing Quality axis
+        const rubricScore = Number(data.score?.overall_0_100 ?? quality.rubric_overall_0_100 ?? 0);
+        // v8 feature model score (secondary / diagnostic)
+        const v8Score = Number(quality.trained_overall_0_100 ?? primary.trained_overall_0_100 ?? NaN);
+        // AI likelihood for the second axis
+        const authProb = Number(authenticity.llm_likelihood_0_1 ?? primary.antipattern_prob_0_1 ?? NaN);
+
+        // Rubric sub-scores for detail
+        const cats = data.score?.categories || {};
+        const catParts = Object.entries(cats).map(([k, v]) => `${k}: ${Math.round(v * 100)}/100`);
 
         const detailLines = [];
-        const authRiskLabel = (() => {
-          if (!Number.isFinite(authProb)) return 'Unknown';
-          if (authProb < 0.35) return 'Low';
-          if (authProb < 0.65) return 'Moderate';
-          return 'High';
-        })();
-        detailLines.push(`Overall score: ${overallScore.toFixed(1)}/100.`);
-        if (Math.abs(overallScore - qualityScore) >= 0.05) {
-          detailLines.push(`Quality score (before authenticity): ${qualityScore.toFixed(1)}/100.`);
+        if (catParts.length) {
+          detailLines.push(catParts.join('. ') + '.');
         }
-        if (Number.isFinite(authProb) && authProb > 0) {
-          detailLines.push(`Authenticity risk: ${authRiskLabel} (${(authProb * 100).toFixed(1)}% AI-like style).`);
+        if (Number.isFinite(v8Score)) {
+          detailLines.push(`Feature model (v8): ${v8Score.toFixed(1)}/100.`);
         }
-        if (appliedPenalty) {
-          const applied = Math.round((Number(primary.antipattern_penalty_0_100 || 0)) * 10) / 10;
-          detailLines.push(`Combined score mode is on. Authenticity penalty applied: -${applied} points.`);
-        } else if (suggestedPenalty > 0.05) {
-          const sp = Math.round(suggestedPenalty * 10) / 10;
-          detailLines.push(`If you enable combined mode, this would become ${combinedPreview.toFixed(1)}/100 (about -${sp} points).`);
+        const antiError = String(data.antipattern_score_error || '').trim();
+        const antiModelMissing = String($('antipattern-model-path').value || '').trim() === '';
+        if (antiError) {
+          detailLines.push(`Authenticity model error: ${antiError}`);
+        } else if (antiModelMissing && !Number.isFinite(authProb)) {
+          detailLines.push('Authenticity model is not configured.');
         }
-        if (Number.isFinite(authSoftThreshold) && Number.isFinite(authHardThreshold)) {
-          detailLines.push(`Risk thresholds: soft ${(authSoftThreshold * 100).toFixed(0)}%, hard ${(authHardThreshold * 100).toFixed(0)}%.`);
+        if (String(data.primary_score_warning || '').trim()) {
+          detailLines.push(`Note: ${String(data.primary_score_warning)}`);
         }
-        if (authMode) {
-          detailLines.push(`Risk model: ${authMode}.`);
+        if (scorerModelPathInvalid) {
+          detailLines.push('Warning: scorer model path looks like an anti-pattern model. Move it to the authenticity field.');
         }
-        if (authInverted) {
-          detailLines.push(`Note: authenticity score was polarity-corrected for this model.`);
+        if (antipatternModelPath && looksLikeWrongAntipatternModel(antipatternModelPath)) {
+          detailLines.push('Warning: authenticity model path looks like a quality model. Use an authenticity-oriented checkpoint.');
         }
-        if (Number.isFinite(authCap) && authCap > 0 && authCap < 100) {
-          detailLines.push(`Authenticity cap at this risk: ${Math.round(authCap * 10) / 10}/100.`);
-        }
-          const antiError = String(data.antipattern_score_error || '').trim();
-          const antiModelMissing = String($('antipattern-model-path').value || '').trim() === '';
-          if (antiError) {
-            detailLines.push(`Authenticity model error: ${antiError}`);
-          } else if (antiModelMissing) {
-            detailLines.push('Authenticity model is not configured.');
-          }
-          if (String(data.primary_score_warning || '').trim()) {
-            detailLines.push(`Note: ${String(data.primary_score_warning)}`);
-          }
-          if (scorerModelPathInvalid) {
-            detailLines.push('Warning: scorer model path looks like an anti-pattern model. Move it to the authenticity field.');
-          }
-          if (antipatternModelPath && looksLikeWrongAntipatternModel(antipatternModelPath)) {
-            detailLines.push('Warning: authenticity model path looks like a quality model. Use an authenticity-oriented checkpoint.');
-          }
+
           result.classList.add('visible');
-          $('score-value').innerHTML = Math.round(overallScore || 0) + '<sup>/100</sup>';
+
+          // Writing Quality axis (rubric)
+          $('score-value').innerHTML = Math.round(rubricScore || 0) + '<sup>/100</sup>';
+
+          // AI Likelihood axis
+          const aiEl = $('ai-value');
+          if (Number.isFinite(authProb) && authProb > 0) {
+            const aiPct = Math.round(authProb * 100);
+            aiEl.innerHTML = aiPct + '<sup>%</sup>';
+            aiEl.className = 'score-number score-ai';
+            if (authProb < 0.35) aiEl.classList.add('ai-low');
+            else if (authProb < 0.65) aiEl.classList.add('ai-moderate');
+            else aiEl.classList.add('ai-high');
+          } else {
+            aiEl.innerHTML = 'N/A';
+            aiEl.className = 'score-number score-ai';
+          }
+
           const summary = String(data.critique?.summary || '');
           const lineBreak = String.fromCharCode(10);
-          const sourceLine = overallSource ? `${lineBreak}${lineBreak}Score source: ${overallSource}` : '';
           const debugLine = detailLines.length ? `${lineBreak}${lineBreak}${detailLines.join(lineBreak)}` : '';
-          $('score-summary').innerText = summary + sourceLine + debugLine;
+          $('score-summary').innerText = summary + debugLine;
           $('text-highlighted').innerHTML = highlightText(text, data.analysis?.spikes || []);
           drawCadence(data.analysis?.series?.surprisal);
           
-          const cats = data.score?.categories || {};
           $('score-metrics').innerHTML = Object.entries(cats).map(([k, v]) => `
             <div class="metric">
               <div class="metric-value">${Math.round(v * 100)}</div>
