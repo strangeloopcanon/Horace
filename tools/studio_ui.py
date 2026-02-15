@@ -337,7 +337,7 @@ def run_analyze(
             score_md += f"\n\nCalibrated score: **{cal_score:.1f}/100** (from `{calibrator_path}`)"
         except Exception as e:
             score_md += f"\n\n_Calibrator failed: {type(e).__name__}: {e}_"
-    # v6 preference scorer (feature-based)
+    # v7 preference scorer (feature-based)
     pref_feedback_md = ""
     if (preference_model_path or "").strip():
         try:
@@ -349,14 +349,14 @@ def run_analyze(
             pref_gaps = pref_model.feature_gaps(pref_features)
 
             score_md = (
-                f"### Preference score: **{pref_score_val}/100** (v6 feature model)\n"
+                f"### Preference score: **{pref_score_val}/100** (v7 feature model)\n"
                 f"- raw: `{pref_raw:.2f}`\n\n"
                 + score_md
             )
 
             # Build feedback markdown
             if pref_feedback_items:
-                pref_feedback_md = "### Writing Feedback (v6)\n"
+                pref_feedback_md = "### Writing Feedback (v7)\n"
                 for fb in pref_feedback_items:
                     direction = fb.get("direction", "")
                     arrow = "\u2191" if direction == "increase" else "\u2193"
@@ -968,8 +968,8 @@ def build_ui() -> gr.Blocks:
 
         with gr.Row():
             preference_model_path = gr.Textbox(
-                value="models/preference_v6/preference_model.json",
-                label="Preference model (v6, JSON)",
+                value="models/preference_v7/preference_model.json",
+                label="Preference model (v7, JSON)",
             )
 
         text = gr.Textbox(lines=14, label="Your text", value="At dawn, the city leans into light:\n")

@@ -20,6 +20,7 @@ data/baselines_smoke*/
 data/corpora/
 data/antipattern/
 data/pairs_v6/
+data/pairs_v7/
 models/
 
 # GEPA run outputs (keep latest snapshot only)
