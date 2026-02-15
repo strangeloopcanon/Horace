@@ -1,8 +1,9 @@
-"""Preference-calibrated scorer: linear Bradley-Terry over cadence + taxonomy features.
+"""Quality scorer: logistic classifier over cadence + taxonomy features.
 
-This is the v6 scorer. It learns which measurable text properties predict human
-preference from pairwise data (human original > LLM imitation), then uses those
-learned weights to score any text and explain what to improve.
+v8 scorer. Trains P(good | features) directly on individual texts labelled as
+human-original (good) or LLM-imitation (slop). Feature set selected by Cohen's d
+effect sizes (see reports/feature_separation_v7.json); 33 features survive from
+the original 52.
 """
 from __future__ import annotations
 
@@ -20,39 +21,32 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 # Cadence features (from causal LM analysis via analyze_text)
+# v8: dropped surprisal_masd (d=0.18), surprisal_acf2 (d=0.04),
+#     surprisal_peak_period_tokens (d=0.12), surprisal_kurtosis (d=-0.15)
 _CADENCE_FEATURES = [
     "high_surprise_rate_per_100",
     "ipi_mean",
     "ipi_cv",
     "surprisal_cv",
-    "surprisal_masd",
     "surprisal_acf1",
-    "surprisal_acf2",
-    "surprisal_peak_period_tokens",
     "run_low_mean_len",
     "run_high_mean_len",
-    # Distributional shape (v7: LLM text is unnaturally uniform)
-    "surprisal_kurtosis",
     "surprisal_skewness",
     "surprisal_iqr",
 ]
 
 # Entropy / focus features
+# v8: dropped entropy_sd (dead), rank_percentile_cv (d=-0.20),
+#     rank_percentile_p10 (dead), perm_entropy (d=0.14)
 _ENTROPY_FEATURES = [
     "entropy_mean",
-    "entropy_sd",
     "nucleus_w_mean",
-    # rank_percentile_mean removed: dominated at 588x, directly rewards LLM text.
-    # Replaced with distribution-shape variants that capture human irregularity.
-    "rank_percentile_cv",
-    "rank_percentile_p10",
     "entropy_range_ratio",
-    "perm_entropy",
 ]
 
 # Texture features
+# v8: dropped word_ttr (d=-0.97, redundant with word_hapax_ratio d=-1.27)
 _TEXTURE_FEATURES = [
-    "word_ttr",
     "word_hapax_ratio",
     "adjacent_word_repeat_rate",
     "bigram_repeat_rate",
@@ -60,42 +54,37 @@ _TEXTURE_FEATURES = [
 ]
 
 # Structure features
+# v8: dropped cohesion_delta (d=0.03), norm_surprisal_mean (d=-0.04)
 _STRUCTURE_FEATURES = [
-    "cohesion_delta",
     "sent_burst_cv",
     "para_burst_cv",
     "sent_len_cv",
     "para_len_cv",
     "hurst_rs",
-    "norm_surprisal_mean",
 ]
 
 # Surface features (from analyze_text surface metrics)
+# v8: dropped syllables_per_word_mean (d=-0.68, redundant with word_len_mean d=-0.98),
+#     sent_words_cv (d=1.45, redundant with sent_len_cv d=1.46)
 _SURFACE_FEATURES = [
     "word_len_mean",
-    "syllables_per_word_mean",
     "alpha_char_fraction",
-    "sent_words_cv",
     "punct_variety_per_1000_chars",
     "content_fraction",
 ]
 
 # Taxonomy-derived features (computed from raw text, not from LM)
+# v8: dropped comma_per_100w (d=-0.03), dash_per_100w (data artifact),
+#     question_rate (d=0.17), discourse_marker_rate (d=0.19),
+#     hedging_phrase_rate (d=-0.10), sentence_opener_entropy (d=0.09)
 _TAXONOMY_FEATURES = [
-    "comma_per_100w",
     "semicolon_per_100w",
-    "dash_per_100w",
     "colon_per_100w",
-    "question_rate",
     "exclamation_rate",
     "one_sent_para_rate",
     "function_word_rate",
-    "discourse_marker_rate",
     "parenthetical_rate",
-    # LLM-slop detection features (v7)
     "slop_phrase_density",
-    "hedging_phrase_rate",
-    "sentence_opener_entropy",
     "paragraph_metric_cv",
 ]
 
@@ -343,16 +332,17 @@ class TrainReport:
 
 
 class FeaturePreferenceModel:
-    """Linear Bradley-Terry model over cadence features.
+    """Logistic quality classifier over cadence + taxonomy features.
 
-    P(A > B) = sigmoid(w . z(features_A) + bias - w . z(features_B) - bias)
-             = sigmoid(w . (z(features_A) - z(features_B)))
+    v8: P(good | features) = sigmoid(w . z(features) + bias)
+    where z() is per-feature z-score standardization.
 
-    where z() is per-feature standardization (z-score).
+    Supports two training modes:
+    - train(): pairwise Bradley-Terry (legacy, v6/v7)
+    - train_direct(): direct binary classification (v8+)
 
-    Trained via logistic regression on standardized feature diffs with L2
-    regularization. Feature standardization prevents any single feature from
-    dominating purely due to scale differences.
+    Feature standardization prevents any single feature from dominating
+    purely due to scale differences.
     """
 
     def __init__(self) -> None:
@@ -472,6 +462,84 @@ class FeaturePreferenceModel:
             weights=[float(w) for w in self.weights],
             bias=float(self.bias),
         )
+
+    def train_direct(
+        self,
+        features: List[np.ndarray],
+        labels: List[int],
+        *,
+        l2_reg: float = 1.0,
+        feature_names: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Train a direct classifier: P(good | features).
+
+        Each sample is a feature vector with label 1 (good/human) or 0 (slop/LLM).
+        Logistic regression output probability IS the quality score.
+        """
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import roc_auc_score
+
+        X = np.array(features, dtype=np.float64)
+        y = np.array(labels, dtype=np.int32)
+        names = list(feature_names or FEATURE_SCHEMA)
+
+        # Learn standardization from all training texts
+        self.feat_mean = np.mean(X, axis=0)
+        self.feat_std = np.std(X, axis=0)
+        self.feat_std[self.feat_std < 1e-12] = 1.0
+
+        Z = (X - self.feat_mean) / self.feat_std
+
+        clf = LogisticRegression(
+            C=float(l2_reg),
+            fit_intercept=True,
+            max_iter=1000,
+            solver="lbfgs",
+        )
+        clf.fit(Z, y)
+
+        self.weights = clf.coef_[0].astype(np.float64)
+        self.bias = float(clf.intercept_[0])
+        self.feature_names = names
+        self._fitted = True
+
+        # Direct classifier: sigmoid IS the probability, no calibration needed
+        self.score_center = 0.0
+        self.score_scale = 1.0
+
+        # Reference stats from "good" texts (label=1) for feedback
+        good_mask = y == 1
+        good_X = X[good_mask]
+        self.reference_stats = {}
+        for i, name in enumerate(names):
+            col = good_X[:, i]
+            finite = col[np.isfinite(col)]
+            if finite.size > 0:
+                self.reference_stats[name] = {
+                    "mean": float(np.mean(finite)),
+                    "std": float(np.std(finite)),
+                    "p25": float(np.percentile(finite, 25)),
+                    "median": float(np.median(finite)),
+                    "p75": float(np.percentile(finite, 75)),
+                }
+
+        # Metrics
+        probs = clf.predict_proba(Z)[:, 1]
+        preds = (probs >= 0.5).astype(int)
+        accuracy = float(np.mean(preds == y))
+        auc = float(roc_auc_score(y, probs))
+
+        return {
+            "accuracy": accuracy,
+            "auc": auc,
+            "n_samples": int(len(y)),
+            "n_good": int(good_mask.sum()),
+            "n_slop": int((~good_mask).sum()),
+            "l2_reg": float(l2_reg),
+            "feature_names": names,
+            "weights": [float(w) for w in self.weights],
+            "bias": float(self.bias),
+        }
 
     def _pairwise_accuracy(self, pairs: List[Tuple[np.ndarray, np.ndarray]]) -> float:
         correct = 0
@@ -600,21 +668,19 @@ _FEATURE_TEMPLATES: Dict[str, str] = {
     "ipi_mean": "Average distance between surprise peaks is {value:.0f} tokens. Reference range: {p25:.0f}\u2013{p75:.0f}.",
     "ipi_cv": "Surprise peak spacing variation (CV) is {value:.2f}. More varied rhythm ({p25:.2f}\u2013{p75:.2f}) reads better.",
     "surprisal_cv": "Overall surprise variation is {value:.2f}. Reference: {p25:.2f}\u2013{p75:.2f}.",
-    "cohesion_delta": "Shuffling your text changes log-prob by {value:.3f}. Stronger narrative structure shows {p25:.3f}\u2013{p75:.3f}.",
-    "word_ttr": "Vocabulary diversity (TTR) is {value:.3f}. Reference: {p25:.3f}\u2013{p75:.3f}.",
     "word_hapax_ratio": "Unique-word ratio is {value:.3f}. Reference: {p25:.3f}\u2013{p75:.3f}.",
     "sent_burst_cv": "Sentence-level surprise burstiness is {value:.2f}. Reference: {p25:.2f}\u2013{p75:.2f}.",
     "entropy_mean": "Mean entropy is {value:.2f}. Reference: {p25:.2f}\u2013{p75:.2f}.",
     "function_word_rate": "Function word rate is {value:.3f}. Reference: {p25:.3f}\u2013{p75:.3f}.",
-    "comma_per_100w": "Comma density is {value:.1f} per 100 words. Reference: {p25:.1f}\u2013{p75:.1f}.",
     "semicolon_per_100w": "Semicolon usage is {value:.2f} per 100 words. Reference: {p25:.2f}\u2013{p75:.2f}.",
-    "dash_per_100w": "Dash usage is {value:.1f} per 100 words. Reference: {p25:.1f}\u2013{p75:.1f}.",
     "slop_phrase_density": "Slop/clich\u00e9 phrase density is {value:.1f} per 100 words. Strong prose stays under {p75:.1f}.",
-    "hedging_phrase_rate": "Hedging phrases at {value:.1f} per 100 words. Strong prose stays under {p75:.1f}.",
-    "sentence_opener_entropy": "Sentence opener diversity is {value:.2f}. More variety ({p25:.2f}\u2013{p75:.2f}) reads more naturally.",
-    "surprisal_kurtosis": "Surprisal tail weight (kurtosis) is {value:.2f}. Human writing typically shows {p25:.2f}\u2013{p75:.2f}.",
     "surprisal_skewness": "Surprisal skewness is {value:.2f}. Reference: {p25:.2f}\u2013{p75:.2f}.",
-    "rank_percentile_cv": "Token predictability variation is {value:.3f}. Human writing shows more variation ({p25:.3f}\u2013{p75:.3f}).",
+    "para_len_cv": "Paragraph length variation (CV) is {value:.2f}. Strong prose shows {p25:.2f}\u2013{p75:.2f}.",
+    "sent_len_cv": "Sentence length variation (CV) is {value:.2f}. Strong prose shows {p25:.2f}\u2013{p75:.2f}.",
+    "paragraph_metric_cv": "Paragraph structure variation is {value:.2f}. More variety ({p25:.2f}\u2013{p75:.2f}) reads less formulaic.",
+    "one_sent_para_rate": "One-sentence paragraph rate is {value:.2f}. Good prose: {p25:.2f}\u2013{p75:.2f}.",
+    "content_fraction": "Content-word fraction is {value:.3f}. Reference: {p25:.3f}\u2013{p75:.3f}.",
+    "word_len_mean": "Average word length is {value:.1f} characters. Reference: {p25:.1f}\u2013{p75:.1f}.",
 }
 
 

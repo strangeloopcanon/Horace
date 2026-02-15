@@ -2,6 +2,7 @@
 .PHONY: modal-score-urls
 .PHONY: v6-consolidate-pairs v6-featurize-train v6-featurize-val v6-featurize-test v6-train v6-eval v6-all modal-v6-featurize
 .PHONY: v7-consolidate-pairs v7-train v7-eval v7-all modal-v7-featurize
+.PHONY: v8-train v8-eval
 
 VENV ?= .venv
 PYTHON ?= $(VENV)/bin/python
@@ -364,6 +365,15 @@ v7-eval: v7-train
 	$(PYTHON) -m tools.studio.eval_preference_v6 --test $(V7_PAIRS_DIR)/test_featurized.jsonl --val $(V7_PAIRS_DIR)/val_featurized.jsonl --model $(V7_MODEL_DIR)/preference_model.json --report-out reports/preference_v7_eval.json
 
 v7-all: v7-eval
+
+# ---- v8: Direct Quality Scorer (33 features, P(good|features)) ----
+V8_MODEL_DIR ?= models/preference_v8
+
+v8-train:
+	$(PYTHON) -m tools.studio.train_quality_scorer --train $(V7_PAIRS_DIR)/train_featurized.jsonl --val $(V7_PAIRS_DIR)/val_featurized.jsonl --test $(V7_PAIRS_DIR)/test_featurized.jsonl --out-dir $(V8_MODEL_DIR)
+
+v8-eval: v8-train
+	@echo "v8 evaluation included in training output (see $(V8_MODEL_DIR)/train_report.json)"
 
 clean:
 	rm -rf $(VENV) .pytest_cache __pycache__
