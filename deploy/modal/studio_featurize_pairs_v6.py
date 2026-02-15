@@ -1,8 +1,7 @@
 """
-Featurize v6 pair data on Modal with GPU-accelerated Qwen3-1.7B.
+Featurize pair data on Modal with GPU-accelerated Qwen3-1.7B.
 
-Uses modal.map() to process pairs in parallel across many GPU containers,
-rather than sequentially in a single container.
+Batches multiple pairs per container to amortize model loading cost.
 
 Run:
     make setup-modal
@@ -10,7 +9,7 @@ Run:
 
 Or with custom paths:
     modal run deploy/modal/studio_featurize_pairs_v6.py \
-        --pairs-dir /vol/pairs_v6 \
+        --pairs-dir data/pairs_v7 \
         --model-id Qwen/Qwen3-1.7B
 """
 from __future__ import annotations
@@ -19,7 +18,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List
 
 
 def _lazy_import_modal():
@@ -35,6 +34,11 @@ modal = _lazy_import_modal()
 
 APP_NAME = "horace-featurize-pairs-v6"
 REPO_REMOTE_PATH = "/root/horace"
+
+# Cost knobs
+_DEFAULT_GPU = "T4"  # T4 (~$0.59/hr) is sufficient for 1.7B models; A10G (~$1.10/hr) was overkill
+_DEFAULT_BATCH_SIZE = 10  # pairs per container invocation (amortises model load)
+_DEFAULT_MAX_CONTAINERS = 10
 
 
 def _local_repo_root() -> Path:
@@ -70,33 +74,21 @@ def _bootstrap_repo() -> None:
     os.environ.setdefault("HF_HOME", "/cache/hf")
 
 
-@app.function(
-    image=image,
-    gpu="A10G",
-    timeout=60 * 30,
-    volumes={"/vol": data_vol, "/cache/hf": hf_cache_vol},
-    concurrency_limit=20,
-)
-def featurize_one_pair(
-    row_json: str,
+def _featurize_single(
+    row: dict,
     *,
-    model_id: str = "Qwen/Qwen3-1.7B",
-    max_input_tokens: int = 1024,
-) -> str:
-    """Featurize a single pair on GPU. Returns JSON string of the result."""
-    _bootstrap_repo()
-
+    model_id: str,
+    max_input_tokens: int,
+) -> dict:
+    """Featurize one pair (both chosen and rejected texts). Assumes model is already loaded."""
     from tools.studio.analyze import analyze_text
     from tools.studio.preference_features import FEATURE_SCHEMA, extract_features
 
-    row = json.loads(row_json)
-    pid = str(row.get("pair_id") or "")
     chosen_text = str(row.get("chosen_text") or "")
     rejected_text = str(row.get("rejected_text") or "")
 
     t0 = time.monotonic()
 
-    # Analyze chosen text
     chosen_result = analyze_text(
         chosen_text,
         model_id=model_id,
@@ -110,7 +102,6 @@ def featurize_one_pair(
     chosen_vec = extract_features(chosen_metrics, chosen_text)
     chosen_feat = {name: float(chosen_vec[j]) for j, name in enumerate(FEATURE_SCHEMA)}
 
-    # Analyze rejected text
     rejected_result = analyze_text(
         rejected_text,
         model_id=model_id,
@@ -130,9 +121,69 @@ def featurize_one_pair(
     out_row["chosen_features"] = chosen_feat
     out_row["rejected_features"] = rejected_feat
     out_row["_featurize_sec"] = round(elapsed, 1)
+    return out_row
+
+
+@app.function(
+    image=image,
+    gpu=_DEFAULT_GPU,
+    timeout=60 * 60,  # 1 hour per batch (batches can be large)
+    volumes={"/vol": data_vol, "/cache/hf": hf_cache_vol},
+    max_containers=_DEFAULT_MAX_CONTAINERS,
+)
+def featurize_batch(
+    batch_json: str,
+    *,
+    model_id: str = "Qwen/Qwen3-1.7B",
+    max_input_tokens: int = 1024,
+) -> str:
+    """Featurize a batch of pairs on GPU. Model loads once per batch.
+
+    Input:  JSON array of pair objects.
+    Output: JSON array of featurized pair objects.
+    """
+    _bootstrap_repo()
+
+    rows = json.loads(batch_json)
+    results = []
+    for i, row in enumerate(rows):
+        try:
+            out = _featurize_single(row, model_id=model_id, max_input_tokens=max_input_tokens)
+            results.append(out)
+        except Exception as e:
+            pid = str(row.get("pair_id") or f"idx-{i}")
+            print(f"  ERROR on pair {pid}: {type(e).__name__}: {e}")
 
     hf_cache_vol.commit()
-    return json.dumps(out_row, ensure_ascii=False)
+    return json.dumps(results, ensure_ascii=False)
+
+
+# --- Backward-compatible single-pair entry point (kept for any external callers) ---
+
+@app.function(
+    image=image,
+    gpu=_DEFAULT_GPU,
+    timeout=60 * 30,
+    volumes={"/vol": data_vol, "/cache/hf": hf_cache_vol},
+    max_containers=_DEFAULT_MAX_CONTAINERS,
+)
+def featurize_one_pair(
+    row_json: str,
+    *,
+    model_id: str = "Qwen/Qwen3-1.7B",
+    max_input_tokens: int = 1024,
+) -> str:
+    """Featurize a single pair on GPU. Returns JSON string of the result."""
+    _bootstrap_repo()
+    row = json.loads(row_json)
+    out = _featurize_single(row, model_id=model_id, max_input_tokens=max_input_tokens)
+    hf_cache_vol.commit()
+    return json.dumps(out, ensure_ascii=False)
+
+
+def _chunk(lst: list, size: int) -> List[list]:
+    """Split a list into chunks of at most `size`."""
+    return [lst[i : i + size] for i in range(0, len(lst), size)]
 
 
 @app.local_entrypoint()
@@ -140,11 +191,14 @@ def main(
     pairs_dir: str = "",
     model_id: str = "Qwen/Qwen3-1.7B",
     max_input_tokens: int = 1024,
+    batch_size: int = _DEFAULT_BATCH_SIZE,
 ) -> None:
     # Support explicit --pairs-dir or default to data/pairs_v6
     local_pairs_dir = Path(pairs_dir) if pairs_dir.strip() else _LOCAL_REPO_ROOT / "data" / "pairs_v6"
     if not local_pairs_dir.is_absolute():
         local_pairs_dir = _LOCAL_REPO_ROOT / local_pairs_dir
+
+    print(f"GPU: {_DEFAULT_GPU}, batch_size: {batch_size}, max_containers: {_DEFAULT_MAX_CONTAINERS}")
 
     for split in ("train", "val", "test"):
         split_path = local_pairs_dir / f"{split}.jsonl"
@@ -183,40 +237,44 @@ def main(
             print(f"{split}: all {len(pairs)} pairs already featurized, skipping")
             continue
 
-        print(f"{split}: {len(todo)} pairs to featurize ({len(already_done)} already done)")
+        batches = _chunk(todo, batch_size)
+        print(
+            f"{split}: {len(todo)} pairs to featurize ({len(already_done)} already done) "
+            f"→ {len(batches)} batches of ≤{batch_size}"
+        )
 
-        # Use modal.map for parallel processing
-        pair_jsons = [json.dumps(p, ensure_ascii=False) for p in todo]
+        batch_jsons = [json.dumps(b, ensure_ascii=False) for b in batches]
         t0 = time.monotonic()
         n_done = 0
         n_errors = 0
 
         mode = "a" if already_done else "w"
         with open(out_path, mode, encoding="utf-8") as fout:
-            for result in featurize_one_pair.map(
-                pair_jsons,
+            for batch_result_json in featurize_batch.map(
+                batch_jsons,
                 kwargs={"model_id": str(model_id), "max_input_tokens": int(max_input_tokens)},
             ):
                 try:
-                    fout.write(result + "\n")
+                    batch_results = json.loads(batch_result_json)
+                    for row in batch_results:
+                        fout.write(json.dumps(row, ensure_ascii=False) + "\n")
                     fout.flush()
-                    n_done += 1
+                    n_done += len(batch_results)
                 except Exception as e:
-                    print(f"  ERROR writing result: {e}")
+                    print(f"  ERROR processing batch result: {e}")
                     n_errors += 1
 
-                if (n_done + n_errors) % 20 == 0:
-                    elapsed = time.monotonic() - t0
-                    rate = float(n_done) / max(elapsed, 0.01)
-                    remaining = (len(todo) - n_done - n_errors) / max(rate, 0.001)
-                    print(
-                        f"  [{split}] {n_done}/{len(todo)} done, "
-                        f"{n_errors} errors, {rate:.2f}/s, ETA {remaining/60:.1f}min"
-                    )
+                elapsed = time.monotonic() - t0
+                rate = float(n_done) / max(elapsed, 0.01)
+                remaining = (len(todo) - n_done) / max(rate, 0.001)
+                print(
+                    f"  [{split}] {n_done}/{len(todo)} done, "
+                    f"{n_errors} batch errors, {rate:.2f} pairs/s, ETA {remaining/60:.1f}min"
+                )
 
         elapsed = time.monotonic() - t0
         print(
-            f"  {split} DONE: {n_done} featurized, {n_errors} errors, "
+            f"  {split} DONE: {n_done} featurized, {n_errors} batch errors, "
             f"{elapsed:.0f}s elapsed"
         )
 
