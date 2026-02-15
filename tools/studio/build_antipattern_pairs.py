@@ -22,6 +22,7 @@ DEFAULT_PROVIDER_MODELS = (
     "anthropic:claude-haiku-4.5",
 )
 DEFAULT_TIERS = ("write_like", "continue_from", "rewrite_from_memory")
+BEST_EFFORT_TIER = "best_effort"
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,18 @@ def _tier_prompt(
             "- Keep stylistic affinity with the source voice.\n"
             "- Do not copy source text.\n"
             "- Keep it self-contained."
+        )
+        return system, user
+
+    if tier == "best_effort":
+        system = "You are an accomplished prose writer."
+        user = (
+            f"Write a polished passage of about {wc} words about: {topic}.\n"
+            "- Write your absolute best prose: clear, engaging, well-crafted.\n"
+            "- Do NOT imitate any particular author.\n"
+            "- Do NOT use filler phrases or hedge.\n"
+            "- Be concrete and vivid.\n"
+            "- No meta-commentary about the writing itself."
         )
         return system, user
 
@@ -499,7 +512,7 @@ def build_antipattern_pairs(
     if not use_tiers:
         raise ValueError("At least one --tier is required")
     for t in use_tiers:
-        if t not in ("write_like", "continue_from", "rewrite_from_memory"):
+        if t not in ("write_like", "continue_from", "rewrite_from_memory", "best_effort"):
             raise ValueError(f"Unsupported tier: {t}")
 
     originals = list(iter_jsonl(Path(originals_path)))
